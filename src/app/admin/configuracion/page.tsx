@@ -1,21 +1,26 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Icon } from "@/components/ui/icon";
-import { defaultAdminConfig } from "@/lib/data";
+import { getEffectiveAdminConfig, useSession } from "@/lib/store";
 import type { AdminConfig } from "@/lib/types";
 
 export default function AdminConfiguracionPage() {
-  const [cfg, setCfg] = useState<AdminConfig>(defaultAdminConfig);
+  const effectiveConfig = useSession(getEffectiveAdminConfig);
+  const setAdminConfig = useSession((s) => s.setAdminConfig);
+  const [cfg, setCfg] = useState<AdminConfig>(effectiveConfig);
   const [saved, setSaved] = useState(false);
 
+  useEffect(() => {
+    setCfg(effectiveConfig);
+  }, [effectiveConfig]);
+
   const save = () => {
-    // DEMO: en producción, esto persistiría en tabla admin_config con RLS.
+    setAdminConfig(cfg);
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
   };
@@ -31,9 +36,9 @@ export default function AdminConfiguracionPage() {
               ⚠️
             </div>
             <div className="text-[12px] text-amber-700 leading-snug">
-              DEMO: cambios no persisten. En producción, estos valores se
-              guardarán en Supabase (<code>admin_config</code>) con reglas de
-              acceso restringidas a admins.
+              DEMO: estos cambios se aplican solo en el estado local de la app.
+              En producción, se guardarían en la configuración global real de
+              Arranxos.
             </div>
           </div>
         </Card>

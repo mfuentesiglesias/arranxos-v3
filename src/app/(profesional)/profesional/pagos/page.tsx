@@ -1,34 +1,40 @@
+"use client";
+
 import { StatusBar } from "@/components/layout/status-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
-import { jobs, defaultAdminConfig } from "@/lib/data";
+import { getCurrentProfessionalId, getEffectiveAdminConfig, getEffectiveJobs, useSession } from "@/lib/store";
 import { formatEuro } from "@/lib/utils";
 
-function calcPayout(priceMin: number, priceMax: number) {
+function calcPayout(priceMin: number, priceMax: number, commissionPct: number) {
   const total = Math.round((priceMin + priceMax) / 2);
-  const commission = Math.round((total * defaultAdminConfig.commissionPct) / 100);
+  const commission = Math.round((total * commissionPct) / 100);
   return { total, commission, net: total - commission };
 }
 
 export default function PagosPage() {
+  const adminConfig = useSession(getEffectiveAdminConfig);
+  const currentProfessionalId = useSession(getCurrentProfessionalId);
+  const jobs = useSession(getEffectiveJobs);
+
   const pending = jobs.filter(
     (j) =>
       (j.status === "escrow_funded" ||
         j.status === "in_progress" ||
         j.status === "completed_pending_confirmation") &&
-      j.assignedProId === "p1",
+      j.assignedProId === currentProfessionalId,
   );
   const released = jobs.filter(
-    (j) => j.status === "completed" && j.assignedProId === "p1",
+    (j) => j.status === "completed" && j.assignedProId === currentProfessionalId,
   );
 
   const pendingTotal = pending.reduce(
-    (acc, j) => acc + calcPayout(j.priceMin, j.priceMax).net,
+    (acc, j) => acc + calcPayout(j.priceMin, j.priceMax, adminConfig.commissionPct).net,
     0,
   );
   const monthTotal = released.reduce(
-    (acc, j) => acc + calcPayout(j.priceMin, j.priceMax).net,
+    (acc, j) => acc + calcPayout(j.priceMin, j.priceMax, adminConfig.commissionPct).net,
     0,
   );
 
@@ -76,7 +82,11 @@ export default function PagosPage() {
             </Card>
           )}
           {pending.map((j) => {
-            const { total, commission, net } = calcPayout(j.priceMin, j.priceMax);
+            const { total, commission, net } = calcPayout(
+              j.priceMin,
+              j.priceMax,
+              adminConfig.commissionPct,
+            );
             return (
               <Card key={j.id} className="!p-3.5">
                 <div className="flex items-start gap-2 mb-2">
@@ -96,7 +106,7 @@ export default function PagosPage() {
                       {formatEuro(net)}
                     </div>
                     <div className="text-[10px] text-ink-400">
-                      {formatEuro(total)} − {defaultAdminConfig.commissionPct}%
+                      {formatEuro(total)} − {adminConfig.commissionPct}%
                     </div>
                   </div>
                 </div>
@@ -115,7 +125,11 @@ export default function PagosPage() {
             </Card>
           )}
           {released.map((j) => {
-            const { total, commission, net } = calcPayout(j.priceMin, j.priceMax);
+            const { total, commission, net } = calcPayout(
+              j.priceMin,
+              j.priceMax,
+              adminConfig.commissionPct,
+            );
             return (
               <Card key={j.id} className="!p-3.5">
                 <div className="flex items-start gap-2">
@@ -145,7 +159,7 @@ export default function PagosPage() {
         </div>
 
         <Card className="mt-4 bg-sand-50 text-[11.5px] text-ink-500 leading-snug">
-          La comisión de Arranxos ({defaultAdminConfig.commissionPct}%) se
+          La comisión de Arranxos ({adminConfig.commissionPct}%) se
           descuenta automáticamente antes de la liberación. Las transferencias
           llegan a tu cuenta bancaria en 1–3 días laborables.
         </Card>

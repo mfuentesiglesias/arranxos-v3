@@ -11,8 +11,9 @@ import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
 import { StatusBadge } from "@/components/ui/badge";
 import { JobStatusTimeline } from "@/components/jobs/job-status-timeline";
-import { defaultAdminConfig, jobs, professionals } from "@/lib/data";
+import { jobs, professionals } from "@/lib/data";
 import { getJobActionsForClient } from "@/lib/domain/policies";
+import { getEffectiveAdminConfig, getEffectiveJobById, useSession } from "@/lib/store";
 import type { JobStatus } from "@/lib/types";
 import { formatEuro } from "@/lib/utils";
 
@@ -23,7 +24,9 @@ interface Props {
 function Inner({ id }: { id: string }) {
   const search = useSearchParams();
   const justPublished = search.get("justPublished") === "1";
-  const job = jobs.find((j) => j.id === id) ?? jobs[0];
+  const adminConfig = useSession(getEffectiveAdminConfig);
+  const effectiveJob = useSession((s) => getEffectiveJobById(s, id));
+  const job = effectiveJob ?? jobs[0];
   const requestingPros = professionals.slice(0, Math.max(2, job.requests));
   const assignedPro = job.assignedProId
     ? professionals.find((p) => p.id === job.assignedProId)
@@ -32,7 +35,7 @@ function Inner({ id }: { id: string }) {
     status: job.status,
     hasAssignedPro: Boolean(assignedPro),
     invitationCount: job.invitations ?? 0,
-    invitationLimit: defaultAdminConfig.invitationLimitPerJob,
+    invitationLimit: adminConfig.invitationLimitPerJob,
   });
   const canOpenChat = clientActions.includes("open_chat");
 

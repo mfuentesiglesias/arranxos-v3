@@ -10,8 +10,13 @@ import { AntiLeakAlert } from "@/components/chat/anti-leak-alert";
 import { jobs, professionals, chatMessages } from "@/lib/data";
 import { canAccessChat, isProfessionalOperative } from "@/lib/domain/policies";
 import { scanLeaks } from "@/lib/anti-leak";
-import { useSession } from "@/lib/store";
-import type { ChatMessage } from "@/lib/types";
+import {
+  getCurrentProfessionalId,
+  getEffectiveAdminConfig,
+  getEffectiveJobById,
+  useSession,
+} from "@/lib/store";
+import type { AdminConfig, ChatMessage } from "@/lib/types";
 import { StatusBadge } from "@/components/ui/badge";
 import { formatEuro } from "@/lib/utils";
 
@@ -19,12 +24,22 @@ interface Props {
   params: Promise<{ jobId: string }>;
 }
 
+function isLeakAllowed(type: ChatMessage["flagReason"] | "phone" | "email" | "url" | "whatsapp" | "telegram", adminConfig: AdminConfig) {
+  if (!adminConfig.antiLeakEnabled) return false;
+  if (type === "phone") return adminConfig.antiLeakRules.phones;
+  if (type === "email") return adminConfig.antiLeakRules.emails;
+  if (type === "url") return adminConfig.antiLeakRules.urls;
+  return adminConfig.antiLeakRules.whatsapp;
+}
+
 function Inner({ jobId }: { jobId: string }) {
-  const currentProfessionalId = "p1";
+  const currentProfessionalId = useSession(getCurrentProfessionalId);
+  const adminConfig = useSession(getEffectiveAdminConfig);
   const sessionRole = useSession((s) => s.role);
   const proStatus = useSession((s) => s.proStatus);
+  const effectiveJob = useSession((s) => getEffectiveJobById(s, jobId));
   const role = sessionRole === "professional" ? "pro" : "client";
-  const job = jobs.find((j) => j.id === jobId) ?? jobs[0];
+  const job = effectiveJob ?? jobs[0];
   const pro = job.assignedProId
     ? professionals.find((p) => p.id === job.assignedProId) ?? professionals[0]
     : professionals[0];
@@ -89,7 +104,9 @@ function Inner({ jobId }: { jobId: string }) {
     String(Math.round((job.priceMin + job.priceMax) / 2)),
   );
 
-  const liveLeaks = input ? scanLeaks(input) : [];
+  const liveLeaks = (input ? scanLeaks(input) : []).filter((leak) =>
+    isLeakAllowed(leak.type, adminConfig),
+  );
 
   const send = () => {
     const text = input.trim();

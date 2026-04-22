@@ -11,12 +11,18 @@ import { Icon } from "@/components/ui/icon";
 import { StatusBadge } from "@/components/ui/badge";
 import { JobStatusTimeline } from "@/components/jobs/job-status-timeline";
 import { MapView } from "@/components/map/map-view";
-import { jobs, defaultAdminConfig } from "@/lib/data";
+import { jobs } from "@/lib/data";
 import {
   canSeeExactLocation,
   getCommissionAmount,
   getJobActionsForPro,
 } from "@/lib/domain/policies";
+import {
+  getCurrentProfessionalId,
+  getEffectiveAdminConfig,
+  getEffectiveJobById,
+  useSession,
+} from "@/lib/store";
 import type { JobStatus } from "@/lib/types";
 import { formatEuro, daysBetween } from "@/lib/utils";
 
@@ -25,8 +31,10 @@ interface Props {
 }
 
 function Inner({ id }: { id: string }) {
-  const currentProfessionalId = "p1";
-  const job = jobs.find((j) => j.id === id) ?? jobs[0];
+  const currentProfessionalId = useSession(getCurrentProfessionalId);
+  const adminConfig = useSession(getEffectiveAdminConfig);
+  const effectiveJob = useSession((s) => getEffectiveJobById(s, id));
+  const job = effectiveJob ?? jobs[0];
   const [requested, setRequested] = useState(false);
 
   const isMine = job.assignedProId === currentProfessionalId;
@@ -43,7 +51,7 @@ function Inner({ id }: { id: string }) {
   });
   const accepted = canSeeLocation;
   const showApprox = !canSeeLocation;
-  const commissionPct = job.commissionPct ?? defaultAdminConfig.commissionPct;
+  const commissionPct = job.commissionPct ?? adminConfig.commissionPct;
   const agreedAmount = Math.round((job.priceMin + job.priceMax) / 2);
   const commission = getCommissionAmount({ amount: agreedAmount, commissionPct });
 
