@@ -8,12 +8,22 @@ import { Avatar } from "@/components/ui/avatar";
 import { MessageBubble } from "@/components/chat/message-bubble";
 import { AntiLeakAlert } from "@/components/chat/anti-leak-alert";
 import { jobs, professionals, chatMessages } from "@/lib/data";
-import { canAccessChat, isProfessionalOperative } from "@/lib/domain/policies";
+import {
+  canAccessChat,
+  canProposePrice,
+  getActiveNegotiation,
+  getAgreement,
+  getEffectiveFinalPrice,
+  hasAgreement,
+  isProfessionalOperative,
+} from "@/lib/domain/policies";
 import { scanLeaks } from "@/lib/anti-leak";
 import {
+  getAgreementByJobId,
   getCurrentProfessionalId,
   getEffectiveAdminConfig,
   getEffectiveJobById,
+  getNegotiationByJobId,
   useSession,
 } from "@/lib/store";
 import type { AdminConfig, ChatMessage } from "@/lib/types";
@@ -35,11 +45,18 @@ function isLeakAllowed(type: ChatMessage["flagReason"] | "phone" | "email" | "ur
 function Inner({ jobId }: { jobId: string }) {
   const currentProfessionalId = useSession(getCurrentProfessionalId);
   const adminConfig = useSession(getEffectiveAdminConfig);
+  const agreement = useSession((s) => getAgreementByJobId(s, jobId));
+  const negotiation = useSession((s) => getNegotiationByJobId(s, jobId));
+  const submitNegotiationProposal = useSession((s) => s.submitNegotiationProposal);
+  const acceptNegotiation = useSession((s) => s.acceptNegotiation);
   const sessionRole = useSession((s) => s.role);
   const proStatus = useSession((s) => s.proStatus);
   const effectiveJob = useSession((s) => getEffectiveJobById(s, jobId));
   const role = sessionRole === "professional" ? "pro" : "client";
   const job = effectiveJob ?? jobs[0];
+  const resolvedAgreement = getAgreement(agreement);
+  const activeNegotiation = getActiveNegotiation(negotiation);
+  const agreementExists = hasAgreement(resolvedAgreement);
   const pro = job.assignedProId
     ? professionals.find((p) => p.id === job.assignedProId) ?? professionals[0]
     : professionals[0];
@@ -54,6 +71,12 @@ function Inner({ jobId }: { jobId: string }) {
     role === "pro"
       ? { name: job.clientName, avatar: job.clientAvatar, subtitle: "Cliente" }
       : { name: pro.name, avatar: pro.avatar, subtitle: pro.specialty };
+  const canPropose = canProposePrice({
+    role: sessionRole,
+    jobStatus: job.status,
+    hasAgreement: agreementExists,
+    chatEnabled,
+  });
 
   if (!chatEnabled) {
     return (
@@ -83,8 +106,63 @@ function Inner({ jobId }: { jobId: string }) {
     () => chatMessages.filter((m) => m.jobId === jobId),
     [jobId],
   );
-  const [history, setHistory] = useState<ChatMessage[]>(
-    seed.length > 0
+  const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [showProposal, setShowProposal] = useState(false);
+  const [proposal, setProposal] = useState(
+    String(Math.round((job.priceMin + job.priceMax) / 2)),
+  );
+
+  const liveLeaks = (input ? scanLeaks(input) : []).filter((leak) =>
+    isLeakAllowed(leak.type, adminConfig),
+  );
+  const canAcceptCurrentOffer = Boolean(
+    activeNegotiation?.lastAmount &&
+      ((role === "client" && !activeNegotiation.clientAccepted) ||
+        (role === "pro" && !activeNegotiation.proAccepted)),
+  );
+
+  const derivedMessages = useMemo<ChatMessage[]>(() => {
+    const historyMessages = (negotiation?.history ?? []).map((entry, index) => {
+      const author = entry.by === "pro" ? pro.name.split(" ")[0] : "El cliente";
+      const text =
+        entry.type === "accept"
+          ? `${author} aceptó la propuesta`
+          : entry.type === "counteroffer"
+            ? `${author} envió una contraoferta`
+            : `${author} envió una propuesta`;
+
+      return {
+        id: `neg-${jobId}-${index}`,
+        jobId,
+        from: "system",
+        text,
+        time: "ahora",
+        timestamp: entry.at,
+        type: entry.type === "accept" ? "system" : "proposal",
+        proposalAmount: entry.amount,
+      } satisfies ChatMessage;
+    });
+
+    if (!resolvedAgreement) return historyMessages;
+
+    return [
+      ...historyMessages,
+      {
+        id: `agr-${jobId}`,
+        jobId,
+        from: "system",
+        text: `Acuerdo creado · comisión ${resolvedAgreement.commissionPct}%`,
+        time: "ahora",
+        timestamp: resolvedAgreement.createdAt,
+        type: "agreement",
+        proposalAmount: resolvedAgreement.finalPrice,
+      },
+    ];
+  }, [jobId, negotiation, pro.name, resolvedAgreement]);
+
+  const history = [
+    ...(seed.length > 0
       ? seed
       : [
           {
@@ -95,18 +173,11 @@ function Inner({ jobId }: { jobId: string }) {
             time: "ahora",
             timestamp: new Date().toISOString(),
             type: "system",
-          },
-        ],
-  );
-  const [input, setInput] = useState("");
-  const [showProposal, setShowProposal] = useState(false);
-  const [proposal, setProposal] = useState(
-    String(Math.round((job.priceMin + job.priceMax) / 2)),
-  );
-
-  const liveLeaks = (input ? scanLeaks(input) : []).filter((leak) =>
-    isLeakAllowed(leak.type, adminConfig),
-  );
+          } satisfies ChatMessage,
+        ]),
+    ...derivedMessages,
+    ...localMessages,
+  ];
 
   const send = () => {
     const text = input.trim();
@@ -126,13 +197,13 @@ function Inner({ jobId }: { jobId: string }) {
       flagged,
       flagReason: flagged ? "anti-leak" : undefined,
     };
-    setHistory((h) => [...h, next]);
+    setLocalMessages((messages) => [...messages, next]);
     setInput("");
     if (flagged) {
       // DEMO: in prod, send strike to moderation queue via server action
       setTimeout(() => {
-        setHistory((h) => [
-          ...h,
+        setLocalMessages((messages) => [
+          ...messages,
           {
             id: `sys-${Date.now()}`,
             jobId,
@@ -149,21 +220,14 @@ function Inner({ jobId }: { jobId: string }) {
 
   const sendProposal = () => {
     const amount = Number(proposal || 0);
-    if (!amount) return;
-    setHistory((h) => [
-      ...h,
-      {
-        id: `sys-prop-${Date.now()}`,
-        jobId,
-        from: "system",
-        text: `${role === "pro" ? pro.name.split(" ")[0] : "El cliente"} envió una propuesta`,
-        time: "ahora",
-        timestamp: new Date().toISOString(),
-        type: "proposal",
-        proposalAmount: amount,
-      },
-    ]);
+    if (!amount || !canPropose) return;
+    submitNegotiationProposal(jobId, role, amount);
     setShowProposal(false);
+  };
+
+  const acceptCurrentOffer = () => {
+    if (!canAcceptCurrentOffer) return;
+    acceptNegotiation(jobId, role);
   };
 
   return (
@@ -213,6 +277,45 @@ function Inner({ jobId }: { jobId: string }) {
           <Icon name="forward" size={14} className="text-ink-400" />
         </Link>
 
+        {resolvedAgreement && (
+          <div className="mb-3 rounded-2xl border border-teal-100 bg-teal-50 px-3.5 py-3 text-[12.5px] text-teal-700">
+            <div className="font-bold">Acuerdo cerrado</div>
+            <div className="mt-1">
+              Precio final {formatEuro(resolvedAgreement.finalPrice)} · comisión snapshot {resolvedAgreement.commissionPct}%
+            </div>
+          </div>
+        )}
+
+        {!resolvedAgreement && activeNegotiation?.lastAmount && (
+          <div className="mb-3 rounded-2xl border border-amber-100 bg-amber-50 px-3.5 py-3 text-[12.5px] text-amber-700">
+            <div className="font-bold">Oferta actual</div>
+            <div className="mt-1 mb-3">
+              {formatEuro(activeNegotiation.lastAmount)} · {activeNegotiation.proposedBy === "pro" ? pro.name.split(" ")[0] : "Cliente"}
+            </div>
+            <div className="flex gap-2">
+              {canAcceptCurrentOffer && (
+                <button
+                  onClick={acceptCurrentOffer}
+                  className="flex-1 rounded-full bg-white px-4 py-2 text-[12px] font-bold text-amber-700 border border-amber-200"
+                >
+                  Aceptar propuesta
+                </button>
+              )}
+              {canPropose && (
+                <button
+                  onClick={() => {
+                    setProposal(String(activeNegotiation.lastAmount));
+                    setShowProposal((value) => !value);
+                  }}
+                  className="flex-1 rounded-full bg-amber-500 px-4 py-2 text-[12px] font-bold text-white"
+                >
+                  Hacer contraoferta
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
           <div className="flex-1 min-h-0 flex flex-col">
             {history.map((m) => (
               <MessageBubble key={m.id} msg={m} selfRole={role} />
@@ -222,7 +325,7 @@ function Inner({ jobId }: { jobId: string }) {
 
       {liveLeaks.length > 0 && <AntiLeakAlert leaks={liveLeaks} />}
 
-      {showProposal && (
+      {showProposal && canPropose && (
         <div className="app-bottom-bar-compact px-4 pt-2 pb-2 bg-white border-t border-sand-200/70">
           <div className="flex items-center gap-2">
             <div className="flex-1 flex items-center gap-1.5 bg-sand-100 rounded-full px-3 py-2">
@@ -248,12 +351,17 @@ function Inner({ jobId }: { jobId: string }) {
       <div className="app-bottom-bar-compact px-3 pt-2 pb-3 bg-white border-t border-sand-200/70">
         <div className="flex items-end gap-2">
           <button
-            onClick={() => setShowProposal(!showProposal)}
+            onClick={() => {
+              if (!canPropose) return;
+              setProposal(String(activeNegotiation?.lastAmount ?? Math.round((job.priceMin + job.priceMax) / 2)));
+              setShowProposal(!showProposal);
+            }}
+            disabled={!canPropose}
             className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
               showProposal
                 ? "bg-coral-500 text-white"
                 : "bg-sand-100 text-ink-600"
-            }`}
+            } disabled:opacity-40`}
           >
             <Icon name="euro" size={16} />
           </button>

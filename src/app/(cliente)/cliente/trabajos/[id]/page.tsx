@@ -12,8 +12,18 @@ import { Icon } from "@/components/ui/icon";
 import { StatusBadge } from "@/components/ui/badge";
 import { JobStatusTimeline } from "@/components/jobs/job-status-timeline";
 import { jobs, professionals } from "@/lib/data";
-import { getJobActionsForClient } from "@/lib/domain/policies";
-import { getEffectiveAdminConfig, getEffectiveJobById, useSession } from "@/lib/store";
+import {
+  getAgreement,
+  getEffectiveFinalPrice,
+  getJobActionsForClient,
+  hasAgreement,
+} from "@/lib/domain/policies";
+import {
+  getAgreementByJobId,
+  getEffectiveAdminConfig,
+  getEffectiveJobById,
+  useSession,
+} from "@/lib/store";
 import type { JobStatus } from "@/lib/types";
 import { formatEuro } from "@/lib/utils";
 
@@ -26,7 +36,10 @@ function Inner({ id }: { id: string }) {
   const justPublished = search.get("justPublished") === "1";
   const adminConfig = useSession(getEffectiveAdminConfig);
   const effectiveJob = useSession((s) => getEffectiveJobById(s, id));
+  const agreement = useSession((s) => getAgreementByJobId(s, id));
   const job = effectiveJob ?? jobs[0];
+  const resolvedAgreement = getAgreement(agreement);
+  const finalPrice = getEffectiveFinalPrice(job, resolvedAgreement);
   const requestingPros = professionals.slice(0, Math.max(2, job.requests));
   const assignedPro = job.assignedProId
     ? professionals.find((p) => p.id === job.assignedProId)
@@ -36,6 +49,8 @@ function Inner({ id }: { id: string }) {
     hasAssignedPro: Boolean(assignedPro),
     invitationCount: job.invitations ?? 0,
     invitationLimit: adminConfig.invitationLimitPerJob,
+    hasAgreement: hasAgreement(resolvedAgreement),
+    paymentStatus: resolvedAgreement?.paymentStatus,
   });
   const canOpenChat = clientActions.includes("open_chat");
 
@@ -195,6 +210,7 @@ function Inner({ id }: { id: string }) {
           status={job.status}
           priceMin={job.priceMin}
           priceMax={job.priceMax}
+          finalPrice={finalPrice}
           actions={clientActions}
         />
       </ScreenBody>
@@ -207,12 +223,14 @@ function ActionsForStatus({
   status,
   priceMin,
   priceMax,
+  finalPrice,
   actions,
 }: {
   jobId: string;
   status: JobStatus;
   priceMin: number;
   priceMax: number;
+  finalPrice?: number;
   actions: ReturnType<typeof getJobActionsForClient>;
 }) {
   if (actions.includes("pay")) {
@@ -226,7 +244,7 @@ function ActionsForStatus({
           custodia. Liberamos el dinero al confirmar.
         </div>
         <Button full href={`/cliente/trabajos/${jobId}/pagar`}>
-          Pagar {formatEuro((priceMin + priceMax) / 2)} con custodia
+          Pagar {formatEuro(finalPrice ?? Math.round((priceMin + priceMax) / 2))} con custodia
         </Button>
       </Card>
     );
@@ -274,7 +292,7 @@ function ActionsForStatus({
           Pago protegido en custodia
         </div>
         <div className="text-[11.5px] text-teal-700/80 leading-snug">
-          {formatEuro((priceMin + priceMax) / 2)} retenidos hasta que confirmes
+          {formatEuro(finalPrice ?? Math.round((priceMin + priceMax) / 2))} retenidos hasta que confirmes
           el trabajo.
         </div>
       </Card>

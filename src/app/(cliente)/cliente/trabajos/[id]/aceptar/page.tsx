@@ -9,7 +9,18 @@ import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { jobs, professionals, defaultAdminConfig } from "@/lib/data";
-import { getCommissionAmount } from "@/lib/domain/policies";
+import {
+  getAgreement,
+  getCommissionAmount,
+  getEffectiveFinalPrice,
+  hasAgreement,
+} from "@/lib/domain/policies";
+import {
+  getAgreementByJobId,
+  getEffectiveAdminConfig,
+  getEffectiveJobById,
+  useSession,
+} from "@/lib/store";
 import { formatEuro } from "@/lib/utils";
 
 interface Props {
@@ -19,17 +30,28 @@ interface Props {
 function Inner({ id }: { id: string }) {
   const search = useSearchParams();
   const router = useRouter();
+  const acceptProfessional = useSession((s) => s.acceptProfessional);
+  const adminConfig = useSession(getEffectiveAdminConfig);
+  const effectiveJob = useSession((s) => getEffectiveJobById(s, id));
+  const agreement = useSession((s) => getAgreementByJobId(s, id));
   const proId = search.get("proId") ?? "p1";
-  const job = jobs.find((j) => j.id === id) ?? jobs[0];
+  const job = effectiveJob ?? jobs.find((j) => j.id === id) ?? jobs[0];
+  const resolvedAgreement = getAgreement(agreement);
   const pro = professionals.find((p) => p.id === proId) ?? professionals[0];
   const [accepting, setAccepting] = useState(false);
-  const agreedPrice = Math.round((job.priceMin + job.priceMax) / 2);
-  const commissionPct = defaultAdminConfig.commissionPct;
+  const agreedPrice =
+    getEffectiveFinalPrice(job, resolvedAgreement) ??
+    Math.round((job.priceMin + job.priceMax) / 2);
+  const commissionPct = resolvedAgreement?.commissionPct ?? adminConfig.commissionPct ?? defaultAdminConfig.commissionPct;
   const commission = getCommissionAmount({ amount: agreedPrice, commissionPct });
+  const agreed = hasAgreement(resolvedAgreement);
 
   const accept = () => {
     setAccepting(true);
-    setTimeout(() => router.push(`/cliente/trabajos/${id}/pagar?proId=${proId}`), 700);
+    acceptProfessional(id, proId);
+    setTimeout(() => {
+      router.push(agreed ? `/cliente/trabajos/${id}/pagar?proId=${proId}` : `/chat/${id}`);
+    }, 700);
   };
 
   return (
@@ -60,9 +82,16 @@ function Inner({ id }: { id: string }) {
 
           <div className="bg-sand-50 rounded-xl p-3 border border-sand-200/70">
             <div className="flex items-center justify-between text-[12.5px] mb-2">
-              <span className="text-ink-500">Precio acordado (orientativo)</span>
+              <span className="text-ink-500">
+                {agreed ? "Precio acordado" : "Precio orientativo publicado"}
+              </span>
               <span className="font-bold text-ink-800">{formatEuro(agreedPrice)}</span>
             </div>
+            {!agreed && (
+              <div className="text-[11.5px] text-ink-500 mb-2">
+                El precio final se cerrará en el chat cuando ambas partes acepten la misma propuesta.
+              </div>
+            )}
             <div className="flex items-center justify-between text-[12.5px] mb-2">
               <span className="text-ink-500">
                 Comisión Arranxos ({commissionPct}%)
@@ -70,9 +99,11 @@ function Inner({ id }: { id: string }) {
               <span className="font-bold text-ink-800">{formatEuro(commission)}</span>
             </div>
             <div className="border-t border-sand-200 pt-2 flex items-center justify-between">
-              <span className="font-bold text-ink-800">A pagar al aceptar</span>
+              <span className="font-bold text-ink-800">
+                {agreed ? "A pagar al aceptar" : "Pendiente de acuerdo"}
+              </span>
               <span className="font-extrabold text-coral-600 text-[15px]">
-                {formatEuro(agreedPrice)}
+                {agreed ? formatEuro(agreedPrice) : "Negociar"}
               </span>
             </div>
           </div>
@@ -97,13 +128,19 @@ function Inner({ id }: { id: string }) {
 
         <div className="text-[11px] text-ink-400 leading-relaxed text-center">
           Al aceptar, el profesional verá tu dirección exacta y se abrirá el chat.
-          El precio final puede ajustarse si ambas partes lo acuerdan.
+          {agreed
+            ? "El acuerdo ya está cerrado y puedes pasar al pago protegido."
+            : "El precio final puede ajustarse si ambas partes lo acuerdan."}
         </div>
       </ScreenBody>
 
       <div className="app-bottom-bar px-5 pb-5 pt-3 bg-white border-t border-sand-200/70">
         <Button full onClick={accept} disabled={accepting}>
-          {accepting ? "Aceptando…" : `Aceptar y proceder al pago`}
+          {accepting
+            ? "Aceptando…"
+            : agreed
+              ? "Aceptar y proceder al pago"
+              : "Aceptar y abrir chat"}
         </Button>
       </div>
     </div>

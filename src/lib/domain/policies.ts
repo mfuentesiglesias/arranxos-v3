@@ -1,4 +1,9 @@
-import type { JobStatus, ProStatus, UserRole } from "@/lib/types";
+import type {
+  AgreementPaymentStatus,
+  AgreementState,
+  NegotiationState,
+} from "@/lib/store";
+import type { Job, JobStatus, ProStatus, UserRole } from "@/lib/types";
 
 export type ClientJobAction =
   | "view_requests"
@@ -17,6 +22,7 @@ export type ProJobAction =
   | "awaiting_client_confirmation";
 
 const POST_ACCEPTANCE_STATUSES: JobStatus[] = [
+  "agreement_pending",
   "agreed",
   "escrow_funded",
   "in_progress",
@@ -45,11 +51,15 @@ interface ClientActionParams {
   hasAssignedPro: boolean;
   invitationCount?: number;
   invitationLimit?: number;
+  hasAgreement?: boolean;
+  paymentStatus?: AgreementPaymentStatus;
 }
 
 interface ProActionParams {
   status: JobStatus;
   isAssignedToCurrentPro: boolean;
+  hasAgreement?: boolean;
+  paymentStatus?: AgreementPaymentStatus;
 }
 
 export function isProfessionalOperative(role: UserRole, proStatus: ProStatus) {
@@ -110,11 +120,67 @@ export function getCommissionAmount({
   return Math.round((amount * commissionPct) / 100);
 }
 
+export function getActiveNegotiation(
+  negotiation?: NegotiationState,
+) {
+  if (!negotiation || negotiation.status === "agreement_created") return undefined;
+  return negotiation;
+}
+
+export function getAgreement(agreement?: AgreementState) {
+  return agreement;
+}
+
+export function hasAgreement(agreement?: AgreementState | null) {
+  return Boolean(agreement);
+}
+
+export function getEffectiveFinalPrice(job: Job, agreement?: AgreementState) {
+  return agreement?.finalPrice ?? job.finalPrice;
+}
+
+export function canCreateAgreement(negotiation?: NegotiationState) {
+  return Boolean(
+    negotiation?.lastAmount && negotiation.clientAccepted && negotiation.proAccepted,
+  );
+}
+
+export function canPayProtected({
+  hasAgreement,
+  paymentStatus,
+}: {
+  hasAgreement: boolean;
+  paymentStatus?: AgreementPaymentStatus;
+}) {
+  return hasAgreement && paymentStatus !== "protected";
+}
+
+export function canProposePrice({
+  role,
+  jobStatus,
+  hasAgreement,
+  chatEnabled,
+}: {
+  role: UserRole;
+  jobStatus: JobStatus;
+  hasAgreement: boolean;
+  chatEnabled: boolean;
+}) {
+  return (
+    chatEnabled &&
+    !hasAgreement &&
+    (role === "client" || role === "professional") &&
+    jobStatus === "agreement_pending"
+  );
+}
+
 export function getJobActionsForClient({
   status,
   hasAssignedPro,
   invitationCount = 0,
   invitationLimit,
+  hasAgreement = false,
+  paymentStatus,
 }: ClientActionParams): ClientJobAction[] {
   const actions: ClientJobAction[] = [];
 
@@ -144,7 +210,9 @@ export function getJobActionsForClient({
     actions.push("open_chat");
   }
 
-  if (status === "agreed") actions.push("pay");
+  if (canPayProtected({ hasAgreement, paymentStatus }) && status === "agreed") {
+    actions.push("pay");
+  }
   if (status === "completed_pending_confirmation") {
     actions.push("confirm_completion", "open_dispute");
   }
@@ -156,15 +224,25 @@ export function getJobActionsForClient({
 export function getJobActionsForPro({
   status,
   isAssignedToCurrentPro,
+  hasAgreement = false,
+  paymentStatus,
 }: ProActionParams): ProJobAction[] {
   if (status === "published" && !isAssignedToCurrentPro) {
     return ["request_job"];
+  }
+
+  if (status === "agreement_pending" && isAssignedToCurrentPro) {
+    return ["open_chat"];
   }
 
   if (
     isAssignedToCurrentPro &&
     (status === "agreed" || status === "escrow_funded")
   ) {
+    if (hasAgreement && paymentStatus === "pending") {
+      return ["open_chat", "view_tracking"];
+    }
+
     return ["open_chat", "view_tracking"];
   }
 

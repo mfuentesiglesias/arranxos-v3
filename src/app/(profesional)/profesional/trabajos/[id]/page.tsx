@@ -14,10 +14,14 @@ import { MapView } from "@/components/map/map-view";
 import { jobs } from "@/lib/data";
 import {
   canSeeExactLocation,
+  getAgreement,
   getCommissionAmount,
+  getEffectiveFinalPrice,
   getJobActionsForPro,
+  hasAgreement,
 } from "@/lib/domain/policies";
 import {
+  getAgreementByJobId,
   getCurrentProfessionalId,
   getEffectiveAdminConfig,
   getEffectiveJobById,
@@ -34,7 +38,9 @@ function Inner({ id }: { id: string }) {
   const currentProfessionalId = useSession(getCurrentProfessionalId);
   const adminConfig = useSession(getEffectiveAdminConfig);
   const effectiveJob = useSession((s) => getEffectiveJobById(s, id));
+  const agreement = useSession((s) => getAgreementByJobId(s, id));
   const job = effectiveJob ?? jobs[0];
+  const resolvedAgreement = getAgreement(agreement);
   const [requested, setRequested] = useState(false);
 
   const isMine = job.assignedProId === currentProfessionalId;
@@ -48,11 +54,13 @@ function Inner({ id }: { id: string }) {
   const proActions = getJobActionsForPro({
     status: job.status,
     isAssignedToCurrentPro: isMine,
+    hasAgreement: hasAgreement(resolvedAgreement),
+    paymentStatus: resolvedAgreement?.paymentStatus,
   });
   const accepted = canSeeLocation;
   const showApprox = !canSeeLocation;
-  const commissionPct = job.commissionPct ?? adminConfig.commissionPct;
-  const agreedAmount = Math.round((job.priceMin + job.priceMax) / 2);
+  const commissionPct = resolvedAgreement?.commissionPct ?? job.commissionPct ?? adminConfig.commissionPct;
+  const agreedAmount = getEffectiveFinalPrice(job, resolvedAgreement) ?? Math.round((job.priceMin + job.priceMax) / 2);
   const commission = getCommissionAmount({ amount: agreedAmount, commissionPct });
 
   return (
@@ -141,7 +149,9 @@ function Inner({ id }: { id: string }) {
             Comisión Arranxos: <strong>{commissionPct}%</strong> ·
             ~ {formatEuro(commission)}. Recibirás{" "}
             <strong>{formatEuro(agreedAmount - commission)}</strong>{" "}
-            (si se acuerda en el rango medio).
+            {resolvedAgreement
+              ? "según el acuerdo actual."
+              : "(si se acuerda en el rango medio)."}
           </div>
         </Card>
       </ScreenBody>

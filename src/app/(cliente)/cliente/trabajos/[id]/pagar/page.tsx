@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import { jobs } from "@/lib/data";
+import { getAgreement, getEffectiveFinalPrice, hasAgreement } from "@/lib/domain/policies";
+import { getAgreementByJobId, getEffectiveJobById, useSession } from "@/lib/store";
 import { formatEuro } from "@/lib/utils";
 
 interface Props {
@@ -17,15 +19,24 @@ interface Props {
 
 function Inner({ id }: { id: string }) {
   const router = useRouter();
-  const job = jobs.find((j) => j.id === id) ?? jobs[0];
-  const total = Math.round((job.priceMin + job.priceMax) / 2);
+  const effectiveJob = useSession((s) => getEffectiveJobById(s, id));
+  const agreement = useSession((s) => getAgreementByJobId(s, id));
+  const markAgreementProtected = useSession((s) => s.markAgreementProtected);
+  const job = effectiveJob ?? jobs.find((j) => j.id === id) ?? jobs[0];
+  const resolvedAgreement = getAgreement(agreement);
+  const total =
+    getEffectiveFinalPrice(job, resolvedAgreement) ??
+    Math.round((job.priceMin + job.priceMax) / 2);
+  const canPay = hasAgreement(resolvedAgreement) && resolvedAgreement?.paymentStatus !== "protected";
   const [method, setMethod] = useState<"card" | "bizum" | "transfer">("card");
   const [paying, setPaying] = useState(false);
   const [card, setCard] = useState({ number: "", name: "", mmyy: "", cvc: "" });
 
   const pay = () => {
+    if (!canPay) return;
     setPaying(true);
     setTimeout(() => {
+      markAgreementProtected(id);
       router.push(`/cliente/trabajos/${id}?paid=1`);
     }, 1000);
   };
@@ -35,6 +46,11 @@ function Inner({ id }: { id: string }) {
       <StatusBar />
       <TopBar title="Pagar con custodia" subtitle="Tu dinero está protegido" />
       <ScreenBody className="px-4 pt-3 pb-6">
+        {!canPay && (
+          <Card className="bg-amber-50 border-amber-100 mb-3 text-[12px] text-amber-700 leading-snug">
+            Necesitas cerrar un acuerdo en el chat antes de realizar el pago protegido.
+          </Card>
+        )}
         <Card className="bg-teal-50/50 border-teal-100 mb-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-teal-500 text-white flex items-center justify-center">
@@ -156,7 +172,7 @@ function Inner({ id }: { id: string }) {
       </ScreenBody>
 
       <div className="app-bottom-bar px-5 pb-5 pt-3 bg-white border-t border-sand-200/70">
-        <Button full onClick={pay} disabled={paying}>
+        <Button full onClick={pay} disabled={paying || !canPay}>
           {paying ? "Procesando…" : `Pagar ${formatEuro(total)} en custodia`}
         </Button>
       </div>

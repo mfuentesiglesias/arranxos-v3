@@ -18,6 +18,45 @@ type JobOverride = Partial<
   >
 >;
 
+export type NegotiationActor = "client" | "pro";
+export type NegotiationEventType = "proposal" | "counteroffer" | "accept";
+export type NegotiationStatus =
+  | "idle"
+  | "proposed"
+  | "countered"
+  | "accepted"
+  | "agreement_created";
+export type AgreementPaymentStatus = "pending" | "protected";
+
+export interface NegotiationEvent {
+  by: NegotiationActor;
+  amount: number;
+  type: NegotiationEventType;
+  at: string;
+}
+
+export interface NegotiationState {
+  jobId: string;
+  status: NegotiationStatus;
+  lastAmount?: number;
+  proposedBy?: NegotiationActor;
+  clientAccepted: boolean;
+  proAccepted: boolean;
+  history: NegotiationEvent[];
+  updatedAt: string;
+}
+
+export interface AgreementState {
+  jobId: string;
+  finalPrice: number;
+  commissionPct: number;
+  createdAt: string;
+  acceptedByClient: true;
+  acceptedByPro: true;
+  paymentStatus: AgreementPaymentStatus;
+  paidAt?: string;
+}
+
 export interface SessionState {
   role: UserRole;
   proStatus: ProStatus;
@@ -41,6 +80,16 @@ export interface SessionState {
   patchJobOverride: (jobId: string, patch: JobOverride) => void;
   resetJobOverride: (jobId: string) => void;
   resetJobOverrides: () => void;
+  negotiations: Record<string, NegotiationState>;
+  agreements: Record<string, AgreementState>;
+  acceptProfessional: (jobId: string, proId: string) => void;
+  submitNegotiationProposal: (
+    jobId: string,
+    by: NegotiationActor,
+    amount: number,
+  ) => void;
+  acceptNegotiation: (jobId: string, by: NegotiationActor) => void;
+  markAgreementProtected: (jobId: string) => void;
 }
 
 function cloneAdminConfig(config: AdminConfig = defaultAdminConfig): AdminConfig {
@@ -54,6 +103,41 @@ function applyJobOverride(job: Job, override?: JobOverride): Job {
   return override ? { ...job, ...override } : job;
 }
 
+function applyAgreementSnapshot(job: Job, agreement?: AgreementState): Job {
+  if (!agreement) return job;
+
+  const status =
+    agreement.paymentStatus === "protected"
+      ? job.status === "in_progress" ||
+        job.status === "completed_pending_confirmation" ||
+        job.status === "completed" ||
+        job.status === "dispute" ||
+        job.status === "cancelled"
+        ? job.status
+        : "escrow_funded"
+      : job.status === "agreement_pending"
+        ? "agreed"
+        : job.status;
+
+  return {
+    ...job,
+    status,
+    finalPrice: agreement.finalPrice,
+    commissionPct: agreement.commissionPct,
+  };
+}
+
+function createEmptyNegotiation(jobId: string): NegotiationState {
+  return {
+    jobId,
+    status: "idle",
+    clientAccepted: false,
+    proAccepted: false,
+    history: [],
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 export function getEffectiveAdminConfig(state: SessionState) {
   return state.adminConfig;
 }
@@ -63,12 +147,26 @@ export function getCurrentProfessionalId(state: SessionState) {
 }
 
 export function getEffectiveJobs(state: SessionState) {
-  return jobs.map((job) => applyJobOverride(job, state.jobOverrides[job.id]));
+  return jobs.map((job) => {
+    const withOverrides = applyJobOverride(job, state.jobOverrides[job.id]);
+    return applyAgreementSnapshot(withOverrides, state.agreements[job.id]);
+  });
 }
 
 export function getEffectiveJobById(state: SessionState, jobId: string) {
   const job = jobs.find((entry) => entry.id === jobId);
-  return job ? applyJobOverride(job, state.jobOverrides[job.id]) : undefined;
+  if (!job) return undefined;
+
+  const withOverrides = applyJobOverride(job, state.jobOverrides[job.id]);
+  return applyAgreementSnapshot(withOverrides, state.agreements[job.id]);
+}
+
+export function getNegotiationByJobId(state: SessionState, jobId: string) {
+  return state.negotiations[jobId];
+}
+
+export function getAgreementByJobId(state: SessionState, jobId: string) {
+  return state.agreements[jobId];
 }
 
 export const useSession = create<SessionState>()(
@@ -94,6 +192,8 @@ export const useSession = create<SessionState>()(
           draft: {},
           adminConfig: cloneAdminConfig(),
           jobOverrides: {},
+          negotiations: {},
+          agreements: {},
         }),
       draft: {},
       setDraft: (patch) =>
@@ -127,6 +227,160 @@ export const useSession = create<SessionState>()(
           return { jobOverrides: next };
         }),
       resetJobOverrides: () => set({ jobOverrides: {} }),
+      negotiations: {},
+      agreements: {},
+      acceptProfessional: (jobId, proId) =>
+        set((s) => {
+          const nextNegotiations = { ...s.negotiations };
+          const nextAgreements = { ...s.agreements };
+          delete nextNegotiations[jobId];
+          delete nextAgreements[jobId];
+
+          return {
+            negotiations: nextNegotiations,
+            agreements: nextAgreements,
+            jobOverrides: {
+              ...s.jobOverrides,
+              [jobId]: {
+                ...s.jobOverrides[jobId],
+                assignedProId: proId,
+                status: "agreement_pending",
+                finalPrice: undefined,
+                commissionPct: undefined,
+              },
+            },
+          };
+        }),
+      submitNegotiationProposal: (jobId, by, amount) =>
+        set((s) => {
+          const timestamp = new Date().toISOString();
+          const current = s.negotiations[jobId] ?? createEmptyNegotiation(jobId);
+          const eventType: NegotiationEventType =
+            current.history.length > 0 ? "counteroffer" : "proposal";
+
+          return {
+            negotiations: {
+              ...s.negotiations,
+              [jobId]: {
+                ...current,
+                status: eventType === "proposal" ? "proposed" : "countered",
+                lastAmount: amount,
+                proposedBy: by,
+                clientAccepted: by === "client",
+                proAccepted: by === "pro",
+                history: [
+                  ...current.history,
+                  {
+                    by,
+                    amount,
+                    type: eventType,
+                    at: timestamp,
+                  },
+                ],
+                updatedAt: timestamp,
+              },
+            },
+          };
+        }),
+      acceptNegotiation: (jobId, by) =>
+        set((s) => {
+          const current = s.negotiations[jobId];
+          if (!current?.lastAmount) return {};
+
+          const timestamp = new Date().toISOString();
+          const nextClientAccepted = by === "client" ? true : current.clientAccepted;
+          const nextProAccepted = by === "pro" ? true : current.proAccepted;
+          const nextHistory = [
+            ...current.history,
+            {
+              by,
+              amount: current.lastAmount,
+              type: "accept" as const,
+              at: timestamp,
+            },
+          ];
+
+          if (nextClientAccepted && nextProAccepted) {
+            const commissionPct = s.adminConfig.commissionPct;
+            const agreement: AgreementState = {
+              jobId,
+              finalPrice: current.lastAmount,
+              commissionPct,
+              createdAt: timestamp,
+              acceptedByClient: true,
+              acceptedByPro: true,
+              paymentStatus: "pending",
+            };
+
+            return {
+              negotiations: {
+                ...s.negotiations,
+                [jobId]: {
+                  ...current,
+                  status: "agreement_created",
+                  clientAccepted: true,
+                  proAccepted: true,
+                  history: nextHistory,
+                  updatedAt: timestamp,
+                },
+              },
+              agreements: {
+                ...s.agreements,
+                [jobId]: agreement,
+              },
+              jobOverrides: {
+                ...s.jobOverrides,
+                [jobId]: {
+                  ...s.jobOverrides[jobId],
+                  status: "agreed",
+                  finalPrice: agreement.finalPrice,
+                  commissionPct: agreement.commissionPct,
+                },
+              },
+            };
+          }
+
+          return {
+            negotiations: {
+              ...s.negotiations,
+              [jobId]: {
+                ...current,
+                status: "accepted",
+                clientAccepted: nextClientAccepted,
+                proAccepted: nextProAccepted,
+                history: nextHistory,
+                updatedAt: timestamp,
+              },
+            },
+          };
+        }),
+      markAgreementProtected: (jobId) =>
+        set((s) => {
+          const current = s.agreements[jobId];
+          if (!current || current.paymentStatus === "protected") return {};
+
+          const paidAt = new Date().toISOString();
+
+          return {
+            agreements: {
+              ...s.agreements,
+              [jobId]: {
+                ...current,
+                paymentStatus: "protected",
+                paidAt,
+              },
+            },
+            jobOverrides: {
+              ...s.jobOverrides,
+              [jobId]: {
+                ...s.jobOverrides[jobId],
+                status: "escrow_funded",
+                finalPrice: current.finalPrice,
+                commissionPct: current.commissionPct,
+              },
+            },
+          };
+        }),
     }),
     { name: "arranxos-session" },
   ),
