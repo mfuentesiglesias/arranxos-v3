@@ -8,7 +8,20 @@ import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
 import { JobStatusTimeline } from "@/components/jobs/job-status-timeline";
-import { jobs, defaultAdminConfig } from "@/lib/data";
+import { jobs } from "@/lib/data";
+import {
+  getAgreement,
+  getCommissionAmount,
+  getEffectiveFinalPrice,
+  getPostPaymentJobActionsForPro,
+} from "@/lib/domain/policies";
+import {
+  getAgreementByJobId,
+  getCurrentProfessionalId,
+  getEffectiveAdminConfig,
+  getEffectiveJobById,
+  useSession,
+} from "@/lib/store";
 import { formatEuro, daysBetween } from "@/lib/utils";
 
 interface Props {
@@ -16,12 +29,24 @@ interface Props {
 }
 
 function Inner({ id }: { id: string }) {
-  const job = jobs.find((j) => j.id === id) ?? jobs[0];
-  const total = Math.round((job.priceMin + job.priceMax) / 2);
-  const commission = Math.round(
-    (total * defaultAdminConfig.commissionPct) / 100,
-  );
+  const currentProfessionalId = useSession(getCurrentProfessionalId);
+  const adminConfig = useSession(getEffectiveAdminConfig);
+  const effectiveJob = useSession((s) => getEffectiveJobById(s, id));
+  const agreement = useSession((s) => getAgreementByJobId(s, id));
+  const markJobInProgress = useSession((s) => s.markJobInProgress);
+  const job = effectiveJob ?? jobs.find((j) => j.id === id) ?? jobs[0];
+  const resolvedAgreement = getAgreement(agreement);
+  const total =
+    getEffectiveFinalPrice(job, resolvedAgreement) ??
+    Math.round((job.priceMin + job.priceMax) / 2);
+  const commissionPct = resolvedAgreement?.commissionPct ?? job.commissionPct ?? adminConfig.commissionPct;
+  const commission = getCommissionAmount({ amount: total, commissionPct });
   const youGet = total - commission;
+  const proPostPaymentActions = getPostPaymentJobActionsForPro({
+    status: job.status,
+    agreement: resolvedAgreement,
+    isAssignedToCurrentPro: job.assignedProId === currentProfessionalId,
+  });
   const days =
     job.completionDeadline && job.status === "completed_pending_confirmation"
       ? Math.max(0, daysBetween(new Date().toISOString(), job.completionDeadline))
@@ -74,9 +99,21 @@ function Inner({ id }: { id: string }) {
             <Button full variant="outline" href={`/chat/${job.id}`}>
               Abrir chat
             </Button>
-            <Button full href={`/profesional/trabajos/${job.id}/finalizar`}>
-              Marcar terminado
-            </Button>
+            {proPostPaymentActions.canStartJob ? (
+              <Button full onClick={() => markJobInProgress(job.id)}>
+                Marcar en curso
+              </Button>
+            ) : proPostPaymentActions.canMarkCompleted ? (
+              <Button full href={`/profesional/trabajos/${job.id}/finalizar`}>
+                Marcar terminado
+              </Button>
+            ) : (
+              <Button full disabled>
+                {proPostPaymentActions.awaitingClientConfirmation
+                  ? "Esperando confirmación"
+                  : "Seguimiento activo"}
+              </Button>
+            )}
           </div>
         </Card>
 
@@ -86,7 +123,7 @@ function Inner({ id }: { id: string }) {
           </div>
           <div className="text-[12px] text-teal-700/80 mb-3 leading-snug">
             {formatEuro(total)} retenidos por Arranxos. Se liberan tras
-            confirmación o tras {defaultAdminConfig.autoReleaseDays} días sin
+            confirmación o tras {adminConfig.autoReleaseDays} días sin
             respuesta del cliente.
           </div>
           <div className="bg-white rounded-xl p-3 border border-teal-100 text-[12.5px]">
@@ -96,7 +133,7 @@ function Inner({ id }: { id: string }) {
             </div>
             <div className="flex items-center justify-between mb-1">
               <span className="text-ink-500">
-                Comisión ({defaultAdminConfig.commissionPct}%)
+                Comisión ({commissionPct}%)
               </span>
               <span className="font-bold text-ink-800">
                 −{formatEuro(commission)}

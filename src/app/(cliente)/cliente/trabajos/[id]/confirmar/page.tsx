@@ -7,7 +7,19 @@ import { ScreenBody } from "@/components/layout/screen-body";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { jobs, defaultAdminConfig } from "@/lib/data";
+import { jobs } from "@/lib/data";
+import {
+  canConfirmCompletedJob,
+  getAgreement,
+  getCommissionAmount,
+  getEffectiveFinalPrice,
+} from "@/lib/domain/policies";
+import {
+  getAgreementByJobId,
+  getEffectiveAdminConfig,
+  getEffectiveJobById,
+  useSession,
+} from "@/lib/store";
 import { formatEuro } from "@/lib/utils";
 
 interface Props {
@@ -16,16 +28,29 @@ interface Props {
 
 function Inner({ id }: { id: string }) {
   const router = useRouter();
-  const job = jobs.find((j) => j.id === id) ?? jobs[0];
+  const adminConfig = useSession(getEffectiveAdminConfig);
+  const effectiveJob = useSession((s) => getEffectiveJobById(s, id));
+  const agreement = useSession((s) => getAgreementByJobId(s, id));
+  const confirmCompletedJob = useSession((s) => s.confirmCompletedJob);
+  const job = effectiveJob ?? jobs.find((j) => j.id === id) ?? jobs[0];
+  const resolvedAgreement = getAgreement(agreement);
   const [confirming, setConfirming] = useState(false);
-  const total = Math.round((job.priceMin + job.priceMax) / 2);
-  const commission = Math.round(
-    (total * defaultAdminConfig.commissionPct) / 100,
-  );
+  const total =
+    getEffectiveFinalPrice(job, resolvedAgreement) ??
+    Math.round((job.priceMin + job.priceMax) / 2);
+  const commissionPct = resolvedAgreement?.commissionPct ?? job.commissionPct ?? adminConfig.commissionPct;
+  const commission = getCommissionAmount({ amount: total, commissionPct });
   const toPro = total - commission;
+  const canConfirm = canConfirmCompletedJob({
+    status: job.status,
+    agreement: resolvedAgreement,
+    role: "client",
+  });
 
   const confirm = () => {
+    if (!canConfirm) return;
     setConfirming(true);
+    confirmCompletedJob(id);
     setTimeout(() => router.push(`/cliente/trabajos/${id}/valorar`), 800);
   };
 
@@ -52,7 +77,7 @@ function Inner({ id }: { id: string }) {
             </div>
             <div className="flex items-center justify-between text-[12.5px] mb-1.5">
               <span className="text-ink-500">
-                Comisión Arranxos ({defaultAdminConfig.commissionPct}%)
+                Comisión Arranxos ({commissionPct}%)
               </span>
               <span className="font-bold text-ink-800">
                 −{formatEuro(commission)}
@@ -78,10 +103,16 @@ function Inner({ id }: { id: string }) {
             </div>
           </div>
         </Card>
+
+        {!canConfirm && (
+          <Card className="bg-amber-50 border-amber-100 text-[12px] text-amber-700 leading-snug">
+            Este trabajo solo puede confirmarse cuando esté pendiente de confirmación y el pago siga protegido.
+          </Card>
+        )}
       </ScreenBody>
 
       <div className="app-bottom-bar px-5 pb-5 pt-3 bg-white border-t border-sand-200/70 flex flex-col gap-2">
-        <Button full onClick={confirm} disabled={confirming}>
+        <Button full onClick={confirm} disabled={confirming || !canConfirm}>
           {confirming ? "Confirmando…" : "Confirmar y liberar pago"}
         </Button>
         <Button

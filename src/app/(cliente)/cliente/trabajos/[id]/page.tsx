@@ -16,6 +16,7 @@ import {
   getAgreement,
   getEffectiveFinalPrice,
   getJobActionsForClient,
+  getPostPaymentJobActionsForClient,
   hasAgreement,
 } from "@/lib/domain/policies";
 import {
@@ -40,6 +41,10 @@ function Inner({ id }: { id: string }) {
   const job = effectiveJob ?? jobs[0];
   const resolvedAgreement = getAgreement(agreement);
   const finalPrice = getEffectiveFinalPrice(job, resolvedAgreement);
+  const postPaymentActions = getPostPaymentJobActionsForClient({
+    status: job.status,
+    agreement: resolvedAgreement,
+  });
   const requestingPros = professionals.slice(0, Math.max(2, job.requests));
   const assignedPro = job.assignedProId
     ? professionals.find((p) => p.id === job.assignedProId)
@@ -212,6 +217,7 @@ function Inner({ id }: { id: string }) {
           priceMax={job.priceMax}
           finalPrice={finalPrice}
           actions={clientActions}
+          postPaymentActions={postPaymentActions}
         />
       </ScreenBody>
     </div>
@@ -225,6 +231,7 @@ function ActionsForStatus({
   priceMax,
   finalPrice,
   actions,
+  postPaymentActions,
 }: {
   jobId: string;
   status: JobStatus;
@@ -232,6 +239,7 @@ function ActionsForStatus({
   priceMax: number;
   finalPrice?: number;
   actions: ReturnType<typeof getJobActionsForClient>;
+  postPaymentActions: ReturnType<typeof getPostPaymentJobActionsForClient>;
 }) {
   if (actions.includes("pay")) {
     return (
@@ -251,7 +259,8 @@ function ActionsForStatus({
   }
   if (
     actions.includes("confirm_completion") &&
-    actions.includes("open_dispute")
+    actions.includes("open_dispute") &&
+    postPaymentActions.canConfirmCompletion
   ) {
     return (
       <Card className="mb-3 bg-violet-50/60 border-violet-100">
@@ -272,7 +281,7 @@ function ActionsForStatus({
       </Card>
     );
   }
-  if (actions.includes("rate_pro")) {
+  if (actions.includes("rate_pro") && postPaymentActions.canRatePro) {
     return (
       <Card className="mb-3">
         <div className="font-bold text-[13.5px] text-ink-800 mb-2">
@@ -284,7 +293,7 @@ function ActionsForStatus({
       </Card>
     );
   }
-  if (status === "escrow_funded" || status === "in_progress") {
+  if (postPaymentActions.showsProtectedPayment && (status === "escrow_funded" || status === "in_progress")) {
     return (
       <Card className="mb-3 bg-teal-50/40 border-teal-100">
         <div className="flex items-center gap-2 text-[12.5px] font-bold text-teal-700 mb-1">

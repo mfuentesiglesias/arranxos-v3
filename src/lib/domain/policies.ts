@@ -18,6 +18,7 @@ export type ProJobAction =
   | "request_job"
   | "open_chat"
   | "view_tracking"
+  | "start_job"
   | "mark_completed"
   | "awaiting_client_confirmation";
 
@@ -155,6 +156,112 @@ export function canPayProtected({
   return hasAgreement && paymentStatus !== "protected";
 }
 
+export function hasProtectedPayment(agreement?: AgreementState | null) {
+  return agreement?.paymentStatus === "protected";
+}
+
+export function canStartJob({
+  status,
+  agreement,
+  role,
+  isAssignedToCurrentPro,
+}: {
+  status: JobStatus;
+  agreement?: AgreementState | null;
+  role: UserRole;
+  isAssignedToCurrentPro: boolean;
+}) {
+  return (
+    role === "professional" &&
+    isAssignedToCurrentPro &&
+    status === "escrow_funded" &&
+    hasProtectedPayment(agreement)
+  );
+}
+
+export function canMarkJobCompleted({
+  status,
+  agreement,
+  role,
+  isAssignedToCurrentPro,
+}: {
+  status: JobStatus;
+  agreement?: AgreementState | null;
+  role: UserRole;
+  isAssignedToCurrentPro: boolean;
+}) {
+  return (
+    role === "professional" &&
+    isAssignedToCurrentPro &&
+    status === "in_progress" &&
+    hasProtectedPayment(agreement)
+  );
+}
+
+export function canConfirmCompletedJob({
+  status,
+  agreement,
+  role,
+}: {
+  status: JobStatus;
+  agreement?: AgreementState | null;
+  role: UserRole;
+}) {
+  return (
+    role === "client" &&
+    status === "completed_pending_confirmation" &&
+    hasProtectedPayment(agreement)
+  );
+}
+
+export function getPostPaymentJobActionsForClient({
+  status,
+  agreement,
+}: {
+  status: JobStatus;
+  agreement?: AgreementState | null;
+}) {
+  return {
+    canConfirmCompletion: canConfirmCompletedJob({
+      status,
+      agreement,
+      role: "client",
+    }),
+    canRatePro: status === "completed",
+    showsProtectedPayment: hasProtectedPayment(agreement),
+  };
+}
+
+export function getPostPaymentJobActionsForPro({
+  status,
+  agreement,
+  isAssignedToCurrentPro,
+}: {
+  status: JobStatus;
+  agreement?: AgreementState | null;
+  isAssignedToCurrentPro: boolean;
+}) {
+  return {
+    canStartJob: canStartJob({
+      status,
+      agreement,
+      role: "professional",
+      isAssignedToCurrentPro,
+    }),
+    canMarkCompleted: canMarkJobCompleted({
+      status,
+      agreement,
+      role: "professional",
+      isAssignedToCurrentPro,
+    }),
+    awaitingClientConfirmation:
+      status === "completed_pending_confirmation" &&
+      isAssignedToCurrentPro &&
+      hasProtectedPayment(agreement),
+    showsProtectedPayment: hasProtectedPayment(agreement),
+  };
+}
+
 export function canProposePrice({
   role,
   jobStatus,
@@ -213,10 +320,26 @@ export function getJobActionsForClient({
   if (canPayProtected({ hasAgreement, paymentStatus }) && status === "agreed") {
     actions.push("pay");
   }
-  if (status === "completed_pending_confirmation") {
+  if (
+    getPostPaymentJobActionsForClient({
+      status,
+      agreement: hasAgreement
+        ? ({ paymentStatus } as AgreementState)
+        : undefined,
+    }).canConfirmCompletion
+  ) {
     actions.push("confirm_completion", "open_dispute");
   }
-  if (status === "completed") actions.push("rate_pro");
+  if (
+    getPostPaymentJobActionsForClient({
+      status,
+      agreement: hasAgreement
+        ? ({ paymentStatus } as AgreementState)
+        : undefined,
+    }).canRatePro
+  ) {
+    actions.push("rate_pro");
+  }
 
   return actions;
 }
@@ -246,11 +369,39 @@ export function getJobActionsForPro({
     return ["open_chat", "view_tracking"];
   }
 
-  if (status === "in_progress" && isAssignedToCurrentPro) {
+  if (
+    getPostPaymentJobActionsForPro({
+      status,
+      agreement: hasAgreement
+        ? ({ paymentStatus } as AgreementState)
+        : undefined,
+      isAssignedToCurrentPro,
+    }).canStartJob
+  ) {
+    return ["start_job", "open_chat", "view_tracking"];
+  }
+
+  if (
+    getPostPaymentJobActionsForPro({
+      status,
+      agreement: hasAgreement
+        ? ({ paymentStatus } as AgreementState)
+        : undefined,
+      isAssignedToCurrentPro,
+    }).canMarkCompleted
+  ) {
     return ["mark_completed"];
   }
 
-  if (status === "completed_pending_confirmation" && isAssignedToCurrentPro) {
+  if (
+    getPostPaymentJobActionsForPro({
+      status,
+      agreement: hasAgreement
+        ? ({ paymentStatus } as AgreementState)
+        : undefined,
+      isAssignedToCurrentPro,
+    }).awaitingClientConfirmation
+  ) {
     return ["awaiting_client_confirmation"];
   }
 

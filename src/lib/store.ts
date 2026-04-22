@@ -90,6 +90,9 @@ export interface SessionState {
   ) => void;
   acceptNegotiation: (jobId: string, by: NegotiationActor) => void;
   markAgreementProtected: (jobId: string) => void;
+  markJobInProgress: (jobId: string) => void;
+  markJobCompletedPendingConfirmation: (jobId: string) => void;
+  confirmCompletedJob: (jobId: string) => void;
 }
 
 function cloneAdminConfig(config: AdminConfig = defaultAdminConfig): AdminConfig {
@@ -167,6 +170,13 @@ export function getNegotiationByJobId(state: SessionState, jobId: string) {
 
 export function getAgreementByJobId(state: SessionState, jobId: string) {
   return state.agreements[jobId];
+}
+
+export function getEffectivePostPaymentStatus(
+  state: SessionState,
+  jobId: string,
+) {
+  return getEffectiveJobById(state, jobId)?.status;
 }
 
 export const useSession = create<SessionState>()(
@@ -377,6 +387,62 @@ export const useSession = create<SessionState>()(
                 status: "escrow_funded",
                 finalPrice: current.finalPrice,
                 commissionPct: current.commissionPct,
+              },
+            },
+          };
+        }),
+      markJobInProgress: (jobId) =>
+        set((s) => {
+          const agreement = s.agreements[jobId];
+          if (!agreement || agreement.paymentStatus !== "protected") return {};
+
+          return {
+            jobOverrides: {
+              ...s.jobOverrides,
+              [jobId]: {
+                ...s.jobOverrides[jobId],
+                status: "in_progress",
+                finalPrice: agreement.finalPrice,
+                commissionPct: agreement.commissionPct,
+              },
+            },
+          };
+        }),
+      markJobCompletedPendingConfirmation: (jobId) =>
+        set((s) => {
+          const agreement = s.agreements[jobId];
+          if (!agreement || agreement.paymentStatus !== "protected") return {};
+
+          const completionDeadline = new Date(
+            Date.now() + s.adminConfig.autoReleaseDays * 24 * 60 * 60 * 1000,
+          ).toISOString();
+
+          return {
+            jobOverrides: {
+              ...s.jobOverrides,
+              [jobId]: {
+                ...s.jobOverrides[jobId],
+                status: "completed_pending_confirmation",
+                completionDeadline,
+                finalPrice: agreement.finalPrice,
+                commissionPct: agreement.commissionPct,
+              },
+            },
+          };
+        }),
+      confirmCompletedJob: (jobId) =>
+        set((s) => {
+          const agreement = s.agreements[jobId];
+          if (!agreement || agreement.paymentStatus !== "protected") return {};
+
+          return {
+            jobOverrides: {
+              ...s.jobOverrides,
+              [jobId]: {
+                ...s.jobOverrides[jobId],
+                status: "completed",
+                finalPrice: agreement.finalPrice,
+                commissionPct: agreement.commissionPct,
               },
             },
           };

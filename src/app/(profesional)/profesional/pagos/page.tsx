@@ -4,11 +4,11 @@ import { StatusBar } from "@/components/layout/status-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
+import { getAgreement, getEffectiveFinalPrice } from "@/lib/domain/policies";
 import { getCurrentProfessionalId, getEffectiveAdminConfig, getEffectiveJobs, useSession } from "@/lib/store";
 import { formatEuro } from "@/lib/utils";
 
-function calcPayout(priceMin: number, priceMax: number, commissionPct: number) {
-  const total = Math.round((priceMin + priceMax) / 2);
+function calcPayout(total: number, commissionPct: number) {
   const commission = Math.round((total * commissionPct) / 100);
   return { total, commission, net: total - commission };
 }
@@ -17,6 +17,7 @@ export default function PagosPage() {
   const adminConfig = useSession(getEffectiveAdminConfig);
   const currentProfessionalId = useSession(getCurrentProfessionalId);
   const jobs = useSession(getEffectiveJobs);
+  const agreements = useSession((s) => s.agreements);
 
   const pending = jobs.filter(
     (j) =>
@@ -30,11 +31,23 @@ export default function PagosPage() {
   );
 
   const pendingTotal = pending.reduce(
-    (acc, j) => acc + calcPayout(j.priceMin, j.priceMax, adminConfig.commissionPct).net,
+    (acc, j) =>
+      acc +
+      calcPayout(
+        getEffectiveFinalPrice(j, getAgreement(agreements[j.id])) ??
+          Math.round((j.priceMin + j.priceMax) / 2),
+        j.commissionPct ?? adminConfig.commissionPct,
+      ).net,
     0,
   );
   const monthTotal = released.reduce(
-    (acc, j) => acc + calcPayout(j.priceMin, j.priceMax, adminConfig.commissionPct).net,
+    (acc, j) =>
+      acc +
+      calcPayout(
+        getEffectiveFinalPrice(j, getAgreement(agreements[j.id])) ??
+          Math.round((j.priceMin + j.priceMax) / 2),
+        j.commissionPct ?? adminConfig.commissionPct,
+      ).net,
     0,
   );
 
@@ -82,10 +95,12 @@ export default function PagosPage() {
             </Card>
           )}
           {pending.map((j) => {
-            const { total, commission, net } = calcPayout(
-              j.priceMin,
-              j.priceMax,
-              adminConfig.commissionPct,
+            const effectiveTotal =
+              getEffectiveFinalPrice(j, getAgreement(agreements[j.id])) ??
+              Math.round((j.priceMin + j.priceMax) / 2);
+            const { total, net } = calcPayout(
+              effectiveTotal,
+              j.commissionPct ?? adminConfig.commissionPct,
             );
             return (
               <Card key={j.id} className="!p-3.5">
@@ -106,7 +121,7 @@ export default function PagosPage() {
                       {formatEuro(net)}
                     </div>
                     <div className="text-[10px] text-ink-400">
-                      {formatEuro(total)} − {adminConfig.commissionPct}%
+                      {formatEuro(total)} − {j.commissionPct ?? adminConfig.commissionPct}%
                     </div>
                   </div>
                 </div>
@@ -125,10 +140,12 @@ export default function PagosPage() {
             </Card>
           )}
           {released.map((j) => {
-            const { total, commission, net } = calcPayout(
-              j.priceMin,
-              j.priceMax,
-              adminConfig.commissionPct,
+            const effectiveTotal =
+              getEffectiveFinalPrice(j, getAgreement(agreements[j.id])) ??
+              Math.round((j.priceMin + j.priceMax) / 2);
+            const { commission, net } = calcPayout(
+              effectiveTotal,
+              j.commissionPct ?? adminConfig.commissionPct,
             );
             return (
               <Card key={j.id} className="!p-3.5">
