@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { BottomNav } from "@/components/layout/bottom-nav";
+import { isProfessionalOperative } from "@/lib/domain/policies";
 import { useSession } from "@/lib/store";
 
 export default function ProLayout({ children }: { children: React.ReactNode }) {
@@ -10,9 +11,11 @@ export default function ProLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const role = useSession((s) => s.role);
   const proStatus = useSession((s) => s.proStatus);
+  const operative = isProfessionalOperative(role, proStatus);
 
   useEffect(() => {
     if (role !== "professional") return;
+    if (operative) return;
     if (proStatus === "pending") {
       router.replace("/profesional/pendiente");
       return;
@@ -20,9 +23,9 @@ export default function ProLayout({ children }: { children: React.ReactNode }) {
     if (proStatus === "blocked") {
       router.replace("/profesional/bloqueado");
     }
-  }, [pathname, proStatus, role, router]);
+  }, [operative, pathname, proStatus, role, router]);
 
-  if (role === "professional" && (proStatus === "pending" || proStatus === "blocked")) {
+  if (role === "professional" && !operative) {
     return null;
   }
 

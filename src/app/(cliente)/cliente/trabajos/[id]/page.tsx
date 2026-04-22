@@ -11,7 +11,9 @@ import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
 import { StatusBadge } from "@/components/ui/badge";
 import { JobStatusTimeline } from "@/components/jobs/job-status-timeline";
-import { jobs, professionals } from "@/lib/data";
+import { defaultAdminConfig, jobs, professionals } from "@/lib/data";
+import { getJobActionsForClient } from "@/lib/domain/policies";
+import type { JobStatus } from "@/lib/types";
 import { formatEuro } from "@/lib/utils";
 
 interface Props {
@@ -26,9 +28,13 @@ function Inner({ id }: { id: string }) {
   const assignedPro = job.assignedProId
     ? professionals.find((p) => p.id === job.assignedProId)
     : null;
-  const canOpenChat = Boolean(
-    assignedPro && ["agreed", "escrow_funded", "in_progress", "completed_pending_confirmation", "completed"].includes(job.status),
-  );
+  const clientActions = getJobActionsForClient({
+    status: job.status,
+    hasAssignedPro: Boolean(assignedPro),
+    invitationCount: job.invitations ?? 0,
+    invitationLimit: defaultAdminConfig.invitationLimitPerJob,
+  });
+  const canOpenChat = clientActions.includes("open_chat");
 
   return (
     <div className="flex-1 flex flex-col bg-sand-50">
@@ -92,7 +98,7 @@ function Inner({ id }: { id: string }) {
         </Card>
 
         {/* Solicitudes / invitaciones */}
-        {job.status === "published" && (
+        {clientActions.includes("view_requests") && (
           <Card className="mb-3">
             <div className="flex items-center justify-between mb-3">
               <div className="font-bold text-[13.5px] text-ink-800">
@@ -129,12 +135,14 @@ function Inner({ id }: { id: string }) {
                 </div>
               ))}
             </div>
-            <Link
-              href={`/cliente/trabajos/${job.id}/invitaciones`}
-              className="block text-center text-[12px] font-bold text-coral-600 mt-3 pt-3 border-t border-sand-200/70"
-            >
-              + Invitar a otros profesionales
-            </Link>
+            {clientActions.includes("invite_pros") && (
+              <Link
+                href={`/cliente/trabajos/${job.id}/invitaciones`}
+                className="block text-center text-[12px] font-bold text-coral-600 mt-3 pt-3 border-t border-sand-200/70"
+              >
+                + Invitar a otros profesionales
+              </Link>
+            )}
           </Card>
         )}
 
@@ -179,7 +187,13 @@ function Inner({ id }: { id: string }) {
         )}
 
         {/* CTAs según estado */}
-        <ActionsForStatus jobId={job.id} status={job.status} priceMin={job.priceMin} priceMax={job.priceMax} />
+        <ActionsForStatus
+          jobId={job.id}
+          status={job.status}
+          priceMin={job.priceMin}
+          priceMax={job.priceMax}
+          actions={clientActions}
+        />
       </ScreenBody>
     </div>
   );
@@ -190,13 +204,15 @@ function ActionsForStatus({
   status,
   priceMin,
   priceMax,
+  actions,
 }: {
   jobId: string;
-  status: string;
+  status: JobStatus;
   priceMin: number;
   priceMax: number;
+  actions: ReturnType<typeof getJobActionsForClient>;
 }) {
-  if (status === "agreed") {
+  if (actions.includes("pay")) {
     return (
       <Card className="mb-3 bg-amber-50/60 border-amber-100">
         <div className="font-bold text-[13.5px] text-amber-800 mb-1">
@@ -212,7 +228,10 @@ function ActionsForStatus({
       </Card>
     );
   }
-  if (status === "completed_pending_confirmation") {
+  if (
+    actions.includes("confirm_completion") &&
+    actions.includes("open_dispute")
+  ) {
     return (
       <Card className="mb-3 bg-violet-50/60 border-violet-100">
         <div className="font-bold text-[13.5px] text-violet-800 mb-1">
@@ -232,7 +251,7 @@ function ActionsForStatus({
       </Card>
     );
   }
-  if (status === "completed") {
+  if (actions.includes("rate_pro")) {
     return (
       <Card className="mb-3">
         <div className="font-bold text-[13.5px] text-ink-800 mb-2">

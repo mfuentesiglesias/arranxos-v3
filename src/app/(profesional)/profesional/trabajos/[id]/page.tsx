@@ -12,6 +12,12 @@ import { StatusBadge } from "@/components/ui/badge";
 import { JobStatusTimeline } from "@/components/jobs/job-status-timeline";
 import { MapView } from "@/components/map/map-view";
 import { jobs, defaultAdminConfig } from "@/lib/data";
+import {
+  canSeeExactLocation,
+  getCommissionAmount,
+  getJobActionsForPro,
+} from "@/lib/domain/policies";
+import type { JobStatus } from "@/lib/types";
 import { formatEuro, daysBetween } from "@/lib/utils";
 
 interface Props {
@@ -19,14 +25,27 @@ interface Props {
 }
 
 function Inner({ id }: { id: string }) {
+  const currentProfessionalId = "p1";
   const job = jobs.find((j) => j.id === id) ?? jobs[0];
   const [requested, setRequested] = useState(false);
 
-  // estado del pro: published → puede solicitar; agreed/escrow_funded/in_progress → puede chatear/finalizar
-  const isMine = job.assignedProId === "p1";
-  const accepted = ["agreed", "escrow_funded", "in_progress", "completed_pending_confirmation", "completed"].includes(job.status);
-  const showApprox = !isMine && !accepted;
-  const commission = Math.round(((job.priceMin + job.priceMax) / 2) * defaultAdminConfig.commissionPct / 100);
+  const isMine = job.assignedProId === currentProfessionalId;
+  const canSeeLocation = canSeeExactLocation({
+    viewerRole: "professional",
+    proStatus: "approved",
+    jobStatus: job.status,
+    assignedProId: job.assignedProId,
+    currentProfessionalId,
+  });
+  const proActions = getJobActionsForPro({
+    status: job.status,
+    isAssignedToCurrentPro: isMine,
+  });
+  const accepted = canSeeLocation;
+  const showApprox = !canSeeLocation;
+  const commissionPct = job.commissionPct ?? defaultAdminConfig.commissionPct;
+  const agreedAmount = Math.round((job.priceMin + job.priceMax) / 2);
+  const commission = getCommissionAmount({ amount: agreedAmount, commissionPct });
 
   return (
     <div className="flex-1 flex flex-col bg-sand-50">
@@ -111,9 +130,9 @@ function Inner({ id }: { id: string }) {
         {/* Comisión */}
         <Card className="mb-3 bg-sand-50">
           <div className="text-[12px] text-ink-500 leading-snug">
-            Comisión Arranxos: <strong>{defaultAdminConfig.commissionPct}%</strong> ·
+            Comisión Arranxos: <strong>{commissionPct}%</strong> ·
             ~ {formatEuro(commission)}. Recibirás{" "}
-            <strong>{formatEuro(Math.round((job.priceMin + job.priceMax) / 2 - commission))}</strong>{" "}
+            <strong>{formatEuro(agreedAmount - commission)}</strong>{" "}
             (si se acuerda en el rango medio).
           </div>
         </Card>
@@ -122,8 +141,7 @@ function Inner({ id }: { id: string }) {
       {/* Sticky CTA */}
       <ProJobActions
         jobId={job.id}
-        status={job.status}
-        isMine={isMine}
+        actions={proActions}
         requested={requested}
         onRequest={() => setRequested(true)}
       />
@@ -144,18 +162,16 @@ function CountdownBox({ deadline }: { deadline: string }) {
 
 function ProJobActions({
   jobId,
-  status,
-  isMine,
+  actions,
   requested,
   onRequest,
 }: {
   jobId: string;
-  status: string;
-  isMine: boolean;
+  actions: ReturnType<typeof getJobActionsForPro>;
   requested: boolean;
   onRequest: () => void;
 }) {
-  if (status === "published" && !isMine) {
+  if (actions.includes("request_job")) {
     return (
       <div className="app-bottom-bar px-5 pb-5 pt-3 bg-white border-t border-sand-200/70">
         <Button
@@ -169,7 +185,7 @@ function ProJobActions({
       </div>
     );
   }
-  if (status === "agreed" || status === "escrow_funded") {
+  if (actions.includes("open_chat") && actions.includes("view_tracking")) {
     return (
       <div className="app-bottom-bar px-5 pb-5 pt-3 bg-white border-t border-sand-200/70 grid grid-cols-2 gap-2">
         <Button full variant="outline" href={`/chat/${jobId}`}>
@@ -181,7 +197,7 @@ function ProJobActions({
       </div>
     );
   }
-  if (status === "in_progress") {
+  if (actions.includes("mark_completed")) {
     return (
       <div className="app-bottom-bar px-5 pb-5 pt-3 bg-white border-t border-sand-200/70">
         <Button full href={`/profesional/trabajos/${jobId}/finalizar`}>
@@ -190,7 +206,7 @@ function ProJobActions({
       </div>
     );
   }
-  if (status === "completed_pending_confirmation") {
+  if (actions.includes("awaiting_client_confirmation")) {
     return (
       <div className="app-bottom-bar px-5 pb-5 pt-3 bg-white border-t border-sand-200/70 text-center text-[12px] text-ink-500">
         Esperando confirmación del cliente

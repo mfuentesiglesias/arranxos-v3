@@ -8,6 +8,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { MessageBubble } from "@/components/chat/message-bubble";
 import { AntiLeakAlert } from "@/components/chat/anti-leak-alert";
 import { jobs, professionals, chatMessages } from "@/lib/data";
+import { canAccessChat, isProfessionalOperative } from "@/lib/domain/policies";
 import { scanLeaks } from "@/lib/anti-leak";
 import { useSession } from "@/lib/store";
 import type { ChatMessage } from "@/lib/types";
@@ -19,6 +20,7 @@ interface Props {
 }
 
 function Inner({ jobId }: { jobId: string }) {
+  const currentProfessionalId = "p1";
   const sessionRole = useSession((s) => s.role);
   const proStatus = useSession((s) => s.proStatus);
   const role = sessionRole === "professional" ? "pro" : "client";
@@ -26,18 +28,19 @@ function Inner({ jobId }: { jobId: string }) {
   const pro = job.assignedProId
     ? professionals.find((p) => p.id === job.assignedProId) ?? professionals[0]
     : professionals[0];
-  const chatOpenStatuses = ["agreed", "escrow_funded", "in_progress", "completed_pending_confirmation", "completed"];
-  const isAcceptedChat = chatOpenStatuses.includes(job.status);
-  const canAccessChat =
-    sessionRole === "admin" ||
-    (sessionRole === "client" && isAcceptedChat && Boolean(job.assignedProId)) ||
-    (sessionRole === "professional" && proStatus === "approved" && isAcceptedChat && job.assignedProId === "p1");
+  const chatEnabled = canAccessChat({
+    role: sessionRole,
+    proStatus,
+    jobStatus: job.status,
+    assignedProId: job.assignedProId,
+    currentProfessionalId,
+  });
   const other =
     role === "pro"
       ? { name: job.clientName, avatar: job.clientAvatar, subtitle: "Cliente" }
       : { name: pro.name, avatar: pro.avatar, subtitle: pro.specialty };
 
-  if (!canAccessChat) {
+  if (!chatEnabled) {
     return (
       <div className="flex-1 min-h-0 flex flex-col bg-sand-50">
         <StatusBar />
@@ -52,7 +55,7 @@ function Inner({ jobId }: { jobId: string }) {
         </div>
         <ScreenBody className="px-4 pt-4 pb-6">
           <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-[13px] text-amber-700 leading-relaxed">
-            {sessionRole === "professional" && proStatus !== "approved"
+            {sessionRole === "professional" && !isProfessionalOperative(sessionRole, proStatus)
               ? "Tu cuenta profesional todavía no puede operar. Necesitas aprobación para acceder al chat."
               : "El chat solo se abre cuando el cliente acepta al profesional."}
           </div>

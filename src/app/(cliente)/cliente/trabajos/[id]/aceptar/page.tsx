@@ -9,6 +9,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { jobs, professionals, defaultAdminConfig } from "@/lib/data";
+import { getCommissionAmount } from "@/lib/domain/policies";
 import { formatEuro } from "@/lib/utils";
 
 interface Props {
@@ -24,7 +25,7 @@ function Inner({ id }: { id: string }) {
   const [accepting, setAccepting] = useState(false);
   const agreedPrice = Math.round((job.priceMin + job.priceMax) / 2);
   const commissionPct = defaultAdminConfig.commissionPct;
-  const commission = Math.round((agreedPrice * commissionPct) / 100);
+  const commission = getCommissionAmount({ amount: agreedPrice, commissionPct });
 
   const accept = () => {
     setAccepting(true);
