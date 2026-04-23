@@ -17,8 +17,10 @@
 
   html,
   body {
+    width: 100%;
     height: 100%;
     min-height: 100%;
+    margin: 0;
     background: var(--bg);
     color: var(--ink);
     font-family: Inter, "DM Sans", -apple-system, system-ui,
@@ -85,6 +87,7 @@
 
 @layer utilities {
   .app-root {
+    width: 100%;
     min-height: 100dvh;
     height: 100dvh;
     overflow: hidden;

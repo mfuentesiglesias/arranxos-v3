@@ -1,7 +1,9 @@
 "use client";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { HeaderActionSheet } from "@/components/layout/header-action-sheet";
+import { HeaderIconButton } from "@/components/layout/header-icon-button";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
@@ -15,6 +17,7 @@ import { professionals, reviews } from "@/lib/data";
 import { formatEuro } from "@/lib/utils";
 
 function Inner() {
+  const [shareOpen, setShareOpen] = useState(false);
   const params = useSearchParams();
   const id = params.get("id") ?? "p1";
   const jobId = params.get("jobId");
@@ -27,10 +30,32 @@ function Inner() {
       <TopBar
         title="Perfil profesional"
         right={
-          <button className="w-9 h-9 rounded-full bg-sand-100 flex items-center justify-center">
+          <HeaderIconButton
+            label="Abrir opciones para compartir perfil"
+            onClick={() => setShareOpen(true)}
+          >
             <Icon name="share" size={16} />
-          </button>
+          </HeaderIconButton>
         }
+      />
+      <HeaderActionSheet
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        title="Compartir perfil"
+        description="Fallback ligero mientras no conectamos compartir nativo real."
+        items={[
+          {
+            label: "Copiar enlace del perfil",
+            description: "Disponible como acción nativa en la siguiente iteración.",
+            icon: "share",
+          },
+          {
+            label: "Volver al trabajo",
+            description: jobId ? "Regresa al detalle del trabajo actual." : "No hay trabajo vinculado en esta vista.",
+            icon: "briefcase",
+            href: jobId ? `/cliente/trabajos/${jobId}` : undefined,
+          },
+        ]}
       />
       <ScreenBody className="px-4 pt-3 pb-6">
         <Card className="mb-3">
