@@ -1,5 +1,10 @@
+"use client";
+
+import { useState } from "react";
 import { StatusBar } from "@/components/layout/status-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
+import { HeaderActionSheet } from "@/components/layout/header-action-sheet";
+import { HeaderIconButton } from "@/components/layout/header-icon-button";
 import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
 import { Card } from "@/components/ui/card";
@@ -18,6 +23,7 @@ import {
 import Link from "next/link";
 
 export default function HomeClientePage() {
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const myJobs = jobs.filter((j) => j.clientId === "u1").slice(0, 2);
   const topPros = professionals
     .filter((p) => p.status === "approved" && p.rating >= 4.7)
@@ -40,14 +46,40 @@ export default function HomeClientePage() {
               </div>
             </div>
           </Link>
-          <button className="w-10 h-10 rounded-full bg-sand-100 flex items-center justify-center text-ink-700 relative">
+          <HeaderIconButton
+            label="Abrir notificaciones"
+            onClick={() => setNotificationsOpen(true)}
+            className="relative"
+          >
             <Icon name="bell" size={20} />
             {unread > 0 && (
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-coral-500 rounded-full ring-2 ring-white" />
             )}
-          </button>
+          </HeaderIconButton>
         </div>
       </div>
+
+      <HeaderActionSheet
+        open={notificationsOpen}
+        onClose={() => setNotificationsOpen(false)}
+        title="Notificaciones"
+        description="Actividad reciente de tus trabajos y acuerdos."
+        items={notifications.map((notification) => ({
+          label: notification.text,
+          description: `${notification.sub ?? ""} · ${notification.time}`,
+          icon:
+            notification.type === "request"
+              ? "users"
+              : notification.type === "agreement"
+                ? "euro"
+                : notification.type === "payment"
+                  ? "shield"
+                  : notification.type === "dispute"
+                    ? "alert"
+                    : "star",
+          href: notification.jobId ? `/cliente/trabajos/${notification.jobId}` : undefined,
+        }))}
+      />
 
       <ScreenBody className="px-4 pt-4 pb-6">
         {/* Big CTA */}

@@ -10,7 +10,7 @@ import { categoryGroups } from "@/lib/data";
 
 export default function PublicarCategoriaPage() {
   const router = useRouter();
-  const [open, setOpen] = useState<string | null>(categoryGroups[0].group);
+  const [open, setOpen] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
   return (

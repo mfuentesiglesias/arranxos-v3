@@ -1,6 +1,9 @@
 "use client";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { HeaderActionSheet } from "@/components/layout/header-action-sheet";
+import { HeaderIconButton } from "@/components/layout/header-icon-button";
 import { StatusBar } from "@/components/layout/status-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
 import { Card } from "@/components/ui/card";
@@ -12,6 +15,7 @@ import { currentPro, reviews, defaultAdminConfig } from "@/lib/data";
 import { useSession } from "@/lib/store";
 
 export default function PerfilProPage() {
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const router = useRouter();
   const reset = useSession((s) => s.reset);
   const myReviews = reviews
@@ -53,10 +57,37 @@ export default function PerfilProPage() {
         <h1 className="font-extrabold text-[20px] text-ink-900 tracking-tight">
           Mi perfil
         </h1>
-        <button className="w-9 h-9 rounded-full bg-sand-100 flex items-center justify-center">
+        <HeaderIconButton
+          label="Abrir ajustes del perfil profesional"
+          onClick={() => setSettingsOpen(true)}
+        >
           <Icon name="settings" size={16} />
-        </button>
+        </HeaderIconButton>
       </div>
+
+      <HeaderActionSheet
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        title="Ajustes del perfil profesional"
+        description="Accesos rápidos a la configuración más habitual en esta demo."
+        items={[
+          {
+            label: "Especialidades y zonas",
+            description: "Actualiza lo que muestras a clientes y admin.",
+            icon: "pin",
+          },
+          {
+            label: "Cuenta bancaria",
+            description: "Revisa la cuenta donde recibirás las liberaciones.",
+            icon: "card",
+          },
+          {
+            label: "Centro de ayuda",
+            description: "Atajos de soporte y recursos para profesionales.",
+            icon: "info",
+          },
+        ]}
+      />
 
       <ScreenBody className="px-4 pt-4 pb-6">
         <Card className="mb-3">

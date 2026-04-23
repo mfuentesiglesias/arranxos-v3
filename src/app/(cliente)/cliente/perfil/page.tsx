@@ -1,6 +1,9 @@
 "use client";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { HeaderActionSheet } from "@/components/layout/header-action-sheet";
+import { HeaderIconButton } from "@/components/layout/header-icon-button";
 import { StatusBar } from "@/components/layout/status-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
 import { Card } from "@/components/ui/card";
@@ -10,6 +13,7 @@ import { currentClient, jobs } from "@/lib/data";
 import { useSession } from "@/lib/store";
 
 export default function PerfilClientePage() {
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const router = useRouter();
   const reset = useSession((s) => s.reset);
   const mine = jobs.filter((j) => j.clientId === "u1");
@@ -53,10 +57,36 @@ export default function PerfilClientePage() {
         <h1 className="font-extrabold text-[20px] text-ink-900 tracking-tight">
           Mi perfil
         </h1>
-        <button className="w-9 h-9 rounded-full bg-sand-100 flex items-center justify-center">
+        <HeaderIconButton
+          label="Abrir ajustes del perfil"
+          onClick={() => setSettingsOpen(true)}
+        >
           <Icon name="settings" size={16} />
-        </button>
+        </HeaderIconButton>
       </div>
+      <HeaderActionSheet
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        title="Ajustes del perfil"
+        description="Accesos rápidos a las opciones más usadas en esta demo."
+        items={[
+          {
+            label: "Métodos de pago",
+            description: "Gestiona tus métodos guardados desde esta misma pantalla.",
+            icon: "card",
+          },
+          {
+            label: "Privacidad y seguridad",
+            description: "Revisa permisos, seguridad y datos del perfil.",
+            icon: "lock",
+          },
+          {
+            label: "Centro de ayuda",
+            description: "Atajos de soporte y preguntas frecuentes.",
+            icon: "info",
+          },
+        ]}
+      />
       <ScreenBody className="px-4 pt-4 pb-6">
         <Card className="mb-3">
           <div className="flex items-center gap-3 mb-4">

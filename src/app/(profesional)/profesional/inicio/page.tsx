@@ -1,15 +1,21 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 import { StatusBar } from "@/components/layout/status-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
+import { HeaderActionSheet } from "@/components/layout/header-action-sheet";
+import { HeaderIconButton } from "@/components/layout/header-icon-button";
 import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
 import { JobCard } from "@/components/jobs/job-card";
 import { SectionHeading } from "@/components/ui/section-heading";
-import { currentPro, jobs, defaultAdminConfig } from "@/lib/data";
+import { currentPro, jobs, defaultAdminConfig, notifications } from "@/lib/data";
 import { formatEuro } from "@/lib/utils";
 
 export default function HomeProPage() {
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const openJobs = jobs
     .filter((j) => j.status === "published")
     .slice(0, 4);
@@ -39,9 +45,13 @@ export default function HomeProPage() {
               </div>
             </div>
           </Link>
-          <button className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+          <HeaderIconButton
+            label="Abrir actividad"
+            onClick={() => setNotificationsOpen(true)}
+            light
+          >
             <Icon name="bell" size={20} />
-          </button>
+          </HeaderIconButton>
         </div>
         <div className="grid grid-cols-3 gap-2">
           {[
@@ -61,6 +71,26 @@ export default function HomeProPage() {
           ))}
         </div>
       </div>
+
+      <HeaderActionSheet
+        open={notificationsOpen}
+        onClose={() => setNotificationsOpen(false)}
+        title="Actividad"
+        description="Avisos recientes relacionados con tus trabajos y cobros."
+        items={notifications.map((notification) => ({
+          label: notification.text,
+          description: `${notification.sub ?? ""} · ${notification.time}`,
+          icon:
+            notification.type === "payment"
+              ? "shield"
+              : notification.type === "agreement"
+                ? "euro"
+                : notification.type === "dispute"
+                  ? "alert"
+                  : "bell",
+          href: notification.jobId ? `/profesional/trabajos/${notification.jobId}` : undefined,
+        }))}
+      />
 
       <ScreenBody className="px-4 pt-4 pb-6">
         {/* Verification card */}

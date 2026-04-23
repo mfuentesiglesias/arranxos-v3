@@ -1,7 +1,9 @@
 "use client";
-import { use, Suspense } from "react";
+import { use, Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { HeaderActionSheet } from "@/components/layout/header-action-sheet";
+import { HeaderIconButton } from "@/components/layout/header-icon-button";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
@@ -33,6 +35,7 @@ interface Props {
 }
 
 function Inner({ id }: { id: string }) {
+  const [moreOpen, setMoreOpen] = useState(false);
   const search = useSearchParams();
   const justPublished = search.get("justPublished") === "1";
   const adminConfig = useSession(getEffectiveAdminConfig);
@@ -65,10 +68,42 @@ function Inner({ id }: { id: string }) {
       <TopBar
         title={`Trabajo ${job.id}`}
         right={
-          <button className="w-9 h-9 rounded-full bg-sand-100 flex items-center justify-center">
+          <HeaderIconButton
+            label="Abrir opciones del trabajo"
+            onClick={() => setMoreOpen(true)}
+          >
             <Icon name="more" size={18} stroke={2} />
-          </button>
+          </HeaderIconButton>
         }
+      />
+
+      <HeaderActionSheet
+        open={moreOpen}
+        onClose={() => setMoreOpen(false)}
+        title="Opciones del trabajo"
+        description="Acciones rápidas disponibles para este trabajo en la demo."
+        items={[
+          {
+            label: "Ver solicitudes",
+            description: "Revisa profesionales interesados en tu trabajo.",
+            icon: "users",
+            href: `/cliente/trabajos/${job.id}/solicitudes`,
+          },
+          {
+            label: "Invitar profesionales",
+            description: "Selecciona nuevos profesionales para este trabajo.",
+            icon: "plus",
+            href: `/cliente/trabajos/${job.id}/invitaciones`,
+          },
+          {
+            label: "Abrir chat",
+            description: canOpenChat
+              ? "Accede a la negociación y seguimiento del acuerdo."
+              : "Disponible cuando el profesional haya sido aceptado.",
+            icon: "chat",
+            href: canOpenChat ? `/chat/${job.id}` : undefined,
+          },
+        ]}
       />
 
       <ScreenBody className="px-4 pt-3 pb-6">
