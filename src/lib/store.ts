@@ -68,6 +68,9 @@ export interface SessionState {
   setCurrentClientId: (id: string) => void;
   setCurrentProfessionalId: (id: string) => void;
   setCurrentAdminId: (id: string) => void;
+  enterDemoAccess: (
+    preset: "client" | "professional_pending" | "professional_approved" | "admin",
+  ) => void;
   reset: () => void;
   draft: Record<string, unknown>;
   setDraft: (patch: Record<string, unknown>) => void;
@@ -192,6 +195,46 @@ export const useSession = create<SessionState>()(
       setCurrentClientId: (currentClientId) => set({ currentClientId }),
       setCurrentProfessionalId: (currentProfessionalId) => set({ currentProfessionalId }),
       setCurrentAdminId: (currentAdminId) => set({ currentAdminId }),
+      enterDemoAccess: (preset) =>
+        set(() => {
+          if (preset === "client") {
+            return {
+              role: "client" as const,
+              proStatus: "approved" as const,
+              currentClientId: "u1",
+              currentProfessionalId: "p1",
+              currentAdminId: "a1",
+            };
+          }
+
+          if (preset === "professional_pending") {
+            return {
+              role: "professional" as const,
+              proStatus: "pending" as const,
+              currentClientId: "u1",
+              currentProfessionalId: "p4",
+              currentAdminId: "a1",
+            };
+          }
+
+          if (preset === "professional_approved") {
+            return {
+              role: "professional" as const,
+              proStatus: "approved" as const,
+              currentClientId: "u1",
+              currentProfessionalId: "p1",
+              currentAdminId: "a1",
+            };
+          }
+
+          return {
+            role: "admin" as const,
+            proStatus: "approved" as const,
+            currentClientId: "u1",
+            currentProfessionalId: "p1",
+            currentAdminId: "a1",
+          };
+        }),
       reset: () =>
         set({
           role: "client",

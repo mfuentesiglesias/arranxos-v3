@@ -13,8 +13,7 @@ import { useSession } from "@/lib/store";
 
 export default function LoginPage() {
   const router = useRouter();
-  const setRole = useSession((s) => s.setRole);
-  const setProStatus = useSession((s) => s.setProStatus);
+  const enterDemoAccess = useSession((s) => s.enterDemoAccess);
   const [email, setEmail] = useState("antia.bouzas@gmail.com");
   const [pass, setPass] = useState("········");
   const [loading, setLoading] = useState(false);
@@ -22,11 +21,41 @@ export default function LoginPage() {
   const doLogin = () => {
     setLoading(true);
     setTimeout(() => {
-      setRole("client");
-      setProStatus("approved");
+      enterDemoAccess("client");
       router.push("/cliente/inicio");
     }, 700);
   };
+
+  const demoAccesses = [
+    {
+      key: "client",
+      label: "Cliente",
+      icon: "👤",
+      description: "Publicar, aceptar, pagar y valorar",
+      target: "/cliente/inicio",
+    },
+    {
+      key: "professional_pending",
+      label: "Pro pending",
+      icon: "🕓",
+      description: "Estado pendiente de aprobación",
+      target: "/profesional/pendiente",
+    },
+    {
+      key: "professional_approved",
+      label: "Pro approved",
+      icon: "🔧",
+      description: "Flujo profesional operativo",
+      target: "/profesional/inicio",
+    },
+    {
+      key: "admin",
+      label: "Admin",
+      icon: "🛡️",
+      description: "Panel global de control",
+      target: "/admin",
+    },
+  ] as const;
 
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-white">
@@ -72,37 +101,23 @@ export default function LoginPage() {
           </Button>
           <div className="mt-5">
             <Divider label="o accede como demo" />
-            <div className="flex gap-2 mt-3">
-              <button
-                onClick={() => {
-                  setRole("client");
-                  setProStatus("approved");
-                  router.push("/cliente/inicio");
-                }}
-                className="flex-1 py-2.5 rounded-xl border-[1.5px] border-sand-200 bg-white text-[12px] font-bold text-ink-600 active:scale-[0.98]"
-              >
-                👤 Cliente
-              </button>
-              <button
-                onClick={() => {
-                  setRole("professional");
-                  setProStatus("approved");
-                  router.push("/profesional/inicio");
-                }}
-                className="flex-1 py-2.5 rounded-xl border-[1.5px] border-sand-200 bg-white text-[12px] font-bold text-ink-600 active:scale-[0.98]"
-              >
-                🔧 Profesional
-              </button>
-              <button
-                onClick={() => {
-                  setRole("admin");
-                  setProStatus("approved");
-                  router.push("/admin");
-                }}
-                className="flex-1 py-2.5 rounded-xl border-[1.5px] border-sand-200 bg-white text-[12px] font-bold text-ink-600 active:scale-[0.98]"
-              >
-                🛡️ Admin
-              </button>
+            <div className="grid grid-cols-2 gap-2 mt-3">
+              {demoAccesses.map((demo) => (
+                <button
+                  key={demo.key}
+                  onClick={() => {
+                    enterDemoAccess(demo.key);
+                    router.push(demo.target);
+                  }}
+                  className="rounded-2xl border-[1.5px] border-sand-200 bg-white px-3 py-3 text-left active:scale-[0.98]"
+                >
+                  <div className="text-[16px] mb-1">{demo.icon}</div>
+                  <div className="text-[12.5px] font-bold text-ink-700">{demo.label}</div>
+                  <div className="text-[11px] text-ink-400 leading-snug mt-0.5">
+                    {demo.description}
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
           <div className="mt-auto pt-5 text-center text-[13px] text-ink-400">
