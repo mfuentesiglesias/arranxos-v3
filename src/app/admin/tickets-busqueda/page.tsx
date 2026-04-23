@@ -6,11 +6,11 @@ import { ScreenBody } from "@/components/layout/screen-body";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
-import { searchTickets as seed } from "@/lib/data";
-import type { SearchTicket } from "@/lib/types";
+import { getEffectiveSearchTickets, useSession } from "@/lib/store";
 
 export default function AdminTicketsPage() {
-  const [list, setList] = useState<SearchTicket[]>(seed);
+  const list = useSession(getEffectiveSearchTickets);
+  const setSearchTicketStatus = useSession((s) => s.setSearchTicketStatus);
   const [q, setQ] = useState("");
 
   const filtered = list.filter((t) =>
@@ -20,17 +20,15 @@ export default function AdminTicketsPage() {
     t.clientName.toLowerCase().includes(q.toLowerCase()),
   );
 
-  const close = (id: string) =>
-    setList((l) => l.map((t) => (t.id === id ? { ...t, status: "closed" } : t)));
-  const matched = (id: string) =>
-    setList((l) => l.map((t) => (t.id === id ? { ...t, status: "matched" } : t)));
+  const close = (id: string) => setSearchTicketStatus(id, "closed");
+  const matched = (id: string) => setSearchTicketStatus(id, "matched");
 
   return (
     <div className="flex-1 flex flex-col bg-sand-50">
       <StatusBar />
       <TopBar
         title="Tickets de búsqueda"
-        subtitle="Clientes con servicios sin oferta en su zona"
+        subtitle="Clientes sin oferta en zona o sin respuesta útil"
       />
       <ScreenBody className="px-4 pt-3 pb-6">
         <Card className="bg-coral-50 border-coral-100 mb-3">
@@ -83,6 +81,11 @@ export default function AdminTicketsPage() {
               </div>
               <div className="text-[11.5px] text-ink-500 mb-3">
                 {t.zone} · cliente {t.clientName}
+              </div>
+              <div className="text-[11px] text-ink-400 mb-3">
+                {t.reason === "no_pros_in_zone"
+                  ? "Motivo: sin profesionales en la zona"
+                  : "Motivo: sin respuesta útil tras invitaciones"}
               </div>
               {t.status === "open" && (
                 <div className="grid grid-cols-2 gap-2">

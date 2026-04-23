@@ -1,9 +1,11 @@
 import type {
   AgreementPaymentStatus,
   AgreementState,
+  JobOutreachMeta,
   NegotiationState,
 } from "@/lib/store";
-import type { Job, JobStatus, ProStatus, UserRole } from "@/lib/types";
+import type { Job, JobStatus, Professional, ProStatus, SearchTicket, UserRole } from "@/lib/types";
+import { daysBetween } from "@/lib/utils";
 
 export type ClientJobAction =
   | "view_requests"
@@ -279,6 +281,119 @@ export function canProposePrice({
     (role === "client" || role === "professional") &&
     jobStatus === "agreement_pending"
   );
+}
+
+function normalize(text: string) {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+export function getProfessionalsInZoneForJob(job: Job, pros: Professional[]) {
+  const jobAreas = [job.location, job.locationApprox]
+    .filter(Boolean)
+    .map(normalize);
+
+  return pros.filter((pro) => {
+    if (pro.status !== "approved") return false;
+
+    const proAreas = [pro.location, pro.zone ?? ""].filter(Boolean).map(normalize);
+    return proAreas.some(
+      (area) =>
+        jobAreas.some((jobArea) => jobArea.includes(area)) ||
+        jobAreas.some((jobArea) => area.includes(jobArea)),
+    );
+  });
+}
+
+function hasUsefulResponse(job: Job) {
+  return (
+    job.requests > 0 ||
+    Boolean(job.assignedProId) ||
+    job.status !== "published"
+  );
+}
+
+export function canCreateSearchTicketNoProsInZone({
+  prosInZoneCount,
+  existingTicket,
+}: {
+  prosInZoneCount: number;
+  existingTicket?: SearchTicket;
+}) {
+  return prosInZoneCount === 0 && !existingTicket;
+}
+
+export function canCreateSearchTicketNoResponse({
+  job,
+  outreachMeta,
+  prosInZoneCount,
+  daysThreshold,
+  existingTicket,
+  now = new Date().toISOString(),
+}: {
+  job: Job;
+  outreachMeta?: JobOutreachMeta;
+  prosInZoneCount: number;
+  daysThreshold: number;
+  existingTicket?: SearchTicket;
+  now?: string;
+}) {
+  const referenceDate =
+    outreachMeta?.invitationsSentAt ??
+    ((job.invitations ?? 0) > 0 ? job.postedAt : undefined);
+
+  if (!referenceDate || prosInZoneCount === 0 || existingTicket) return false;
+  if (hasUsefulResponse(job)) return false;
+
+  return daysBetween(referenceDate, now) >= daysThreshold;
+}
+
+export function getSearchTicketReason({
+  job,
+  professionals,
+  outreachMeta,
+  existingTicket,
+  daysThreshold,
+  now,
+}: {
+  job: Job;
+  professionals: Professional[];
+  outreachMeta?: JobOutreachMeta;
+  existingTicket?: SearchTicket;
+  daysThreshold: number;
+  now?: string;
+}) {
+  const prosInZone = getProfessionalsInZoneForJob(job, professionals);
+
+  if (
+    canCreateSearchTicketNoProsInZone({
+      prosInZoneCount: prosInZone.length,
+      existingTicket,
+    })
+  ) {
+    return "no_pros_in_zone" as const;
+  }
+
+  if (
+    canCreateSearchTicketNoResponse({
+      job,
+      outreachMeta,
+      prosInZoneCount: prosInZone.length,
+      daysThreshold,
+      existingTicket,
+      now,
+    })
+  ) {
+    return "no_useful_response" as const;
+  }
+
+  return null;
+}
+
+export function canCreateSearchTicket(params: Parameters<typeof getSearchTicketReason>[0]) {
+  return Boolean(getSearchTicketReason(params));
 }
 
 export function getJobActionsForClient({

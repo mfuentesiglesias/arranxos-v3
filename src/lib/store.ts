@@ -1,8 +1,20 @@
 "use client";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { defaultAdminConfig, jobs } from "./data";
-import type { AdminConfig, Job, ProStatus, UserRole } from "./types";
+import {
+  defaultAdminConfig,
+  jobs,
+  notifications as seedNotifications,
+  searchTickets as seedSearchTickets,
+} from "./data";
+import type {
+  AdminConfig,
+  Job,
+  Notification,
+  ProStatus,
+  SearchTicket,
+  UserRole,
+} from "./types";
 
 // DEMO ONLY: persisted to localStorage. This is UI/demo state, not a source
 // of truth. Real state must live in Supabase (or chosen backend).
@@ -57,6 +69,12 @@ export interface AgreementState {
   paidAt?: string;
 }
 
+export interface JobOutreachMeta {
+  invitationsSentAt?: string;
+  invitedCount?: number;
+  searchTicketId?: string;
+}
+
 export interface SessionState {
   role: UserRole;
   proStatus: ProStatus;
@@ -96,6 +114,18 @@ export interface SessionState {
   markJobInProgress: (jobId: string) => void;
   markJobCompletedPendingConfirmation: (jobId: string) => void;
   confirmCompletedJob: (jobId: string) => void;
+  notifications: Notification[];
+  searchTickets: SearchTicket[];
+  jobOutreachMeta: Record<string, JobOutreachMeta>;
+  recordInvitationsSent: (jobId: string, invitedCount: number) => void;
+  createSearchTicket: (
+    jobId: string,
+    reason: SearchTicket["reason"],
+  ) => void;
+  setSearchTicketStatus: (
+    ticketId: string,
+    status: SearchTicket["status"],
+  ) => void;
 }
 
 function cloneAdminConfig(config: AdminConfig = defaultAdminConfig): AdminConfig {
@@ -107,6 +137,14 @@ function cloneAdminConfig(config: AdminConfig = defaultAdminConfig): AdminConfig
 
 function applyJobOverride(job: Job, override?: JobOverride): Job {
   return override ? { ...job, ...override } : job;
+}
+
+function cloneNotifications(notifications: Notification[] = seedNotifications) {
+  return notifications.map((notification) => ({ ...notification }));
+}
+
+function cloneSearchTickets(searchTickets: SearchTicket[] = seedSearchTickets) {
+  return searchTickets.map((ticket) => ({ ...ticket }));
 }
 
 function applyAgreementSnapshot(job: Job, agreement?: AgreementState): Job {
@@ -182,6 +220,28 @@ export function getEffectivePostPaymentStatus(
   return getEffectiveJobById(state, jobId)?.status;
 }
 
+export function getEffectiveNotifications(state: SessionState) {
+  return state.notifications;
+}
+
+export function getEffectiveSearchTickets(state: SessionState) {
+  return state.searchTickets;
+}
+
+export function getJobOutreachMeta(state: SessionState, jobId: string) {
+  return state.jobOutreachMeta[jobId];
+}
+
+export function getSearchTicketByJobId(state: SessionState, jobId: string) {
+  return state.searchTickets.find((ticket) => ticket.jobId === jobId);
+}
+
+export function hasOpenSearchTicket(state: SessionState, jobId: string) {
+  return state.searchTickets.some(
+    (ticket) => ticket.jobId === jobId && ticket.status === "open",
+  );
+}
+
 export const useSession = create<SessionState>()(
   persist(
     (set) => ({
@@ -247,6 +307,9 @@ export const useSession = create<SessionState>()(
           jobOverrides: {},
           negotiations: {},
           agreements: {},
+          notifications: cloneNotifications(),
+          searchTickets: cloneSearchTickets(),
+          jobOutreachMeta: {},
         }),
       draft: {},
       setDraft: (patch) =>
@@ -265,6 +328,9 @@ export const useSession = create<SessionState>()(
           },
         })),
       resetAdminConfig: () => set({ adminConfig: cloneAdminConfig() }),
+      notifications: cloneNotifications(),
+      searchTickets: cloneSearchTickets(),
+      jobOutreachMeta: {},
       jobOverrides: {},
       patchJobOverride: (jobId, patch) =>
         set((s) => ({
@@ -490,6 +556,70 @@ export const useSession = create<SessionState>()(
             },
           };
         }),
+      recordInvitationsSent: (jobId, invitedCount) =>
+        set((s) => ({
+          jobOutreachMeta: {
+            ...s.jobOutreachMeta,
+            [jobId]: {
+              ...s.jobOutreachMeta[jobId],
+              invitedCount,
+              invitationsSentAt: new Date().toISOString(),
+            },
+          },
+        })),
+      createSearchTicket: (jobId, reason) =>
+        set((s) => {
+          const existing = s.searchTickets.find((ticket) => ticket.jobId === jobId);
+          if (existing) return {};
+
+          const job = getEffectiveJobById(s, jobId);
+          if (!job) return {};
+
+          const createdAt = new Date().toISOString();
+          const ticketId = `t-${jobId}`;
+          const ticket: SearchTicket = {
+            id: ticketId,
+            jobId,
+            clientId: job.clientId,
+            clientName: job.clientName,
+            service: job.service,
+            zone: reason === "no_pros_in_zone" ? job.locationApprox : job.location,
+            radiusKm: 25,
+            createdAt,
+            reason,
+            status: "open",
+          };
+          const notification: Notification = {
+            id: `n-ticket-${jobId}`,
+            text:
+              reason === "no_pros_in_zone"
+                ? "Hemos creado un ticket de búsqueda porque no hay profesionales en tu zona"
+                : "Hemos creado un ticket de búsqueda porque sigues sin respuesta útil",
+            sub: job.title,
+            time: "ahora",
+            unread: true,
+            type: "system",
+            jobId,
+          };
+
+          return {
+            searchTickets: [ticket, ...s.searchTickets],
+            notifications: [notification, ...s.notifications],
+            jobOutreachMeta: {
+              ...s.jobOutreachMeta,
+              [jobId]: {
+                ...s.jobOutreachMeta[jobId],
+                searchTicketId: ticketId,
+              },
+            },
+          };
+        }),
+      setSearchTicketStatus: (ticketId, status) =>
+        set((s) => ({
+          searchTickets: s.searchTickets.map((ticket) =>
+            ticket.id === ticketId ? { ...ticket, status } : ticket,
+          ),
+        })),
     }),
     { name: "arranxos-session" },
   ),

@@ -13,17 +13,18 @@ import { JobCard } from "@/components/jobs/job-card";
 import { ProCard } from "@/components/pros/pro-card";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { Button } from "@/components/ui/button";
+import { getEffectiveNotifications, useSession } from "@/lib/store";
 import {
   currentClient,
   jobs,
   professionals,
-  notifications,
   categoryGroups,
 } from "@/lib/data";
 import Link from "next/link";
 
 export default function HomeClientePage() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const notifications = useSession(getEffectiveNotifications);
   const myJobs = jobs.filter((j) => j.clientId === "u1").slice(0, 2);
   const topPros = professionals
     .filter((p) => p.status === "approved" && p.rating >= 4.7)

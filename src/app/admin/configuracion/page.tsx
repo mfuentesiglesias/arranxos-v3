@@ -90,6 +90,20 @@ export default function AdminConfiguracionPage() {
               }
             />
             <Input
+              label="Días sin respuesta útil para habilitar ticket"
+              type="number"
+              min={1}
+              max={30}
+              value={String(cfg.searchTicketNoResponseDays)}
+              onChange={(e) =>
+                setCfg({
+                  ...cfg,
+                  searchTicketNoResponseDays: Number(e.target.value) || 1,
+                })
+              }
+              note="Si pasa este plazo tras invitar profesionales y no hay respuesta útil, el cliente puede abrir ticket de búsqueda."
+            />
+            <Input
               label="Umbral de strikes para bloqueo automático"
               type="number"
               min={1}

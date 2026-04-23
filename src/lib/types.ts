@@ -146,6 +146,7 @@ export interface AdminConfig {
   commissionPct: number; // default 9
   autoReleaseDays: number; // default 5
   invitationLimitPerJob: number; // default 10
+  searchTicketNoResponseDays: number; // default 5
   strikeAutoBlockThreshold: number; // default 3 (configurable)
   antiLeakEnabled: boolean;
   antiLeakRules: {
@@ -158,12 +159,14 @@ export interface AdminConfig {
 
 export interface SearchTicket {
   id: string;
+  jobId?: string;
   clientId: string;
   clientName: string;
   service: string;
   zone: string;
   radiusKm: number;
   createdAt: string;
+  reason: "no_pros_in_zone" | "no_useful_response";
   status: "open" | "matched" | "closed";
 }
 

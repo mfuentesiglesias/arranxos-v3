@@ -1471,22 +1471,26 @@ export const disputes: Dispute[] = [
 export const searchTickets: SearchTicket[] = [
   {
     id: "t1",
+    jobId: "j30",
     clientId: "u30",
     clientName: "Martín L.",
     service: "Limpieza de pozos",
     zone: "Vilagarcía de Arousa",
     radiusKm: 15,
     createdAt: "2026-04-20T08:30:00Z",
+    reason: "no_pros_in_zone",
     status: "open",
   },
   {
     id: "t2",
+    jobId: "j31",
     clientId: "u14",
     clientName: "Manuel G.",
     service: "Esquilador",
     zone: "A Fonsagrada",
     radiusKm: 40,
     createdAt: "2026-04-18T07:00:00Z",
+    reason: "no_useful_response",
     status: "matched",
   },
 ];
@@ -1496,6 +1500,7 @@ export const defaultAdminConfig: AdminConfig = {
   commissionPct: 9,
   autoReleaseDays: 5,
   invitationLimitPerJob: 10,
+  searchTicketNoResponseDays: 5,
   strikeAutoBlockThreshold: 3,
   antiLeakEnabled: true,
   antiLeakRules: {

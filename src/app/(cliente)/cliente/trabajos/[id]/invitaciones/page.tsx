@@ -8,7 +8,18 @@ import { Avatar } from "@/components/ui/avatar";
 import { RatingStars } from "@/components/pros/rating-stars";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { jobs, professionals, defaultAdminConfig } from "@/lib/data";
+import { jobs, professionals } from "@/lib/data";
+import {
+  getProfessionalsInZoneForJob,
+  getSearchTicketReason,
+} from "@/lib/domain/policies";
+import {
+  getEffectiveAdminConfig,
+  getEffectiveJobById,
+  getJobOutreachMeta,
+  getSearchTicketByJobId,
+  useSession,
+} from "@/lib/store";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -16,10 +27,24 @@ interface Props {
 
 export default function Page({ params }: Props) {
   const { id } = use(params);
-  const job = jobs.find((j) => j.id === id) ?? jobs[0];
-  const limit = defaultAdminConfig.invitationLimitPerJob;
+  const adminConfig = useSession(getEffectiveAdminConfig);
+  const effectiveJob = useSession((s) => getEffectiveJobById(s, id));
+  const outreachMeta = useSession((s) => getJobOutreachMeta(s, id));
+  const searchTicket = useSession((s) => getSearchTicketByJobId(s, id));
+  const recordInvitationsSent = useSession((s) => s.recordInvitationsSent);
+  const createSearchTicket = useSession((s) => s.createSearchTicket);
+  const job = effectiveJob ?? jobs.find((j) => j.id === id) ?? jobs[0];
+  const limit = adminConfig.invitationLimitPerJob;
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sent, setSent] = useState(false);
+  const prosInZone = getProfessionalsInZoneForJob(job, professionals);
+  const searchTicketReason = getSearchTicketReason({
+    job,
+    professionals,
+    outreachMeta,
+    existingTicket: searchTicket,
+    daysThreshold: adminConfig.searchTicketNoResponseDays,
+  });
 
   const toggle = (proId: string) => {
     setSelected((prev) => {
@@ -33,6 +58,7 @@ export default function Page({ params }: Props) {
   const candidates = professionals.filter((p) => p.status === "approved").slice(0, 12);
 
   const send = () => {
+    recordInvitationsSent(id, selected.size);
     setSent(true);
     setTimeout(() => history.back(), 700);
   };
@@ -52,6 +78,35 @@ export default function Page({ params }: Props) {
             por admin).
           </div>
         </Card>
+
+        {searchTicket ? (
+          <Card className="bg-teal-50/50 border-teal-100 mb-3">
+            <div className="text-[12px] text-teal-700 leading-snug">
+              Ya existe un ticket de búsqueda para este trabajo. Admin puede seguirlo desde panel y tú recibirás avisos en notificaciones.
+            </div>
+          </Card>
+        ) : searchTicketReason ? (
+          <Card className="bg-coral-50/50 border-coral-100 mb-3">
+            <div className="text-[12px] text-coral-700 leading-snug mb-3">
+              {searchTicketReason === "no_pros_in_zone"
+                ? "No detectamos profesionales cercanos para este trabajo. Puedes crear un ticket para que admin impulse la búsqueda."
+                : `Han pasado ${adminConfig.searchTicketNoResponseDays} días sin respuesta útil tras las invitaciones. Puedes crear ticket de búsqueda.`}
+            </div>
+            <Button
+              size="sm"
+              full
+              onClick={() => createSearchTicket(id, searchTicketReason)}
+            >
+              Crear ticket de búsqueda
+            </Button>
+          </Card>
+        ) : null}
+
+        {prosInZone.length === 0 && (
+          <div className="text-[11px] text-ink-400 px-1 mb-2">
+            No hay profesionales aprobados en la zona detectada del trabajo.
+          </div>
+        )}
 
         <div className="flex items-center justify-between mb-2 px-1">
           <span className="text-[12.5px] font-bold text-ink-700">
