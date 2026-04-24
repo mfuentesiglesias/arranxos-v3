@@ -6,7 +6,7 @@ export function StatusBar({ light = false }: { light?: boolean }) {
   return (
     <div
       className={cn(
-        "h-11 flex items-center justify-between px-5 pl-5 pr-[22px] flex-shrink-0 relative z-10",
+        "hidden h-11 items-center justify-between px-5 pl-5 pr-[22px] flex-shrink-0 relative z-10 lg:flex",
       )}
     >
       <span className={cn("text-[13px] font-bold tracking-tight", color)}>9:41</span>
