@@ -1171,10 +1171,10 @@ export const jobs: Job[] = [
     requests: 0,
     posted: "hace 40 min",
     postedAt: "2026-04-20T08:20:00Z",
-    clientId: "u30",
-    clientName: "Martín L.",
-    clientAvatar: "ML",
-    clientRating: 4.7,
+    clientId: "u1",
+    clientName: "Antía B.",
+    clientAvatar: "AB",
+    clientRating: 4.9,
     description: "Pozo de 8 m. Agua con sabor raro, necesito limpieza y análisis.",
   },
   {
@@ -1446,6 +1446,7 @@ export const reviews: Review[] = [
 // ── Notifications ────────────────────────────────────────────────────────────
 export const notifications: Notification[] = [
   { id: "n1", text: "Manuel García solicita participar en tu trabajo", sub: "Reparar enchufe y cuadro eléctrico", time: "hace 5 min", unread: true, type: "request", jobId: "j1" },
+  { id: "n-ticket-j30", text: "Hemos creado un ticket de búsqueda para tu trabajo", sub: "Limpieza de pozo para agua potable", time: "hace 40 min", unread: true, type: "system", jobId: "j30" },
   { id: "n2", text: "Xosé Rodríguez acepta tu propuesta de 520 €", sub: "Instalar tarima flotante en salón", time: "hace 2 h", unread: true, type: "agreement", jobId: "j2" },
   { id: "n3", text: "Tu trabajo fue valorado con 5 estrellas", sub: "Pintar piso de 80 m²", time: "hace 1 d", unread: false, type: "review", jobId: "j4" },
   { id: "n4", text: "Pago liberado al profesional", sub: "Cambio de cerradura urgente · 120 €", time: "hace 2 d", unread: false, type: "payment", jobId: "j11" },
@@ -1472,8 +1473,8 @@ export const searchTickets: SearchTicket[] = [
   {
     id: "t1",
     jobId: "j30",
-    clientId: "u30",
-    clientName: "Martín L.",
+    clientId: "u1",
+    clientName: "Antía Bouzas",
     service: "Limpieza de pozos",
     zone: "Vilagarcía de Arousa",
     radiusKm: 15,
