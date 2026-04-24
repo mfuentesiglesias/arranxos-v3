@@ -16,6 +16,13 @@ export type ClientJobAction =
   | "open_dispute"
   | "rate_pro";
 
+export type SearchTicketClientState =
+  | "ticket_created"
+  | "no_pros_cta"
+  | "waiting_info"
+  | "no_response_cta"
+  | "hidden";
+
 export type ProJobAction =
   | "request_job"
   | "open_chat"
@@ -394,6 +401,53 @@ export function getSearchTicketReason({
 
 export function canCreateSearchTicket(params: Parameters<typeof getSearchTicketReason>[0]) {
   return Boolean(getSearchTicketReason(params));
+}
+
+export function getSearchTicketClientState({
+  job,
+  professionals,
+  outreachMeta,
+  existingTicket,
+  daysThreshold,
+  now,
+}: Parameters<typeof getSearchTicketReason>[0]): SearchTicketClientState {
+  if (existingTicket) return "ticket_created";
+
+  const prosInZone = getProfessionalsInZoneForJob(job, professionals);
+
+  if (
+    canCreateSearchTicketNoProsInZone({
+      prosInZoneCount: prosInZone.length,
+      existingTicket,
+    })
+  ) {
+    return "no_pros_cta";
+  }
+
+  if (
+    canCreateSearchTicketNoResponse({
+      job,
+      outreachMeta,
+      prosInZoneCount: prosInZone.length,
+      daysThreshold,
+      existingTicket,
+      now,
+    })
+  ) {
+    return "no_response_cta";
+  }
+
+  const hasInvitationWindow = Boolean(
+    prosInZone.length > 0 &&
+      !existingTicket &&
+      (outreachMeta?.invitationsSentAt || (job.invitations ?? 0) > 0),
+  );
+
+  if (hasInvitationWindow) {
+    return "waiting_info";
+  }
+
+  return "hidden";
 }
 
 export function getJobActionsForClient({

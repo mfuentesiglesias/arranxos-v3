@@ -11,7 +11,7 @@ import { Icon } from "@/components/ui/icon";
 import { jobs, professionals } from "@/lib/data";
 import {
   getProfessionalsInZoneForJob,
-  getSearchTicketReason,
+  getSearchTicketClientState,
 } from "@/lib/domain/policies";
 import {
   getEffectiveAdminConfig,
@@ -38,7 +38,7 @@ export default function Page({ params }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sent, setSent] = useState(false);
   const prosInZone = getProfessionalsInZoneForJob(job, professionals);
-  const searchTicketReason = getSearchTicketReason({
+  const searchTicketState = getSearchTicketClientState({
     job,
     professionals,
     outreachMeta,
@@ -79,23 +79,40 @@ export default function Page({ params }: Props) {
           </div>
         </Card>
 
-        {searchTicket ? (
+        {searchTicketState === "ticket_created" ? (
           <Card className="bg-teal-50/50 border-teal-100 mb-3">
             <div className="text-[12px] text-teal-700 leading-snug">
               Ya existe un ticket de búsqueda para este trabajo. Admin puede seguirlo desde panel y tú recibirás avisos en notificaciones.
             </div>
           </Card>
-        ) : searchTicketReason ? (
+        ) : searchTicketState === "no_pros_cta" ? (
           <Card className="bg-coral-50/50 border-coral-100 mb-3">
             <div className="text-[12px] text-coral-700 leading-snug mb-3">
-              {searchTicketReason === "no_pros_in_zone"
-                ? "No detectamos profesionales cercanos para este trabajo. Puedes crear un ticket para que admin impulse la búsqueda."
-                : `Han pasado ${adminConfig.searchTicketNoResponseDays} días sin respuesta útil tras las invitaciones. Puedes crear ticket de búsqueda.`}
+              No detectamos profesionales cercanos para este trabajo. Puedes crear un ticket para que admin impulse la búsqueda.
             </div>
             <Button
               size="sm"
               full
-              onClick={() => createSearchTicket(id, searchTicketReason)}
+              onClick={() => createSearchTicket(id, "no_pros_in_zone")}
+            >
+              Crear ticket de búsqueda
+            </Button>
+          </Card>
+        ) : searchTicketState === "waiting_info" ? (
+          <Card className="bg-amber-50/60 border-amber-100 mb-3">
+            <div className="text-[12px] text-amber-700 leading-snug">
+              Si en {adminConfig.searchTicketNoResponseDays} días no recibes solicitudes, indícanoslo para ayudarte.
+            </div>
+          </Card>
+        ) : searchTicketState === "no_response_cta" ? (
+          <Card className="bg-coral-50/50 border-coral-100 mb-3">
+            <div className="text-[12px] text-coral-700 leading-snug mb-3">
+              Han pasado {adminConfig.searchTicketNoResponseDays} días sin respuesta útil tras las invitaciones. Puedes crear ticket de búsqueda.
+            </div>
+            <Button
+              size="sm"
+              full
+              onClick={() => createSearchTicket(id, "no_useful_response")}
             >
               Crear ticket de búsqueda
             </Button>

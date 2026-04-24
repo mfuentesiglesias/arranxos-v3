@@ -19,7 +19,7 @@ import {
   getEffectiveFinalPrice,
   getJobActionsForClient,
   getPostPaymentJobActionsForClient,
-  getSearchTicketReason,
+  getSearchTicketClientState,
   hasAgreement,
 } from "@/lib/domain/policies";
 import {
@@ -48,6 +48,7 @@ function Inner({ id }: { id: string }) {
   const searchTicket = useSession((s) => getSearchTicketByJobId(s, id));
   const createSearchTicket = useSession((s) => s.createSearchTicket);
   const job = effectiveJob ?? jobs[0];
+  const existingSearchTicket = searchTicket ?? null;
   const resolvedAgreement = getAgreement(agreement);
   const finalPrice = getEffectiveFinalPrice(job, resolvedAgreement);
   const postPaymentActions = getPostPaymentJobActionsForClient({
@@ -67,7 +68,7 @@ function Inner({ id }: { id: string }) {
     paymentStatus: resolvedAgreement?.paymentStatus,
   });
   const canOpenChat = clientActions.includes("open_chat");
-  const searchTicketReason = getSearchTicketReason({
+  const searchTicketState = getSearchTicketClientState({
     job,
     professionals,
     outreachMeta,
@@ -257,28 +258,47 @@ function Inner({ id }: { id: string }) {
           </Card>
         )}
 
-        {searchTicket ? (
+        {searchTicketState === "ticket_created" && existingSearchTicket ? (
           <Card className="mb-3 bg-teal-50/50 border-teal-100">
             <div className="font-bold text-[13px] text-teal-700 mb-1">
               Ticket de búsqueda creado
             </div>
             <div className="text-[11.5px] text-teal-700/80 leading-snug">
-              {searchTicket.reason === "no_pros_in_zone"
+              {existingSearchTicket.reason === "no_pros_in_zone"
                 ? "Admin ya tiene un ticket para buscar profesionales en tu zona."
                 : "Admin ya tiene un ticket por falta de respuesta útil a tus invitaciones."}
             </div>
           </Card>
-        ) : searchTicketReason ? (
+        ) : searchTicketState === "no_pros_cta" ? (
           <Card className="mb-3 bg-coral-50/50 border-coral-100">
             <div className="font-bold text-[13px] text-coral-700 mb-1">
               ¿Necesitas ayuda para encontrar profesionales?
             </div>
             <div className="text-[11.5px] text-coral-700/80 leading-snug mb-3">
-              {searchTicketReason === "no_pros_in_zone"
-                ? "No vemos profesionales aprobados en tu zona para este trabajo."
-                : `Han pasado ${adminConfig.searchTicketNoResponseDays} días sin respuesta útil tras las invitaciones.`}
+              No vemos profesionales aprobados en tu zona para este trabajo.
             </div>
-            <Button size="sm" full onClick={() => createSearchTicket(job.id, searchTicketReason)}>
+            <Button size="sm" full onClick={() => createSearchTicket(job.id, "no_pros_in_zone")}>
+              Crear ticket de búsqueda
+            </Button>
+          </Card>
+        ) : searchTicketState === "waiting_info" ? (
+          <Card className="mb-3 bg-amber-50/60 border-amber-100">
+            <div className="font-bold text-[13px] text-amber-700 mb-1">
+              Aún estamos esperando respuesta
+            </div>
+            <div className="text-[11.5px] text-amber-700/80 leading-snug">
+              Si en {adminConfig.searchTicketNoResponseDays} días no recibes solicitudes, indícanoslo para ayudarte.
+            </div>
+          </Card>
+        ) : searchTicketState === "no_response_cta" ? (
+          <Card className="mb-3 bg-coral-50/50 border-coral-100">
+            <div className="font-bold text-[13px] text-coral-700 mb-1">
+              ¿Necesitas ayuda para encontrar profesionales?
+            </div>
+            <div className="text-[11.5px] text-coral-700/80 leading-snug mb-3">
+              Han pasado {adminConfig.searchTicketNoResponseDays} días sin respuesta útil tras las invitaciones.
+            </div>
+            <Button size="sm" full onClick={() => createSearchTicket(job.id, "no_useful_response")}>
               Crear ticket de búsqueda
             </Button>
           </Card>
