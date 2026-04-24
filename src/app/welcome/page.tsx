@@ -14,7 +14,7 @@ export default function WelcomePage() {
             Conecta con profesionales de confianza
           </h1>
           <p className="text-white/85 text-[14px] mt-3 leading-relaxed">
-            Servicios verificados en Galicia.
+            Profesionales verificados para tus trabajos.
             <br />
             Pago protegido, sin sorpresas.
           </p>
