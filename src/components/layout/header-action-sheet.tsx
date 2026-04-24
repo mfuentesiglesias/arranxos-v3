@@ -35,7 +35,7 @@ export function HeaderActionSheet({
   return (
     <div className="fixed inset-0 z-[350] bg-black/45" onClick={onClose}>
       <div
-        className="absolute inset-x-0 bottom-0 rounded-t-3xl bg-white px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 shadow-cardHover animate-slideUp md:left-1/2 md:right-auto md:top-1/2 md:bottom-auto md:w-[360px] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-3xl"
+        className="absolute inset-x-0 bottom-0 top-[calc(env(safe-area-inset-top)+0.75rem)] flex flex-col overflow-hidden rounded-t-3xl bg-white px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 shadow-cardHover animate-slideUp md:left-1/2 md:right-auto md:top-1/2 md:bottom-auto md:w-[360px] md:max-h-[min(80vh,640px)] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-3xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-3 flex items-start gap-3">
@@ -54,8 +54,9 @@ export function HeaderActionSheet({
           </button>
         </div>
 
-        {items.length > 0 && (
-          <div className="overflow-hidden rounded-2xl border border-sand-200/70 bg-sand-50/70">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
+          {items.length > 0 && (
+            <div className="overflow-hidden rounded-2xl border border-sand-200/70 bg-sand-50/70">
             {items.map((item, index) => {
               const content = (
                 <div
@@ -100,10 +101,11 @@ export function HeaderActionSheet({
                 </button>
               );
             })}
-          </div>
-        )}
+            </div>
+          )}
 
-        {children}
+          {children}
+        </div>
       </div>
     </div>
   );
