@@ -1,5 +1,5 @@
 "use client";
-import { use, Suspense, useState } from "react";
+import { use, Suspense, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
@@ -9,6 +9,17 @@ import { Button } from "@/components/ui/button";
 import { Textarea, Select } from "@/components/ui/input";
 import { PhotoUploader } from "@/components/forms/photo-uploader";
 import { Icon } from "@/components/ui/icon";
+import { jobs } from "@/lib/data";
+import {
+  canAutoReleaseCompletedJob,
+  canOpenDispute,
+  getAgreement,
+} from "@/lib/domain/policies";
+import {
+  getAgreementByJobId,
+  getEffectiveJobById,
+  useSession,
+} from "@/lib/store";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -26,14 +37,39 @@ const REASONS = [
 
 function Inner({ id }: { id: string }) {
   const router = useRouter();
+  const effectiveJob = useSession((s) => getEffectiveJobById(s, id));
+  const agreement = useSession((s) => getAgreementByJobId(s, id));
+  const openJobDispute = useSession((s) => s.openJobDispute);
+  const autoReleaseCompletedJob = useSession((s) => s.autoReleaseCompletedJob);
   const [reason, setReason] = useState("");
   const [desc, setDesc] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
   const [sent, setSent] = useState(false);
+  const job = effectiveJob ?? jobs.find((j) => j.id === id) ?? jobs[0];
+  const resolvedAgreement = getAgreement(agreement);
+  const canSubmitDispute = canOpenDispute({
+    status: job.status,
+    agreement: resolvedAgreement,
+    role: "client",
+    completionDeadline: job.completionDeadline,
+  });
+  const canAutoRelease = canAutoReleaseCompletedJob({
+    status: job.status,
+    agreement: resolvedAgreement,
+    completionDeadline: job.completionDeadline,
+  });
   const valid = Boolean(reason && desc.length > 20);
 
+  useEffect(() => {
+    if (canAutoRelease) {
+      autoReleaseCompletedJob(id);
+    }
+  }, [autoReleaseCompletedJob, canAutoRelease, id]);
+
   const submit = () => {
+    if (!valid || !canSubmitDispute) return;
     setSent(true);
+    openJobDispute(id, reason, desc, photos);
     setTimeout(() => router.push(`/cliente/trabajos/${id}`), 900);
   };
 
@@ -82,10 +118,21 @@ function Inner({ id }: { id: string }) {
             </div>
           </div>
         </Card>
+
+        {!canSubmitDispute && (
+          <Card className="bg-amber-50 border-amber-100 text-[12px] text-amber-700 leading-snug">
+            Este trabajo solo puede entrar en disputa mientras siga pendiente de confirmación y el pago continúe protegido.
+          </Card>
+        )}
       </ScreenBody>
 
       <div className="app-bottom-bar px-5 pb-5 pt-3 bg-white border-t border-sand-200/70">
-        <Button full variant="danger" onClick={submit} disabled={!valid || sent}>
+        <Button
+          full
+          variant="danger"
+          onClick={submit}
+          disabled={!valid || sent || !canSubmitDispute}
+        >
           {sent ? "Disputa enviada ✓" : "Enviar disputa"}
         </Button>
       </div>

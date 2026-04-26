@@ -1,5 +1,5 @@
 "use client";
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
@@ -13,6 +13,7 @@ import { JobStatusTimeline } from "@/components/jobs/job-status-timeline";
 import { MapView } from "@/components/map/map-view";
 import { jobs } from "@/lib/data";
 import {
+  canAutoReleaseCompletedJob,
   canSeeExactLocation,
   getAgreement,
   getCommissionAmount,
@@ -39,6 +40,7 @@ function Inner({ id }: { id: string }) {
   const adminConfig = useSession(getEffectiveAdminConfig);
   const effectiveJob = useSession((s) => getEffectiveJobById(s, id));
   const agreement = useSession((s) => getAgreementByJobId(s, id));
+  const autoReleaseCompletedJob = useSession((s) => s.autoReleaseCompletedJob);
   const job = effectiveJob ?? jobs[0];
   const resolvedAgreement = getAgreement(agreement);
   const [requested, setRequested] = useState(false);
@@ -62,6 +64,17 @@ function Inner({ id }: { id: string }) {
   const commissionPct = resolvedAgreement?.commissionPct ?? job.commissionPct ?? adminConfig.commissionPct;
   const agreedAmount = getEffectiveFinalPrice(job, resolvedAgreement) ?? Math.round((job.priceMin + job.priceMax) / 2);
   const commission = getCommissionAmount({ amount: agreedAmount, commissionPct });
+  const canAutoRelease = canAutoReleaseCompletedJob({
+    status: job.status,
+    agreement: resolvedAgreement,
+    completionDeadline: job.completionDeadline,
+  });
+
+  useEffect(() => {
+    if (canAutoRelease) {
+      autoReleaseCompletedJob(id);
+    }
+  }, [autoReleaseCompletedJob, canAutoRelease, id]);
 
   return (
     <div className="flex-1 flex flex-col bg-sand-50">

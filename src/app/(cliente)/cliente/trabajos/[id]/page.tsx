@@ -1,5 +1,5 @@
 "use client";
-import { use, Suspense, useState } from "react";
+import { use, Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { HeaderActionSheet } from "@/components/layout/header-action-sheet";
@@ -47,6 +47,7 @@ function Inner({ id }: { id: string }) {
   const outreachMeta = useSession((s) => getJobOutreachMeta(s, id));
   const searchTicket = useSession((s) => getSearchTicketByJobId(s, id));
   const createSearchTicket = useSession((s) => s.createSearchTicket);
+  const autoReleaseCompletedJob = useSession((s) => s.autoReleaseCompletedJob);
   const job = effectiveJob ?? jobs[0];
   const existingSearchTicket = searchTicket ?? null;
   const resolvedAgreement = getAgreement(agreement);
@@ -54,6 +55,7 @@ function Inner({ id }: { id: string }) {
   const postPaymentActions = getPostPaymentJobActionsForClient({
     status: job.status,
     agreement: resolvedAgreement,
+    completionDeadline: job.completionDeadline,
   });
   const requestingPros = professionals.slice(0, Math.max(2, job.requests));
   const assignedPro = job.assignedProId
@@ -66,6 +68,7 @@ function Inner({ id }: { id: string }) {
     invitationLimit: adminConfig.invitationLimitPerJob,
     hasAgreement: hasAgreement(resolvedAgreement),
     paymentStatus: resolvedAgreement?.paymentStatus,
+    completionDeadline: job.completionDeadline,
   });
   const canOpenChat = clientActions.includes("open_chat");
   const searchTicketState = getSearchTicketClientState({
@@ -75,6 +78,12 @@ function Inner({ id }: { id: string }) {
     existingTicket: searchTicket,
     daysThreshold: adminConfig.searchTicketNoResponseDays,
   });
+
+  useEffect(() => {
+    if (postPaymentActions.canAutoRelease) {
+      autoReleaseCompletedJob(id);
+    }
+  }, [autoReleaseCompletedJob, id, postPaymentActions.canAutoRelease]);
 
   return (
     <div className="flex-1 flex flex-col bg-sand-50">

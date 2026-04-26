@@ -1,18 +1,20 @@
 "use client";
-import { useState } from "react";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { disputes as seed, jobs } from "@/lib/data";
-import type { Dispute } from "@/lib/types";
+import {
+  getEffectiveDisputes,
+  getEffectiveJobs,
+  useSession,
+} from "@/lib/store";
 
 export default function AdminDisputasPage() {
-  const [list, setList] = useState<Dispute[]>(seed);
-  const resolve = (id: string, status: Dispute["status"]) =>
-    setList((d) => d.map((x) => (x.id === id ? { ...x, status } : x)));
+  const list = useSession(getEffectiveDisputes);
+  const jobs = useSession(getEffectiveJobs);
+  const resolveDispute = useSession((s) => s.resolveDispute);
 
   return (
     <div className="flex-1 flex flex-col bg-sand-50">
@@ -65,7 +67,7 @@ export default function AdminDisputasPage() {
                         size="sm"
                         full
                         variant="outline"
-                        onClick={() => resolve(d.id, "resolved_client")}
+                        onClick={() => resolveDispute(d.id, "resolved_client")}
                       >
                         A favor cliente
                       </Button>
@@ -73,7 +75,7 @@ export default function AdminDisputasPage() {
                         size="sm"
                         full
                         variant="outline"
-                        onClick={() => resolve(d.id, "resolved_pro")}
+                        onClick={() => resolveDispute(d.id, "resolved_pro")}
                       >
                         A favor pro
                       </Button>
@@ -81,7 +83,7 @@ export default function AdminDisputasPage() {
                     <Button
                       size="sm"
                       full
-                      onClick={() => resolve(d.id, "split")}
+                      onClick={() => resolveDispute(d.id, "split")}
                     >
                       Dividir responsabilidad
                     </Button>

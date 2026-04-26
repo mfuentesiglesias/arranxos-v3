@@ -1,5 +1,5 @@
 "use client";
-import { use } from "react";
+import { use, useEffect } from "react";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
@@ -10,6 +10,7 @@ import { Icon } from "@/components/ui/icon";
 import { JobStatusTimeline } from "@/components/jobs/job-status-timeline";
 import { jobs } from "@/lib/data";
 import {
+  canAutoReleaseCompletedJob,
   getAgreement,
   getCommissionAmount,
   getEffectiveFinalPrice,
@@ -34,6 +35,7 @@ function Inner({ id }: { id: string }) {
   const effectiveJob = useSession((s) => getEffectiveJobById(s, id));
   const agreement = useSession((s) => getAgreementByJobId(s, id));
   const markJobInProgress = useSession((s) => s.markJobInProgress);
+  const autoReleaseCompletedJob = useSession((s) => s.autoReleaseCompletedJob);
   const job = effectiveJob ?? jobs.find((j) => j.id === id) ?? jobs[0];
   const resolvedAgreement = getAgreement(agreement);
   const total =
@@ -51,6 +53,17 @@ function Inner({ id }: { id: string }) {
     job.completionDeadline && job.status === "completed_pending_confirmation"
       ? Math.max(0, daysBetween(new Date().toISOString(), job.completionDeadline))
       : null;
+  const canAutoRelease = canAutoReleaseCompletedJob({
+    status: job.status,
+    agreement: resolvedAgreement,
+    completionDeadline: job.completionDeadline,
+  });
+
+  useEffect(() => {
+    if (canAutoRelease) {
+      autoReleaseCompletedJob(id);
+    }
+  }, [autoReleaseCompletedJob, canAutoRelease, id]);
 
   return (
     <div className="flex-1 flex flex-col bg-sand-50">

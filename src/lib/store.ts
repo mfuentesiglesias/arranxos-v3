@@ -3,12 +3,18 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
   defaultAdminConfig,
+  disputes as seedDisputes,
   jobs,
   notifications as seedNotifications,
   searchTickets as seedSearchTickets,
 } from "./data";
+import {
+  canAutoReleaseCompletedJob,
+  canOpenDispute,
+} from "./domain/policies";
 import type {
   AdminConfig,
+  Dispute,
   Job,
   Notification,
   ProStatus,
@@ -24,9 +30,11 @@ type JobOverride = Partial<
     | "status"
     | "assignedProId"
     | "finalPrice"
-    | "invitations"
-    | "commissionPct"
-    | "completionDeadline"
+      | "invitations"
+      | "commissionPct"
+      | "completionDeadline"
+      | "disputeOpenedAt"
+      | "disputeReason"
   >
 >;
 
@@ -114,7 +122,16 @@ export interface SessionState {
   markJobInProgress: (jobId: string) => void;
   markJobCompletedPendingConfirmation: (jobId: string) => void;
   confirmCompletedJob: (jobId: string) => void;
+  autoReleaseCompletedJob: (jobId: string) => void;
+  openJobDispute: (
+    jobId: string,
+    reason: string,
+    description: string,
+    evidence: string[],
+  ) => void;
   notifications: Notification[];
+  disputes: Dispute[];
+  resolveDispute: (disputeId: string, status: Dispute["status"]) => void;
   searchTickets: SearchTicket[];
   jobOutreachMeta: Record<string, JobOutreachMeta>;
   recordInvitationsSent: (jobId: string, invitedCount: number) => void;
@@ -141,6 +158,13 @@ function applyJobOverride(job: Job, override?: JobOverride): Job {
 
 function cloneNotifications(notifications: Notification[] = seedNotifications) {
   return notifications.map((notification) => ({ ...notification }));
+}
+
+function cloneDisputes(disputes: Dispute[] = seedDisputes) {
+  return disputes.map((dispute) => ({
+    ...dispute,
+    evidence: dispute.evidence ? [...dispute.evidence] : undefined,
+  }));
 }
 
 function cloneSearchTickets(searchTickets: SearchTicket[] = seedSearchTickets) {
@@ -222,6 +246,10 @@ export function getEffectivePostPaymentStatus(
 
 export function getEffectiveNotifications(state: SessionState) {
   return state.notifications;
+}
+
+export function getEffectiveDisputes(state: SessionState) {
+  return state.disputes;
 }
 
 export function getEffectiveSearchTickets(state: SessionState) {
@@ -308,6 +336,7 @@ export const useSession = create<SessionState>()(
           negotiations: {},
           agreements: {},
           notifications: cloneNotifications(),
+          disputes: cloneDisputes(),
           searchTickets: cloneSearchTickets(),
           jobOutreachMeta: {},
         }),
@@ -329,6 +358,7 @@ export const useSession = create<SessionState>()(
         })),
       resetAdminConfig: () => set({ adminConfig: cloneAdminConfig() }),
       notifications: cloneNotifications(),
+      disputes: cloneDisputes(),
       searchTickets: cloneSearchTickets(),
       jobOutreachMeta: {},
       jobOverrides: {},
@@ -550,12 +580,116 @@ export const useSession = create<SessionState>()(
               [jobId]: {
                 ...s.jobOverrides[jobId],
                 status: "completed",
+                completionDeadline: undefined,
+                disputeOpenedAt: undefined,
+                disputeReason: undefined,
                 finalPrice: agreement.finalPrice,
                 commissionPct: agreement.commissionPct,
               },
             },
           };
         }),
+      autoReleaseCompletedJob: (jobId) =>
+        set((s) => {
+          const job = getEffectiveJobById(s, jobId);
+          const agreement = s.agreements[jobId];
+          if (
+            !job ||
+            !canAutoReleaseCompletedJob({
+              status: job.status,
+              agreement,
+              completionDeadline: job.completionDeadline,
+            })
+          ) {
+            return {};
+          }
+
+          const notification: Notification = {
+            id: `n-payment-auto-${jobId}-${Date.now()}`,
+            text: "Pago liberado automáticamente al profesional",
+            sub: job.title,
+            time: "ahora",
+            unread: true,
+            type: "payment",
+            jobId,
+          };
+
+          return {
+            jobOverrides: {
+              ...s.jobOverrides,
+              [jobId]: {
+                ...s.jobOverrides[jobId],
+                status: "completed",
+                completionDeadline: undefined,
+                disputeOpenedAt: undefined,
+                disputeReason: undefined,
+                finalPrice: agreement?.finalPrice ?? job.finalPrice,
+                commissionPct: agreement?.commissionPct ?? job.commissionPct,
+              },
+            },
+            notifications: [notification, ...s.notifications],
+          };
+        }),
+      openJobDispute: (jobId, reason, description, evidence) =>
+        set((s) => {
+          const job = getEffectiveJobById(s, jobId);
+          const agreement = s.agreements[jobId];
+          if (
+            !job ||
+            !canOpenDispute({
+              status: job.status,
+              agreement,
+              role: "client",
+              completionDeadline: job.completionDeadline,
+            })
+          ) {
+            return {};
+          }
+
+          const openedAt = new Date().toISOString();
+          const dispute: Dispute = {
+            id: `d-${jobId}-${Date.now()}`,
+            jobId,
+            openedBy: "client",
+            reason,
+            description,
+            status: "open",
+            openedAt,
+            evidence: evidence.length > 0 ? evidence : undefined,
+          };
+          const notification: Notification = {
+            id: `n-dispute-${jobId}-${Date.now()}`,
+            text: "Se ha abierto una disputa",
+            sub: job.title,
+            time: "ahora",
+            unread: true,
+            type: "dispute",
+            jobId,
+          };
+
+          return {
+            jobOverrides: {
+              ...s.jobOverrides,
+              [jobId]: {
+                ...s.jobOverrides[jobId],
+                status: "dispute",
+                completionDeadline: undefined,
+                disputeOpenedAt: openedAt,
+                disputeReason: reason,
+                finalPrice: agreement?.finalPrice ?? job.finalPrice,
+                commissionPct: agreement?.commissionPct ?? job.commissionPct,
+              },
+            },
+            disputes: [dispute, ...s.disputes],
+            notifications: [notification, ...s.notifications],
+          };
+        }),
+      resolveDispute: (disputeId, status) =>
+        set((s) => ({
+          disputes: s.disputes.map((dispute) =>
+            dispute.id === disputeId ? { ...dispute, status } : dispute,
+          ),
+        })),
       recordInvitationsSent: (jobId, invitedCount) =>
         set((s) => ({
           jobOutreachMeta: {

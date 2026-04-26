@@ -63,6 +63,7 @@ interface ClientActionParams {
   invitationLimit?: number;
   hasAgreement?: boolean;
   paymentStatus?: AgreementPaymentStatus;
+  completionDeadline?: string;
 }
 
 interface ProActionParams {
@@ -207,37 +208,114 @@ export function canMarkJobCompleted({
   );
 }
 
+export function canAutoReleaseCompletedJob({
+  status,
+  agreement,
+  completionDeadline,
+  now = new Date().toISOString(),
+}: {
+  status: JobStatus;
+  agreement?: AgreementState | null;
+  completionDeadline?: string;
+  now?: string;
+}) {
+  if (
+    status !== "completed_pending_confirmation" ||
+    !completionDeadline ||
+    !hasProtectedPayment(agreement)
+  ) {
+    return false;
+  }
+
+  return new Date(now).getTime() >= new Date(completionDeadline).getTime();
+}
+
 export function canConfirmCompletedJob({
   status,
   agreement,
   role,
+  completionDeadline,
+  now,
 }: {
   status: JobStatus;
   agreement?: AgreementState | null;
   role: UserRole;
+  completionDeadline?: string;
+  now?: string;
 }) {
   return (
     role === "client" &&
     status === "completed_pending_confirmation" &&
-    hasProtectedPayment(agreement)
+    hasProtectedPayment(agreement) &&
+    !canAutoReleaseCompletedJob({
+      status,
+      agreement,
+      completionDeadline,
+      now,
+    })
+  );
+}
+
+export function canOpenDispute({
+  status,
+  agreement,
+  role,
+  completionDeadline,
+  now,
+}: {
+  status: JobStatus;
+  agreement?: AgreementState | null;
+  role: UserRole;
+  completionDeadline?: string;
+  now?: string;
+}) {
+  return (
+    role === "client" &&
+    status === "completed_pending_confirmation" &&
+    hasProtectedPayment(agreement) &&
+    !canAutoReleaseCompletedJob({
+      status,
+      agreement,
+      completionDeadline,
+      now,
+    })
   );
 }
 
 export function getPostPaymentJobActionsForClient({
   status,
   agreement,
+  completionDeadline,
+  now,
 }: {
   status: JobStatus;
   agreement?: AgreementState | null;
+  completionDeadline?: string;
+  now?: string;
 }) {
   return {
     canConfirmCompletion: canConfirmCompletedJob({
       status,
       agreement,
       role: "client",
+      completionDeadline,
+      now,
+    }),
+    canOpenDispute: canOpenDispute({
+      status,
+      agreement,
+      role: "client",
+      completionDeadline,
+      now,
     }),
     canRatePro: status === "completed",
     showsProtectedPayment: hasProtectedPayment(agreement),
+    canAutoRelease: canAutoReleaseCompletedJob({
+      status,
+      agreement,
+      completionDeadline,
+      now,
+    }),
   };
 }
 
@@ -457,8 +535,16 @@ export function getJobActionsForClient({
   invitationLimit,
   hasAgreement = false,
   paymentStatus,
+  completionDeadline,
 }: ClientActionParams): ClientJobAction[] {
   const actions: ClientJobAction[] = [];
+  const postPaymentActions = getPostPaymentJobActionsForClient({
+    status,
+    agreement: hasAgreement
+      ? ({ paymentStatus } as AgreementState)
+      : undefined,
+    completionDeadline,
+  });
 
   if (status === "published") {
     actions.push("view_requests");
@@ -489,24 +575,13 @@ export function getJobActionsForClient({
   if (canPayProtected({ hasAgreement, paymentStatus }) && status === "agreed") {
     actions.push("pay");
   }
-  if (
-    getPostPaymentJobActionsForClient({
-      status,
-      agreement: hasAgreement
-        ? ({ paymentStatus } as AgreementState)
-        : undefined,
-    }).canConfirmCompletion
-  ) {
-    actions.push("confirm_completion", "open_dispute");
+  if (postPaymentActions.canConfirmCompletion) {
+    actions.push("confirm_completion");
   }
-  if (
-    getPostPaymentJobActionsForClient({
-      status,
-      agreement: hasAgreement
-        ? ({ paymentStatus } as AgreementState)
-        : undefined,
-    }).canRatePro
-  ) {
+  if (postPaymentActions.canOpenDispute) {
+    actions.push("open_dispute");
+  }
+  if (postPaymentActions.canRatePro) {
     actions.push("rate_pro");
   }
 

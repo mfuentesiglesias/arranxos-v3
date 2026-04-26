@@ -1,10 +1,16 @@
 "use client";
 
+import { useEffect } from "react";
+
 import { StatusBar } from "@/components/layout/status-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
-import { getAgreement, getEffectiveFinalPrice } from "@/lib/domain/policies";
+import {
+  canAutoReleaseCompletedJob,
+  getAgreement,
+  getEffectiveFinalPrice,
+} from "@/lib/domain/policies";
 import { getCurrentProfessionalId, getEffectiveAdminConfig, getEffectiveJobs, useSession } from "@/lib/store";
 import { formatEuro } from "@/lib/utils";
 
@@ -18,6 +24,22 @@ export default function PagosPage() {
   const currentProfessionalId = useSession(getCurrentProfessionalId);
   const jobs = useSession(getEffectiveJobs);
   const agreements = useSession((s) => s.agreements);
+  const autoReleaseCompletedJob = useSession((s) => s.autoReleaseCompletedJob);
+
+  useEffect(() => {
+    jobs.forEach((job) => {
+      if (
+        job.assignedProId === currentProfessionalId &&
+        canAutoReleaseCompletedJob({
+          status: job.status,
+          agreement: getAgreement(agreements[job.id]),
+          completionDeadline: job.completionDeadline,
+        })
+      ) {
+        autoReleaseCompletedJob(job.id);
+      }
+    });
+  }, [agreements, autoReleaseCompletedJob, currentProfessionalId, jobs]);
 
   const pending = jobs.filter(
     (j) =>

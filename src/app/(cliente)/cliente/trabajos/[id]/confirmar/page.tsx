@@ -1,5 +1,5 @@
 "use client";
-import { use, Suspense, useState } from "react";
+import { use, Suspense, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { jobs } from "@/lib/data";
 import {
+  canAutoReleaseCompletedJob,
   canConfirmCompletedJob,
   getAgreement,
   getCommissionAmount,
@@ -32,6 +33,7 @@ function Inner({ id }: { id: string }) {
   const effectiveJob = useSession((s) => getEffectiveJobById(s, id));
   const agreement = useSession((s) => getAgreementByJobId(s, id));
   const confirmCompletedJob = useSession((s) => s.confirmCompletedJob);
+  const autoReleaseCompletedJob = useSession((s) => s.autoReleaseCompletedJob);
   const job = effectiveJob ?? jobs.find((j) => j.id === id) ?? jobs[0];
   const resolvedAgreement = getAgreement(agreement);
   const [confirming, setConfirming] = useState(false);
@@ -45,7 +47,19 @@ function Inner({ id }: { id: string }) {
     status: job.status,
     agreement: resolvedAgreement,
     role: "client",
+    completionDeadline: job.completionDeadline,
   });
+  const canAutoRelease = canAutoReleaseCompletedJob({
+    status: job.status,
+    agreement: resolvedAgreement,
+    completionDeadline: job.completionDeadline,
+  });
+
+  useEffect(() => {
+    if (canAutoRelease) {
+      autoReleaseCompletedJob(id);
+    }
+  }, [autoReleaseCompletedJob, canAutoRelease, id]);
 
   const confirm = () => {
     if (!canConfirm) return;
