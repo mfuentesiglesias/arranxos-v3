@@ -57,7 +57,7 @@ function DetalleInner() {
           {leaks.length > 0 && <AntiLeakAlert leaks={leaks} />}
 
           <Select
-            label="Ubicación"
+            label="Ciudad o zona aproximada"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
           >
@@ -71,7 +71,7 @@ function DetalleInner() {
               "Ferrol",
               "Sanxenxo",
               "Cangas",
-              "Otro (Galicia)",
+              "Otra ciudad",
             ].map((c) => (
               <option key={c}>{c}</option>
             ))}

@@ -132,7 +132,7 @@ export default function HomeClientePage() {
         )}
 
         {/* Top pros */}
-        <SectionHeading title="Top profesionales en Vigo" action="Ver mapa" href="/cliente/explorar" />
+        <SectionHeading title="Top profesionales cerca de ti" action="Ver mapa" href="/cliente/explorar" />
         <div className="flex flex-col gap-2.5 mb-5">
           {topPros.map((p) => (
             <ProCard key={p.id} pro={p} href={`/profesional/perfil?id=${p.id}`} />

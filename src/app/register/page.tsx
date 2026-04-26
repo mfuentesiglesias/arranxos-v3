@@ -130,7 +130,7 @@ function RegisterInner() {
                 ))}
               </Select>
               <Select
-                label="Zona de trabajo principal"
+                label="Ciudad base de trabajo"
                 value={form.zone}
                 onChange={(e) => upd("zone", e.target.value)}
               >
@@ -142,7 +142,7 @@ function RegisterInner() {
                   "Ourense",
                   "Lugo",
                   "Ferrol",
-                  "Toda Galicia",
+                  "Hasta mi radio de acción",
                 ].map((z) => (
                   <option key={z}>{z}</option>
                 ))}

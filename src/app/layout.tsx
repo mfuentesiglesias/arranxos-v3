@@ -4,9 +4,9 @@ import { InstallPrompt } from "@/components/layout/install-prompt";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Arranxos — Servicios de confianza en Galicia",
+  title: "Arranxos — Servicios de confianza cerca de ti",
   description:
-    "Conecta con profesionales verificados en Galicia. Pago protegido, sin sorpresas.",
+    "Conecta con profesionales verificados cerca de ti. Pago protegido, sin sorpresas.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,

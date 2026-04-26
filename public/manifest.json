@@ -1,7 +1,7 @@
 {
   "name": "Arranxos",
   "short_name": "Arranxos",
-  "description": "Servicios de confianza en Galicia. Conecta con profesionales verificados.",
+  "description": "Servicios de confianza cerca de ti. Conecta con profesionales verificados.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

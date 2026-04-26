@@ -15,7 +15,7 @@ export default function SplashPage() {
         <Logo size={64} light />
       </div>
       <p className="text-white/80 text-[14px] font-medium tracking-wide">
-        Servicios de confianza en Galicia
+        Servicios de confianza cerca de ti
       </p>
     </div>
   );
