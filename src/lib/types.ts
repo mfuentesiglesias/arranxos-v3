@@ -170,6 +170,43 @@ export interface SearchTicket {
   status: "open" | "matched" | "closed";
 }
 
+export type CatalogRequestStatus =
+  | "pending"
+  | "reviewing"
+  | "approved"
+  | "rejected"
+  | "merged";
+
+export interface CatalogService {
+  id: string;
+  categoryId: string;
+  categoryName: string;
+  name: string;
+  description?: string;
+  aliases?: string[];
+  active: boolean;
+  source: "seed" | "admin_approved";
+  createdFromRequestId?: string;
+}
+
+export interface CatalogRequest {
+  id: string;
+  requestedName: string;
+  suggestedCategoryId?: string;
+  suggestedCategoryName?: string;
+  description?: string;
+  requestedByUserId: string;
+  requestedByName: string;
+  requestedByRole: "professional" | "client" | "admin";
+  status: CatalogRequestStatus;
+  createdAt: string;
+  reviewedAt?: string;
+  reviewedByAdminId?: string;
+  rejectionReason?: string;
+  mergedIntoServiceId?: string;
+  approvedServiceId?: string;
+}
+
 export interface Category {
   id: string;
   name: string;
