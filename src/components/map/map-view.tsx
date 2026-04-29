@@ -14,11 +14,26 @@ interface Props {
   pins?: MapPin[];
   blurred?: boolean;
   className?: string;
+  radiusKm?: number;
+  showRadius?: boolean;
+  radiusLabel?: string;
 }
 
 // DEMO: simulated map. In production, replace with MapLibre GL / Leaflet
 // bound to Supabase PostGIS data.
-export function MapView({ height = 200, pins = [], blurred = false, className }: Props) {
+export function MapView({
+  height = 200,
+  pins = [],
+  blurred = false,
+  className,
+  radiusKm = 0,
+  showRadius = false,
+  radiusLabel = "Radio aprox.",
+}: Props) {
+  const clampedRadiusKm = Math.max(5, Math.min(100, radiusKm || 5));
+  const radiusScale = Math.sqrt(clampedRadiusKm / 100);
+  const radiusPx = 16 + radiusScale * height * 0.38;
+
   return (
     <div
       className={cn("relative rounded-2xl overflow-hidden bg-sand-100", className)}
@@ -34,6 +49,27 @@ export function MapView({ height = 200, pins = [], blurred = false, className }:
         <rect width="100%" height="100%" fill="url(#gridP)" />
         <ellipse cx="40%" cy="45%" rx="22%" ry="14%" fill="rgba(47,146,121,0.12)" />
         <ellipse cx="70%" cy="60%" rx="16%" ry="10%" fill="rgba(47,146,121,0.10)" />
+        {showRadius && !blurred && (
+          <>
+            <circle
+              cx="52%"
+              cy="56%"
+              r={radiusPx}
+              fill="rgba(255, 90, 95, 0.10)"
+              stroke="rgba(255, 90, 95, 0.42)"
+              strokeWidth="2"
+              strokeDasharray="6 6"
+            />
+            <circle
+              cx="52%"
+              cy="56%"
+              r="6"
+              fill="rgba(255,255,255,0.95)"
+              stroke="rgba(255, 90, 95, 0.85)"
+              strokeWidth="3"
+            />
+          </>
+        )}
         <path
           d="M0,60 Q40,50 80,65 T160,55 T250,60 T390,65"
           stroke="rgba(61,124,201,0.35)"
@@ -57,6 +93,17 @@ export function MapView({ height = 200, pins = [], blurred = false, className }:
           <span className="text-[11px] text-ink-400 leading-snug max-w-[220px]">
             La ubicación exacta se revela tras la aceptación del profesional
           </span>
+        </div>
+      )}
+
+      {showRadius && !blurred && (
+        <div
+          className="absolute -translate-x-1/2 -translate-y-full"
+          style={{ left: "52%", top: "56%" }}
+        >
+          <div className="rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-bold text-coral-700 shadow-card whitespace-nowrap border border-coral-100">
+            {radiusLabel}
+          </div>
         </div>
       )}
 

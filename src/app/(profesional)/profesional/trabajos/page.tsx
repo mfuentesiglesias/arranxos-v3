@@ -303,7 +303,13 @@ function Inner() {
       <ScreenBody className="px-4 pt-4 pb-6">
         {view === "mapa" && (
           <div className="mb-4">
-            <MapView height={260} pins={pins} />
+            <MapView
+              height={260}
+              pins={pins}
+              showRadius
+              radiusKm={maxKm}
+              radiusLabel="Radio aprox."
+            />
             <div className="mt-3 rounded-2xl border border-sand-200/70 bg-white p-3.5 shadow-card">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
