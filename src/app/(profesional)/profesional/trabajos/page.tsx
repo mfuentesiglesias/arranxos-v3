@@ -304,6 +304,49 @@ function Inner() {
         {view === "mapa" && (
           <div className="mb-4">
             <MapView height={260} pins={pins} />
+            <div className="mt-3 rounded-2xl border border-sand-200/70 bg-white p-3.5 shadow-card">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[12px] font-bold text-ink-800">
+                    Radio de búsqueda
+                  </div>
+                  <div className="text-[11px] text-ink-400 leading-snug">
+                    Vista aproximada. El filtrado real por distancia se conectará en la siguiente fase.
+                  </div>
+                </div>
+                <div className="rounded-full bg-coral-50 px-3 py-1 text-[12px] font-bold text-coral-700 whitespace-nowrap">
+                  {maxKm} km
+                </div>
+              </div>
+
+              <input
+                type="range"
+                min={KM_OPTIONS[0]}
+                max={KM_OPTIONS[KM_OPTIONS.length - 1]}
+                step={5}
+                value={maxKm}
+                onChange={(e) => setMaxKm(Number(e.target.value))}
+                className="w-full accent-[#FF5A5F]"
+                aria-label="Radio de búsqueda"
+              />
+
+              <div className="mt-3 flex items-center justify-between gap-2">
+                {KM_OPTIONS.map((km) => (
+                  <button
+                    key={km}
+                    type="button"
+                    onClick={() => setMaxKm(km)}
+                    className={`min-w-[42px] rounded-full px-2.5 py-1 text-[11px] font-bold transition ${
+                      maxKm === km
+                        ? "bg-coral-50 text-coral-700"
+                        : "bg-sand-100 text-ink-500"
+                    }`}
+                  >
+                    {km}
+                  </button>
+                ))}
+              </div>
+            </div>
             <p className="text-[11px] text-ink-400 mt-2 text-center italic">
               DEMO: mapa simulado. Producción → MapLibre + PostGIS.
             </p>
