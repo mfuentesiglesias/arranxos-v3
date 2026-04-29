@@ -7,8 +7,18 @@ import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { ScreenBody } from "@/components/layout/screen-body";
 import { Icon } from "@/components/ui/icon";
-import { categories } from "@/lib/data";
+import { getSeedCatalogServices } from "@/lib/catalog";
 import { useSession } from "@/lib/store";
+import type { CatalogService } from "@/lib/types";
+
+const catalogServices = getSeedCatalogServices();
+
+function normalizeSearchText(text: string) {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
 
 function RegisterInner() {
   const router = useRouter();
@@ -27,8 +37,61 @@ function RegisterInner() {
   });
   const upd = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
   const [loading, setLoading] = useState(false);
+  const [specialtyQuery, setSpecialtyQuery] = useState("");
+  const [selectedServices, setSelectedServices] = useState<CatalogService[]>([]);
+  const [specialtyError, setSpecialtyError] = useState(false);
+
+  const query = normalizeSearchText(specialtyQuery.trim());
+  const suggestedServices = catalogServices
+    .filter(
+      (service) =>
+        !selectedServices.some((selected) => selected.id === service.id),
+    )
+    .filter((service) => {
+      if (!query) return true;
+
+      const haystack = [
+        service.name,
+        service.categoryName,
+        ...(service.aliases ?? []),
+      ]
+        .map(normalizeSearchText)
+        .join(" ");
+
+      return haystack.includes(query);
+    })
+    .slice(0, query ? 8 : 6);
+
+  const syncSelectedServices = (nextSelected: CatalogService[]) => {
+    setSelectedServices(nextSelected);
+    setForm((current) => ({
+      ...current,
+      specialty: nextSelected[0]?.name ?? "",
+    }));
+
+    if (nextSelected.length > 0) {
+      setSpecialtyError(false);
+    }
+  };
+
+  const addService = (service: CatalogService) => {
+    if (selectedServices.some((selected) => selected.id === service.id)) return;
+    syncSelectedServices([...selectedServices, service]);
+    setSpecialtyQuery("");
+  };
+
+  const removeService = (serviceId: string) => {
+    syncSelectedServices(
+      selectedServices.filter((service) => service.id !== serviceId),
+    );
+  };
 
   const submit = () => {
+    if (isPro && selectedServices.length === 0) {
+      setSpecialtyError(true);
+      return;
+    }
+
     setLoading(true);
     setTimeout(() => {
       if (isPro) {
@@ -117,18 +180,87 @@ function RegisterInner() {
                 onChange={(e) => upd("dni", e.target.value)}
                 placeholder="00000000A"
               />
-              <Select
-                label="Especialidad principal"
-                value={form.specialty}
-                onChange={(e) => upd("specialty", e.target.value)}
-              >
-                <option value="">Selecciona tu especialidad</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.name}>
-                    {c.name}
-                  </option>
-                ))}
-              </Select>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[13px] font-semibold text-ink-500">
+                  Especialidades
+                </label>
+                <Input
+                  value={specialtyQuery}
+                  onChange={(e) => {
+                    setSpecialtyQuery(e.target.value);
+                    if (specialtyError) {
+                      setSpecialtyError(false);
+                    }
+                  }}
+                  placeholder="Busca por servicio o categoría"
+                  note="Puedes seleccionar varias especialidades. La primera quedará como principal en esta demo."
+                />
+
+                {selectedServices.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {selectedServices.map((service, index) => (
+                      <div
+                        key={service.id}
+                        className="inline-flex max-w-full items-center gap-2 rounded-full bg-coral-50 px-3 py-1.5 text-[12px] font-semibold text-coral-700"
+                      >
+                        <span className="truncate">
+                          {service.name}
+                          {index === 0 ? " · principal" : ""}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeService(service.id)}
+                          className="rounded-full bg-coral-100 px-1.5 py-0.5 text-[10px] font-bold text-coral-700"
+                          aria-label={`Quitar ${service.name}`}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="rounded-2xl border border-sand-200 bg-white overflow-hidden">
+                  {suggestedServices.length > 0 ? (
+                    <div className="divide-y divide-sand-200/70">
+                      {suggestedServices.map((service) => (
+                        <button
+                          key={service.id}
+                          type="button"
+                          onClick={() => addService(service)}
+                          className="w-full px-4 py-3 text-left transition active:bg-sand-50"
+                        >
+                          <div className="font-semibold text-[13px] text-ink-800">
+                            {service.name}
+                          </div>
+                          <div className="text-[11px] text-ink-400">
+                            {service.categoryName}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : specialtyQuery.trim() ? (
+                    <div className="px-4 py-3 text-[12px] leading-snug">
+                      <div className="font-semibold text-ink-700">
+                        No encontramos esa especialidad.
+                      </div>
+                      <div className="text-ink-400 mt-1">
+                        Pronto podrás solicitar que admin la revise.
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="px-4 py-3 text-[12px] text-ink-400 leading-snug">
+                      Empieza a escribir para filtrar servicios o elige una sugerencia.
+                    </div>
+                  )}
+                </div>
+
+                {specialtyError && (
+                  <span className="text-[11px] text-rose-600 font-medium">
+                    Selecciona al menos una especialidad para continuar como profesional.
+                  </span>
+                )}
+              </div>
               <Select
                 label="Ciudad base de trabajo"
                 value={form.zone}

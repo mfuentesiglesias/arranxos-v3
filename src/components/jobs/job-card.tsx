@@ -9,9 +9,18 @@ interface Props {
   href?: string;
   approxLocation?: boolean; // pro view before acceptance
   showDistance?: string;
+  specialtyMatchLabel?: string;
+  specialtyMatch?: "match" | "outside";
 }
 
-export function JobCard({ job, href, approxLocation = false, showDistance }: Props) {
+export function JobCard({
+  job,
+  href,
+  approxLocation = false,
+  showDistance,
+  specialtyMatchLabel,
+  specialtyMatch,
+}: Props) {
   const content = (
     <div className="card cursor-pointer px-[18px] py-[17px] transition hover:shadow-cardHover">
       <div className="mb-1.5 flex items-start justify-between gap-2">
@@ -31,6 +40,20 @@ export function JobCard({ job, href, approxLocation = false, showDistance }: Pro
         )}
         <span className="ml-auto whitespace-nowrap text-ink-400">{job.posted}</span>
       </div>
+
+      {specialtyMatchLabel && specialtyMatch && (
+        <div className="mb-2">
+          <span
+            className={`inline-flex rounded-full px-2.5 py-1 text-[10.5px] font-bold ${
+              specialtyMatch === "match"
+                ? "bg-teal-50 text-teal-700"
+                : "bg-sand-100 text-ink-500"
+            }`}
+          >
+            {specialtyMatchLabel}
+          </span>
+        </div>
+      )}
 
       <div className="flex items-center gap-2">
         <span className="text-[13px] font-bold text-coral-600">

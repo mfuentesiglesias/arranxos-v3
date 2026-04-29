@@ -6,11 +6,17 @@ import { ScreenBody } from "@/components/layout/screen-body";
 import { JobCard } from "@/components/jobs/job-card";
 import { Icon } from "@/components/ui/icon";
 import { MapView } from "@/components/map/map-view";
-import { jobs, categoryGroups } from "@/lib/data";
+import { categoryGroups, jobs, professionals } from "@/lib/data";
+import { classifyJobForProfessionalSpecialties } from "@/lib/catalog";
+import { getCurrentProfessionalId, useSession } from "@/lib/store";
 
 function Inner() {
   const params = useSearchParams();
   const myOnly = params.get("mine") === "1";
+  const currentProfessionalId = useSession(getCurrentProfessionalId);
+  const currentProfessional =
+    professionals.find((professional) => professional.id === currentProfessionalId) ??
+    professionals[0];
 
   const [view, setView] = useState<"lista" | "mapa">("lista");
   const [search, setSearch] = useState("");
@@ -127,17 +133,31 @@ function Inner() {
         </div>
 
         <div className="flex flex-col gap-2.5">
-          {filtered.map((j, i) => (
-            <JobCard
-              key={j.id}
-              job={j}
-              href={`/profesional/trabajos/${j.id}`}
-              approxLocation={!myOnly && j.status === "published"}
-              showDistance={
-                !myOnly ? `${1 + ((i * 3) % 12)} km` : undefined
-              }
-            />
-          ))}
+          {filtered.map((j, i) => {
+            const specialtyMatch = !myOnly
+              ? classifyJobForProfessionalSpecialties(j, currentProfessional)
+              : undefined;
+
+            return (
+              <JobCard
+                key={j.id}
+                job={j}
+                href={`/profesional/trabajos/${j.id}`}
+                approxLocation={!myOnly && j.status === "published"}
+                showDistance={
+                  !myOnly ? `${1 + ((i * 3) % 12)} km` : undefined
+                }
+                specialtyMatchLabel={specialtyMatch?.label}
+                specialtyMatch={
+                  specialtyMatch
+                    ? specialtyMatch.isMatch
+                      ? "match"
+                      : "outside"
+                    : undefined
+                }
+              />
+            );
+          })}
           {filtered.length === 0 && (
             <div className="text-center py-12 text-ink-400 text-[13px]">
               No hay trabajos que coincidan.

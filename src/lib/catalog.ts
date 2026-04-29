@@ -1,5 +1,17 @@
 import { categoryGroups } from "@/lib/data";
-import type { CatalogService } from "@/lib/types";
+import type { CatalogService, Job, Professional } from "@/lib/types";
+
+type ProfessionalWithSelectedServiceIds = Professional & {
+  selectedServiceIds?: string[];
+};
+
+export type JobSpecialtyMatchType = "service" | "category" | "legacy" | "none";
+
+export interface JobSpecialtyClassification {
+  isMatch: boolean;
+  label: string;
+  matchType: JobSpecialtyMatchType;
+}
 
 export function slugifyCatalogText(text: string) {
   return text
@@ -9,6 +21,10 @@ export function slugifyCatalogText(text: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .replace(/-{2,}/g, "-");
+}
+
+export function normalizeCatalogText(text: string) {
+  return slugifyCatalogText(text).replace(/-/g, " ").trim();
 }
 
 export function getSeedCatalogServices(): CatalogService[] {
@@ -40,4 +56,64 @@ export function getCatalogServicesByCategory(
   return services.filter(
     (service) => service.active && service.categoryId === categoryId,
   );
+}
+
+export function classifyJobForProfessionalSpecialties(
+  job: Job,
+  professional: Professional,
+  services: CatalogService[] = getSeedCatalogServices(),
+): JobSpecialtyClassification {
+  const matchLabel = "Coincide con tus especialidades";
+  const outsideLabel = "Fuera de tus especialidades";
+  const categoryServices = getCatalogServicesByCategory(job.categoryId, services);
+  const exactJobService = categoryServices.find(
+    (service) => normalizeCatalogText(service.name) === normalizeCatalogText(job.service),
+  );
+  const selectedServiceIds = (professional as ProfessionalWithSelectedServiceIds)
+    .selectedServiceIds;
+
+  if (selectedServiceIds && selectedServiceIds.length > 0) {
+    if (exactJobService && selectedServiceIds.includes(exactJobService.id)) {
+      return { isMatch: true, label: matchLabel, matchType: "service" };
+    }
+
+    if (
+      categoryServices.some((service) => selectedServiceIds.includes(service.id))
+    ) {
+      return { isMatch: true, label: matchLabel, matchType: "category" };
+    }
+
+    return { isMatch: false, label: outsideLabel, matchType: "none" };
+  }
+
+  const legacyValues = [professional.specialty, ...(professional.specialties ?? [])]
+    .filter(Boolean)
+    .map(normalizeCatalogText);
+
+  if (legacyValues.length === 0) {
+    return { isMatch: false, label: outsideLabel, matchType: "none" };
+  }
+
+  const jobCategoryNames = new Set(
+    [job.category, ...categoryServices.map((service) => service.categoryName)].map(
+      normalizeCatalogText,
+    ),
+  );
+  const jobServiceNames = new Set(
+    [job.service, ...categoryServices.map((service) => service.name)].map(
+      normalizeCatalogText,
+    ),
+  );
+
+  const hasCategoryMatch = legacyValues.some((value) => jobCategoryNames.has(value));
+  if (hasCategoryMatch) {
+    return { isMatch: true, label: matchLabel, matchType: "category" };
+  }
+
+  const hasServiceMatch = legacyValues.some((value) => jobServiceNames.has(value));
+  if (hasServiceMatch) {
+    return { isMatch: true, label: matchLabel, matchType: "legacy" };
+  }
+
+  return { isMatch: false, label: outsideLabel, matchType: "none" };
 }
