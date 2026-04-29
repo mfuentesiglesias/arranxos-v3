@@ -1,5 +1,5 @@
 "use client";
-import { useState, Suspense, type ReactNode } from "react";
+import { useEffect, useRef, useState, Suspense, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { HeaderActionSheet } from "@/components/layout/header-action-sheet";
 import { StatusBar } from "@/components/layout/status-bar";
@@ -59,6 +59,18 @@ function Inner() {
   const [draftSuggestedFilterIds, setDraftSuggestedFilterIds] = useState<string[]>([]);
   const [maxKm, setMaxKm] = useState<number>(50);
   const [draftMaxKm, setDraftMaxKm] = useState<number>(50);
+  const [selectedMapJobId, setSelectedMapJobId] = useState<string | null>(null);
+  const [highlightedJobId, setHighlightedJobId] = useState<string | null>(null);
+  const jobRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimeoutRef.current) {
+        clearTimeout(highlightTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const openFilters = () => {
     setDraftOpportunityFilter(opportunityFilter);
@@ -150,6 +162,22 @@ function Inner() {
     label: `${job.priceMin}€`,
     type: "coral" as const,
   }));
+
+  const focusJobFromMap = (jobId: string) => {
+    const target = jobRefs.current[jobId];
+    setSelectedMapJobId(jobId);
+    setHighlightedJobId(jobId);
+
+    if (highlightTimeoutRef.current) {
+      clearTimeout(highlightTimeoutRef.current);
+    }
+
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    highlightTimeoutRef.current = setTimeout(() => {
+      setHighlightedJobId((current) => (current === jobId ? null : current));
+    }, 2600);
+  };
 
   return (
     <div className="flex-1 flex flex-col">
@@ -309,6 +337,8 @@ function Inner() {
               showRadius
               radiusKm={maxKm}
               radiusLabel="Radio aprox."
+              selectedPinId={selectedMapJobId ?? undefined}
+              onPinClick={(pin) => focusJobFromMap(pin.id)}
             />
             <div className="mt-3 rounded-2xl border border-sand-200/70 bg-white p-3.5 shadow-card">
               <div className="mb-3 flex items-center justify-between gap-3">
@@ -371,23 +401,35 @@ function Inner() {
         <div className="flex flex-col gap-2.5">
           {displayJobs.map(({ job, specialtyMatch }, i) => {
             return (
-              <JobCard
+              <div
                 key={job.id}
-                job={job}
-                href={`/profesional/trabajos/${job.id}`}
-                approxLocation={!myOnly && job.status === "published"}
-                showDistance={
-                  !myOnly ? `${1 + ((i * 3) % 12)} km` : undefined
-                }
-                specialtyMatchLabel={specialtyMatch?.label}
-                specialtyMatch={
-                  specialtyMatch
-                    ? specialtyMatch.isMatch
-                      ? "match"
-                      : "outside"
-                    : undefined
-                }
-              />
+                id={`job-card-${job.id}`}
+                ref={(element) => {
+                  jobRefs.current[job.id] = element;
+                }}
+                className={`rounded-2xl transition-all duration-300 ${
+                  highlightedJobId === job.id
+                    ? "ring-2 ring-coral-300 ring-offset-2 ring-offset-sand-50 bg-coral-50/20"
+                    : ""
+                }`}
+              >
+                <JobCard
+                  job={job}
+                  href={`/profesional/trabajos/${job.id}`}
+                  approxLocation={!myOnly && job.status === "published"}
+                  showDistance={
+                    !myOnly ? `${1 + ((i * 3) % 12)} km` : undefined
+                  }
+                  specialtyMatchLabel={specialtyMatch?.label}
+                  specialtyMatch={
+                    specialtyMatch
+                      ? specialtyMatch.isMatch
+                        ? "match"
+                        : "outside"
+                      : undefined
+                  }
+                />
+              </div>
             );
           })}
           {displayJobs.length === 0 && (

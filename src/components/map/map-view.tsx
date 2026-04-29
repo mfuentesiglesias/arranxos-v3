@@ -17,6 +17,8 @@ interface Props {
   radiusKm?: number;
   showRadius?: boolean;
   radiusLabel?: string;
+  onPinClick?: (pin: MapPin) => void;
+  selectedPinId?: string;
 }
 
 // DEMO: simulated map. In production, replace with MapLibre GL / Leaflet
@@ -29,6 +31,8 @@ export function MapView({
   radiusKm = 0,
   showRadius = false,
   radiusLabel = "Radio aprox.",
+  onPinClick,
+  selectedPinId,
 }: Props) {
   const clampedRadiusKm = Math.max(5, Math.min(100, radiusKm || 5));
   const radiusScale = Math.sqrt(clampedRadiusKm / 100);
@@ -109,6 +113,7 @@ export function MapView({
 
       {!blurred &&
         pins.map((pin) => {
+          const isSelected = selectedPinId === pin.id;
           const color =
             pin.type === "teal"
               ? "bg-teal-500"
@@ -117,26 +122,48 @@ export function MapView({
               : pin.type === "ink"
               ? "bg-ink-800"
               : "bg-coral-500";
-          return (
-            <div
-              key={pin.id}
-              className="absolute -translate-x-1/2 -translate-y-full"
-              style={{ left: `${pin.x}%`, top: `${pin.y}%` }}
-            >
+          const content = (
+            <>
               <div
                 className={cn(
-                  "text-white text-[11px] font-bold px-2 py-1 rounded-lg shadow-card whitespace-nowrap",
+                  "text-white text-[11px] font-bold px-2 py-1 rounded-lg shadow-card whitespace-nowrap transition",
                   color,
+                  isSelected && "scale-[1.04] ring-2 ring-white/90 ring-offset-2 ring-offset-coral-300",
                 )}
               >
                 {pin.label}
               </div>
               <div
                 className={cn(
-                  "w-2 h-2 mx-auto rotate-45 -mt-1",
+                  "w-2 h-2 mx-auto rotate-45 -mt-1 transition",
                   color,
+                  isSelected && "scale-110",
                 )}
               />
+            </>
+          );
+
+          return (
+            <div
+              key={pin.id}
+              className={cn(
+                "absolute -translate-x-1/2 -translate-y-full",
+                isSelected && "z-20",
+              )}
+              style={{ left: `${pin.x}%`, top: `${pin.y}%` }}
+            >
+              {onPinClick ? (
+                <button
+                  type="button"
+                  onClick={() => onPinClick(pin)}
+                  aria-label={`Ver trabajo ${pin.label}`}
+                  className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-coral-400 focus-visible:ring-offset-2 focus-visible:ring-offset-sand-100 rounded-lg"
+                >
+                  {content}
+                </button>
+              ) : (
+                content
+              )}
             </div>
           );
         })}
