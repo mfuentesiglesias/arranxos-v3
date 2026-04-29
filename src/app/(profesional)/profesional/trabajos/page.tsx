@@ -1,14 +1,33 @@
 "use client";
-import { useState, Suspense } from "react";
+import { useState, Suspense, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
+import { HeaderActionSheet } from "@/components/layout/header-action-sheet";
 import { StatusBar } from "@/components/layout/status-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
 import { JobCard } from "@/components/jobs/job-card";
+import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { MapView } from "@/components/map/map-view";
-import { categoryGroups, jobs, professionals } from "@/lib/data";
-import { classifyJobForProfessionalSpecialties } from "@/lib/catalog";
+import { jobs, professionals } from "@/lib/data";
+import {
+  classifyJobForProfessionalSpecialties,
+  getProfessionalSpecialtyFilterSuggestions,
+  getSeedCatalogServices,
+  jobMatchesProfessionalSpecialtyFilter,
+  type ProfessionalSpecialtyFilterOption,
+} from "@/lib/catalog";
 import { getCurrentProfessionalId, useSession } from "@/lib/store";
+
+const catalogServices = getSeedCatalogServices();
+const KM_OPTIONS = [5, 10, 25, 50, 100] as const;
+const OPPORTUNITY_FILTERS = [
+  { id: "all", label: "Todos" },
+  { id: "recommended", label: "Para mí" },
+  { id: "matching", label: "Mis especialidades" },
+  { id: "outside", label: "Fuera" },
+] as const;
+
+type OpportunityFilterMode = (typeof OPPORTUNITY_FILTERS)[number]["id"];
 
 function Inner() {
   const params = useSearchParams();
@@ -17,11 +36,66 @@ function Inner() {
   const currentProfessional =
     professionals.find((professional) => professional.id === currentProfessionalId) ??
     professionals[0];
+  const suggestedFilters = getProfessionalSpecialtyFilterSuggestions(
+    currentProfessional,
+    catalogServices,
+  );
+  const availableSuggestedFilters = [
+    ...suggestedFilters.specialties,
+    ...suggestedFilters.related,
+  ];
+  const suggestedFilterMap = new Map(
+    availableSuggestedFilters.map((filter) => [filter.id, filter]),
+  );
 
   const [view, setView] = useState<"lista" | "mapa">("lista");
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState<string>("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [opportunityFilter, setOpportunityFilter] =
+    useState<OpportunityFilterMode>("all");
+  const [draftOpportunityFilter, setDraftOpportunityFilter] =
+    useState<OpportunityFilterMode>("all");
+  const [selectedSuggestedFilterIds, setSelectedSuggestedFilterIds] = useState<string[]>([]);
+  const [draftSuggestedFilterIds, setDraftSuggestedFilterIds] = useState<string[]>([]);
   const [maxKm, setMaxKm] = useState<number>(50);
+  const [draftMaxKm, setDraftMaxKm] = useState<number>(50);
+
+  const openFilters = () => {
+    setDraftOpportunityFilter(opportunityFilter);
+    setDraftSuggestedFilterIds(selectedSuggestedFilterIds);
+    setDraftMaxKm(maxKm);
+    setFiltersOpen(true);
+  };
+
+  const resetDraftFilters = () => {
+    setDraftOpportunityFilter("all");
+    setDraftSuggestedFilterIds([]);
+    setDraftMaxKm(50);
+  };
+
+  const applyFilters = () => {
+    setOpportunityFilter(draftOpportunityFilter);
+    setSelectedSuggestedFilterIds(draftSuggestedFilterIds);
+    setMaxKm(draftMaxKm);
+    setFiltersOpen(false);
+  };
+
+  const toggleDraftSuggestedFilter = (filterId: string) => {
+    setDraftSuggestedFilterIds((current) =>
+      current.includes(filterId)
+        ? current.filter((id) => id !== filterId)
+        : [...current, filterId],
+    );
+  };
+
+  const applyQuickFilter = (nextFilter: OpportunityFilterMode) => {
+    setOpportunityFilter(nextFilter);
+    setDraftOpportunityFilter(nextFilter);
+  };
+
+  const appliedSuggestedFilters = selectedSuggestedFilterIds
+    .map((filterId) => suggestedFilterMap.get(filterId))
+    .filter((filter): filter is ProfessionalSpecialtyFilterOption => Boolean(filter));
 
   const all = jobs.filter((j) =>
     myOnly
@@ -29,22 +103,51 @@ function Inner() {
       : j.status === "published" || j.status === "agreement_pending",
   );
 
-  const filtered = all.filter((j) => {
+  const enrichedJobs = all.map((job) => ({
+    job,
+    specialtyMatch: classifyJobForProfessionalSpecialties(
+      job,
+      currentProfessional,
+      catalogServices,
+    ),
+  }));
+
+  const filtered = enrichedJobs.filter(({ job, specialtyMatch }) => {
     const q = search.toLowerCase();
     const matchesQ =
       !q ||
-      j.title.toLowerCase().includes(q) ||
-      j.location.toLowerCase().includes(q) ||
-      j.category.toLowerCase().includes(q);
-    const matchesC = !category || j.category === category;
-    return matchesQ && matchesC;
+      job.title.toLowerCase().includes(q) ||
+      job.location.toLowerCase().includes(q) ||
+      job.category.toLowerCase().includes(q) ||
+      job.service.toLowerCase().includes(q);
+
+    if (!matchesQ) return false;
+    if (opportunityFilter === "matching" && !specialtyMatch.isMatch) return false;
+    if (opportunityFilter === "outside" && specialtyMatch.isMatch) return false;
+    if (
+      appliedSuggestedFilters.length > 0 &&
+      !appliedSuggestedFilters.some((filter) =>
+        jobMatchesProfessionalSpecialtyFilter(job, filter, catalogServices),
+      )
+    ) {
+      return false;
+    }
+
+    return true;
   });
 
-  const pins = filtered.slice(0, 8).map((j, i) => ({
-    id: j.id,
+  const displayJobs =
+    opportunityFilter === "recommended"
+      ? [...filtered].sort(
+          (a, b) => Number(b.specialtyMatch.isMatch) - Number(a.specialtyMatch.isMatch),
+        )
+      : filtered;
+
+  const pins = displayJobs.slice(0, 8).map(({ job }, i) => ({
+    id: job.id,
     x: 15 + ((i * 13) % 70),
     y: 20 + ((i * 19) % 60),
-    label: `${j.priceMin}€`,
+    label: `${job.priceMin}€`,
     type: "coral" as const,
   }));
 
@@ -79,39 +182,123 @@ function Inner() {
             placeholder="Buscar por título, zona, categoría…"
             className="flex-1 bg-transparent outline-none text-[14px] text-ink-800 placeholder:text-ink-400"
           />
-          <button className="text-coral-600 font-bold text-[12px] flex items-center gap-1">
+          <button
+            onClick={openFilters}
+            className="text-coral-600 font-bold text-[12px] flex items-center gap-1"
+          >
             <Icon name="filter" size={14} />
             Filtros
           </button>
         </div>
 
         <div className="flex gap-1.5 mt-3 overflow-x-auto -mx-1 px-1 scrollbar-hide">
-          <button
-            onClick={() => setCategory("")}
-            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-bold border-[1.5px] ${
-              !category
-                ? "border-coral-500 bg-coral-50 text-coral-700"
-                : "border-sand-200 text-ink-500 bg-white"
-            }`}
-          >
-            Todas
-          </button>
-          {categoryGroups[0].categories.slice(0, 6).map((c) => (
+          {OPPORTUNITY_FILTERS.map((filter) => (
             <button
-              key={c.id}
-              onClick={() => setCategory(c.name)}
+              key={filter.id}
+              onClick={() => applyQuickFilter(filter.id)}
               className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-bold border-[1.5px] whitespace-nowrap ${
-                category === c.name
+                opportunityFilter === filter.id
                   ? "border-coral-500 bg-coral-50 text-coral-700"
                   : "border-sand-200 text-ink-500 bg-white"
               }`}
             >
-              <span className="mr-1">{c.icon}</span>
-              {c.name}
+              {filter.label}
             </button>
           ))}
         </div>
       </div>
+
+      <HeaderActionSheet
+        open={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        title="Filtros"
+        description="Ajusta cómo quieres explorar oportunidades en esta demo."
+      >
+        <div className="flex flex-col gap-4 pb-1">
+          <FilterSection
+            title="Radio de búsqueda"
+            description={`Valor actual: ${draftMaxKm} km`}
+          >
+            <div className="flex flex-wrap gap-2">
+              {KM_OPTIONS.map((km) => (
+                <FilterChip
+                  key={km}
+                  active={draftMaxKm === km}
+                  onClick={() => setDraftMaxKm(km)}
+                >
+                  {km} km
+                </FilterChip>
+              ))}
+            </div>
+            <div className="text-[11px] text-ink-400 leading-snug mt-2">
+              En esta fase, el radio actualiza la vista, pero todavía no aplica filtrado real por distancia.
+            </div>
+          </FilterSection>
+
+          <FilterSection title="Tipo de oportunidad">
+            <div className="flex flex-wrap gap-2">
+              {OPPORTUNITY_FILTERS.map((filter) => (
+                <FilterChip
+                  key={filter.id}
+                  active={draftOpportunityFilter === filter.id}
+                  onClick={() => setDraftOpportunityFilter(filter.id)}
+                >
+                  {filter.label}
+                </FilterChip>
+              ))}
+            </div>
+          </FilterSection>
+
+          <FilterSection title="Tus especialidades">
+            <div className="flex flex-wrap gap-2">
+              {suggestedFilters.specialties.length > 0 ? (
+                suggestedFilters.specialties.map((filter) => (
+                  <FilterChip
+                    key={filter.id}
+                    active={draftSuggestedFilterIds.includes(filter.id)}
+                    onClick={() => toggleDraftSuggestedFilter(filter.id)}
+                  >
+                    {filter.label}
+                  </FilterChip>
+                ))
+              ) : (
+                <div className="text-[11.5px] text-ink-400 leading-snug">
+                  Aún no hay especialidades derivadas para tu perfil demo.
+                </div>
+              )}
+            </div>
+          </FilterSection>
+
+          <FilterSection title="Relacionadas">
+            <div className="flex flex-wrap gap-2">
+              {suggestedFilters.related.length > 0 ? (
+                suggestedFilters.related.map((filter) => (
+                  <FilterChip
+                    key={filter.id}
+                    active={draftSuggestedFilterIds.includes(filter.id)}
+                    onClick={() => toggleDraftSuggestedFilter(filter.id)}
+                  >
+                    {filter.label}
+                  </FilterChip>
+                ))
+              ) : (
+                <div className="text-[11.5px] text-ink-400 leading-snug">
+                  No encontramos sugerencias relacionadas para tu perfil actual.
+                </div>
+              )}
+            </div>
+          </FilterSection>
+
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <Button full variant="outline" onClick={resetDraftFilters}>
+              Limpiar
+            </Button>
+            <Button full onClick={applyFilters}>
+              Aplicar filtros
+            </Button>
+          </div>
+        </div>
+      </HeaderActionSheet>
 
       <ScreenBody className="px-4 pt-4 pb-6">
         {view === "mapa" && (
@@ -125,7 +312,7 @@ function Inner() {
 
         <div className="flex items-center justify-between mb-2 px-1">
           <span className="text-[12px] text-ink-400 font-semibold">
-            {filtered.length} trabajo{filtered.length === 1 ? "" : "s"}
+            {displayJobs.length} trabajo{displayJobs.length === 1 ? "" : "s"}
           </span>
           <span className="text-[11px] text-ink-400 font-semibold">
             Radio: {maxKm} km
@@ -133,17 +320,13 @@ function Inner() {
         </div>
 
         <div className="flex flex-col gap-2.5">
-          {filtered.map((j, i) => {
-            const specialtyMatch = !myOnly
-              ? classifyJobForProfessionalSpecialties(j, currentProfessional)
-              : undefined;
-
+          {displayJobs.map(({ job, specialtyMatch }, i) => {
             return (
               <JobCard
-                key={j.id}
-                job={j}
-                href={`/profesional/trabajos/${j.id}`}
-                approxLocation={!myOnly && j.status === "published"}
+                key={job.id}
+                job={job}
+                href={`/profesional/trabajos/${job.id}`}
+                approxLocation={!myOnly && job.status === "published"}
                 showDistance={
                   !myOnly ? `${1 + ((i * 3) % 12)} km` : undefined
                 }
@@ -158,7 +341,7 @@ function Inner() {
               />
             );
           })}
-          {filtered.length === 0 && (
+          {displayJobs.length === 0 && (
             <div className="text-center py-12 text-ink-400 text-[13px]">
               No hay trabajos que coincidan.
             </div>
@@ -166,6 +349,53 @@ function Inner() {
         </div>
       </ScreenBody>
     </div>
+  );
+}
+
+function FilterSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-sand-200/70 bg-sand-50/60 p-3.5">
+      <div className="font-bold text-[13px] text-ink-800">{title}</div>
+      {description && (
+        <div className="mt-0.5 mb-3 text-[11.5px] text-ink-400 leading-snug">
+          {description}
+        </div>
+      )}
+      {!description && <div className="mb-3" />}
+      {children}
+    </div>
+  );
+}
+
+function FilterChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full border-[1.5px] px-3 py-1.5 text-[12px] font-bold transition whitespace-nowrap ${
+        active
+          ? "border-coral-500 bg-coral-50 text-coral-700"
+          : "border-sand-200 bg-white text-ink-500"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
