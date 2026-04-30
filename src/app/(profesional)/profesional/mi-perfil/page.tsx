@@ -15,7 +15,7 @@ import { StrikeBadge } from "@/components/pros/strike-badge";
 import { getSeedCatalogServices, slugifyCatalogText } from "@/lib/catalog";
 import { currentPro, reviews, defaultAdminConfig } from "@/lib/data";
 import { useSession } from "@/lib/store";
-import type { CatalogService, Professional } from "@/lib/types";
+import type { CatalogRequest, CatalogService, Professional } from "@/lib/types";
 
 const catalogServices = getSeedCatalogServices();
 const SPECIALTY_RADIUS_OPTIONS = [5, 10, 25, 50, 100] as const;
@@ -78,6 +78,8 @@ export default function PerfilProPage() {
   );
   const [savedRadiusKm, setSavedRadiusKm] = useState(currentPro.radiusKm ?? 25);
   const [radiusDraft, setRadiusDraft] = useState(currentPro.radiusKm ?? 25);
+  const [catalogRequests, setCatalogRequests] = useState<CatalogRequest[]>([]);
+  const [catalogRequestFeedback, setCatalogRequestFeedback] = useState<string | null>(null);
   const [profileDraft, setProfileDraft] = useState({
     name: currentPro.name,
     bio: currentPro.bio ?? "",
@@ -101,15 +103,7 @@ export default function PerfilProPage() {
   const displayedPrimarySpecialty = savedSpecialties[0]?.label ?? currentPro.specialty;
   const workBaseLookup = getWorkBaseLookup(workBaseDraft.postalCode);
   const normalizedSpecialtySearch = normalizeSpecialtySearch(specialtySearch.trim());
-  const specialtySuggestions = catalogServices
-    .filter(
-      (service) =>
-        !specialtiesDraft.some(
-          (selected) =>
-            selected.serviceId === service.id ||
-            normalizeSpecialtySearch(selected.label) === normalizeSpecialtySearch(service.name),
-        ),
-    )
+  const matchingCatalogServices = catalogServices
     .filter((service) => {
       if (!normalizedSpecialtySearch) return true;
 
@@ -122,8 +116,20 @@ export default function PerfilProPage() {
         .join(" ");
 
       return haystack.includes(normalizedSpecialtySearch);
-    })
+    });
+  const specialtySuggestions = matchingCatalogServices
+    .filter(
+      (service) =>
+        !specialtiesDraft.some(
+          (selected) =>
+            selected.serviceId === service.id ||
+            normalizeSpecialtySearch(selected.label) === normalizeSpecialtySearch(service.name),
+        ),
+    )
     .slice(0, normalizedSpecialtySearch ? 8 : 6);
+  const requestableSpecialtySearch = specialtySearch.trim();
+  const canRequestNewSpecialty =
+    requestableSpecialtySearch.length > 0 && matchingCatalogServices.length === 0;
 
   const syncSpecialtiesDraftFromSaved = () => {
     setSpecialtiesDraft(savedSpecialties);
@@ -131,6 +137,7 @@ export default function PerfilProPage() {
     setRadiusDraft(savedRadiusKm);
     setSpecialtySearch("");
     setSpecialtiesSaved(false);
+    setCatalogRequestFeedback(null);
   };
 
   const openPanel = (panelId: ProfilePanelId) => {
@@ -143,6 +150,7 @@ export default function PerfilProPage() {
 
   const addSpecialty = (service: CatalogService) => {
     setSpecialtiesSaved(false);
+    setCatalogRequestFeedback(null);
     setSpecialtiesDraft((current) => [
       ...current,
       {
@@ -158,9 +166,39 @@ export default function PerfilProPage() {
 
   const removeSpecialty = (specialtyId: string) => {
     setSpecialtiesSaved(false);
+    setCatalogRequestFeedback(null);
     setSpecialtiesDraft((current) =>
       current.filter((specialty) => specialty.id !== specialtyId),
     );
+  };
+
+  const requestNewSpecialty = () => {
+    const requestedName = requestableSpecialtySearch.trim();
+    if (!requestedName) return;
+
+    const normalizedRequestedName = normalizeSpecialtySearch(requestedName);
+    const alreadyRequested = catalogRequests.some(
+      (request) => normalizeSpecialtySearch(request.requestedName) === normalizedRequestedName,
+    );
+
+    if (alreadyRequested) {
+      setCatalogRequestFeedback("Esta especialidad ya está solicitada en esta demo.");
+      return;
+    }
+
+    const request: CatalogRequest = {
+      id: `catalog-request-${slugifyCatalogText(requestedName)}-${Date.now()}`,
+      requestedName,
+      suggestedCategoryName: inferSuggestedCategoryName(requestedName),
+      requestedByUserId: currentPro.id || "p1",
+      requestedByName: currentPro.name,
+      requestedByRole: "professional",
+      status: "pending",
+      createdAt: new Date().toISOString(),
+    };
+
+    setCatalogRequests((current) => [request, ...current]);
+    setCatalogRequestFeedback("Solicitud enviada a revisión en demo");
   };
 
   const saveSpecialties = () => {
@@ -361,6 +399,7 @@ export default function PerfilProPage() {
                 value={specialtySearch}
                 onChange={(event) => {
                   setSpecialtiesSaved(false);
+                  setCatalogRequestFeedback(null);
                   setSpecialtySearch(event.target.value);
                 }}
                 placeholder="Buscar especialidad o servicio"
@@ -386,13 +425,32 @@ export default function PerfilProPage() {
                       </button>
                     ))}
                   </div>
-                ) : specialtySearch.trim() ? (
+                ) : canRequestNewSpecialty ? (
                   <div className="px-4 py-3 text-[12px] leading-snug">
                     <div className="font-semibold text-ink-700">
                       No encontramos esa especialidad.
                     </div>
                     <div className="text-ink-400 mt-1">
-                      Prueba con otro servicio del catálogo disponible en esta demo.
+                      Puedes solicitar que admin la revise.
+                    </div>
+                    <Button
+                      full
+                      size="sm"
+                      variant="outline"
+                      className="mt-3"
+                      onClick={requestNewSpecialty}
+                      testId="request-new-specialty"
+                    >
+                      Solicitar nueva especialidad
+                    </Button>
+                  </div>
+                ) : specialtySearch.trim() ? (
+                  <div className="px-4 py-3 text-[12px] leading-snug">
+                    <div className="font-semibold text-ink-700">
+                      Ya tienes esa especialidad añadida o hay sugerencias equivalentes.
+                    </div>
+                    <div className="text-ink-400 mt-1">
+                      Ajusta la búsqueda o revisa los chips seleccionados arriba.
                     </div>
                   </div>
                 ) : (
@@ -401,6 +459,49 @@ export default function PerfilProPage() {
                   </div>
                 )}
               </div>
+              {catalogRequestFeedback && (
+                <div
+                  data-testid="catalog-request-feedback"
+                  className={`rounded-2xl border px-3.5 py-3 text-[12px] font-semibold ${
+                    catalogRequestFeedback.includes("ya está")
+                      ? "border-amber-100 bg-amber-50 text-amber-700"
+                      : "border-teal-100 bg-teal-50 text-teal-700"
+                  }`}
+                >
+                  {catalogRequestFeedback}
+                </div>
+              )}
+              {catalogRequests.length > 0 && (
+                <div className="rounded-2xl border border-sand-200/70 bg-sand-50/70 p-3.5">
+                  <div className="font-bold text-[13px] text-ink-800 mb-2">
+                    Solicitudes enviadas
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {catalogRequests.map((request) => (
+                      <div
+                        key={request.id}
+                        data-testid={`catalog-request-${slugifyCatalogText(request.requestedName)}`}
+                        className="rounded-2xl border border-sand-200/70 bg-white px-3.5 py-3"
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="font-bold text-[12.5px] text-ink-800">
+                            {request.requestedName}
+                          </div>
+                          <span className="ml-auto rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                            Pendiente de revisión
+                          </span>
+                        </div>
+                        <div className="text-[11.5px] text-ink-400 leading-snug">
+                          {request.suggestedCategoryName
+                            ? `Sugerencia: ${request.suggestedCategoryName} · `
+                            : ""}
+                          Creada ahora
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <Input
@@ -970,6 +1071,19 @@ function normalizeSpecialtySearch(text: string) {
 
 function getWorkBaseLookup(postalCode: string) {
   return POSTAL_CODE_LOOKUP[postalCode as keyof typeof POSTAL_CODE_LOOKUP];
+}
+
+function inferSuggestedCategoryName(requestedName: string) {
+  const normalizedRequestedName = normalizeSpecialtySearch(requestedName);
+  const categoryMatch = catalogServices.find((service) => {
+    const normalizedCategory = normalizeSpecialtySearch(service.categoryName);
+    return (
+      normalizedCategory.includes(normalizedRequestedName) ||
+      normalizedRequestedName.includes(normalizedCategory)
+    );
+  });
+
+  return categoryMatch?.categoryName;
 }
 
 function getInitialWorkBase(professional: Professional): WorkBaseDraft {
