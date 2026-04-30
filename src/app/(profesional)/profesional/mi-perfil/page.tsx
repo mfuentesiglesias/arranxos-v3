@@ -19,6 +19,12 @@ import type { CatalogService, Professional } from "@/lib/types";
 
 const catalogServices = getSeedCatalogServices();
 const SPECIALTY_RADIUS_OPTIONS = [5, 10, 25, 50, 100] as const;
+const POSTAL_CODE_LOOKUP = {
+  "15824": { municipality: "O Pino", locality: "Boavista" },
+  "15705": { municipality: "Santiago de Compostela", locality: "" },
+  "15001": { municipality: "A Coruña", locality: "" },
+  "36201": { municipality: "Vigo", locality: "" },
+} as const;
 
 type ProfilePanelId =
   | "edit"
@@ -47,6 +53,13 @@ type EditableSpecialty = {
   serviceId?: string;
 };
 
+type WorkBaseDraft = {
+  postalCode: string;
+  municipality: string;
+  locality: string;
+  privateAddress: string;
+};
+
 export default function PerfilProPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<ProfilePanelId | null>(null);
@@ -57,8 +70,12 @@ export default function PerfilProPage() {
     getInitialEditableSpecialties(currentPro),
   );
   const [specialtySearch, setSpecialtySearch] = useState("");
-  const [savedBaseCity, setSavedBaseCity] = useState(currentPro.location || "Vigo");
-  const [baseCityDraft, setBaseCityDraft] = useState(currentPro.location || "Vigo");
+  const [savedWorkBase, setSavedWorkBase] = useState<WorkBaseDraft>(() =>
+    getInitialWorkBase(currentPro),
+  );
+  const [workBaseDraft, setWorkBaseDraft] = useState<WorkBaseDraft>(() =>
+    getInitialWorkBase(currentPro),
+  );
   const [savedRadiusKm, setSavedRadiusKm] = useState(currentPro.radiusKm ?? 25);
   const [radiusDraft, setRadiusDraft] = useState(currentPro.radiusKm ?? 25);
   const [profileDraft, setProfileDraft] = useState({
@@ -82,6 +99,7 @@ export default function PerfilProPage() {
     .filter((r) => r.targetId === "p1")
     .slice(0, 3);
   const displayedPrimarySpecialty = savedSpecialties[0]?.label ?? currentPro.specialty;
+  const workBaseLookup = getWorkBaseLookup(workBaseDraft.postalCode);
   const normalizedSpecialtySearch = normalizeSpecialtySearch(specialtySearch.trim());
   const specialtySuggestions = catalogServices
     .filter(
@@ -109,7 +127,7 @@ export default function PerfilProPage() {
 
   const syncSpecialtiesDraftFromSaved = () => {
     setSpecialtiesDraft(savedSpecialties);
-    setBaseCityDraft(savedBaseCity);
+    setWorkBaseDraft(savedWorkBase);
     setRadiusDraft(savedRadiusKm);
     setSpecialtySearch("");
     setSpecialtiesSaved(false);
@@ -147,13 +165,26 @@ export default function PerfilProPage() {
 
   const saveSpecialties = () => {
     setSavedSpecialties(specialtiesDraft);
-    setSavedBaseCity(baseCityDraft.trim() || currentPro.location || "Vigo");
+    setSavedWorkBase({
+      postalCode: workBaseDraft.postalCode.trim(),
+      municipality:
+        workBaseDraft.municipality.trim() || currentPro.location || "Zona pendiente",
+      locality: workBaseDraft.locality.trim(),
+      privateAddress: workBaseDraft.privateAddress.trim(),
+    });
     setSavedRadiusKm(radiusDraft);
-    setProfileDraft((current) => ({
-      ...current,
-      location: baseCityDraft.trim() || current.location,
-    }));
     setSpecialtiesSaved(true);
+  };
+
+  const syncWorkBaseFromPostalCode = (postalCode: string) => {
+    const lookup = getWorkBaseLookup(postalCode);
+
+    setWorkBaseDraft((current) => ({
+      ...current,
+      postalCode,
+      municipality: lookup?.municipality ?? current.municipality,
+      locality: lookup?.locality ?? current.locality,
+    }));
   };
 
   const sections: ProfilePanelAction[][] = [
@@ -373,15 +404,71 @@ export default function PerfilProPage() {
             </div>
 
             <Input
-              label="Ciudad base de trabajo"
-              value={baseCityDraft}
+              label="Código postal"
+              value={workBaseDraft.postalCode}
               onChange={(event) => {
                 setSpecialtiesSaved(false);
-                setBaseCityDraft(event.target.value);
+                syncWorkBaseFromPostalCode(event.target.value.replace(/[^0-9]/g, "").slice(0, 5));
               }}
-              placeholder="Ej. Vigo"
-              data-testid="profile-base-city"
+              placeholder="Ej. 15824"
+              data-testid="profile-postal-code"
             />
+
+            <Input
+              label="Concello / municipio"
+              value={workBaseDraft.municipality}
+              onChange={(event) => {
+                setSpecialtiesSaved(false);
+                setWorkBaseDraft((current) => ({
+                  ...current,
+                  municipality: event.target.value,
+                }));
+              }}
+              placeholder="Ej. O Pino"
+              data-testid="profile-municipality"
+            />
+
+            <Input
+              label="Localidad o lugar"
+              value={workBaseDraft.locality}
+              onChange={(event) => {
+                setSpecialtiesSaved(false);
+                setWorkBaseDraft((current) => ({
+                  ...current,
+                  locality: event.target.value,
+                }));
+              }}
+              placeholder="Ej. Boavista"
+              data-testid="profile-locality"
+            />
+
+            <Input
+              label="Dirección o referencia privada"
+              value={workBaseDraft.privateAddress}
+              onChange={(event) => {
+                setSpecialtiesSaved(false);
+                setWorkBaseDraft((current) => ({
+                  ...current,
+                  privateAddress: event.target.value,
+                }));
+              }}
+              placeholder="Ej. Boavista 9"
+              data-testid="profile-private-address"
+              note="La dirección privada no se muestra al cliente. Se usa para calcular trabajos cercanos y validar tu zona de servicio."
+            />
+
+            {workBaseDraft.postalCode.trim() && !workBaseLookup && (
+              <div className="rounded-2xl border border-amber-100 bg-amber-50 px-3.5 py-3 text-[12px] text-amber-700 leading-snug">
+                Código postal pendiente de validar en esta demo.
+              </div>
+            )}
+
+            {workBaseLookup && (
+              <div className="rounded-2xl border border-teal-100 bg-teal-50 px-3.5 py-3 text-[12px] text-teal-700 leading-snug">
+                Base sugerida para {workBaseDraft.postalCode}: {workBaseLookup.municipality}
+                {workBaseLookup.locality ? ` · ${workBaseLookup.locality}` : ""}
+              </div>
+            )}
 
             <div className="rounded-2xl border border-sand-200/70 bg-white p-3.5">
               <div className="mb-2 flex items-center justify-between gap-3">
@@ -433,7 +520,7 @@ export default function PerfilProPage() {
             </div>
 
             <div className="rounded-2xl border border-amber-100 bg-amber-50 px-3.5 py-3 text-[12px] text-amber-700 leading-snug">
-              La edición avanzada ya es usable en esta demo, pero todavía no cambia el matching ni crea nuevas solicitudes de catálogo.
+              La base de trabajo ya es usable en esta demo, pero todavía no cambia el matching real ni crea nuevas solicitudes de catálogo.
             </div>
             {specialtiesSaved && (
               <div className="rounded-2xl border border-teal-100 bg-teal-50 px-3.5 py-3 text-[12px] font-semibold text-teal-700">
@@ -686,6 +773,9 @@ export default function PerfilProPage() {
               <div className="text-[12.5px] text-ink-500">
                 {displayedPrimarySpecialty} · {profileDraft.location}
               </div>
+              <div className="mt-1 text-[11.5px] font-semibold text-ink-500">
+                Base: {formatWorkBaseSummary(savedWorkBase, savedRadiusKm)}
+              </div>
               {savedSpecialties.length > 0 && (
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {savedSpecialties.slice(0, 3).map((specialty) => (
@@ -876,6 +966,59 @@ function normalizeSpecialtySearch(text: string) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
+}
+
+function getWorkBaseLookup(postalCode: string) {
+  return POSTAL_CODE_LOOKUP[postalCode as keyof typeof POSTAL_CODE_LOOKUP];
+}
+
+function getInitialWorkBase(professional: Professional): WorkBaseDraft {
+  const normalizedLocation = normalizeSpecialtySearch(professional.location || "");
+
+  if (normalizedLocation.includes("vigo")) {
+    return {
+      postalCode: "36201",
+      municipality: "Vigo",
+      locality: "",
+      privateAddress: "",
+    };
+  }
+
+  if (normalizedLocation.includes("coruna")) {
+    return {
+      postalCode: "15001",
+      municipality: "A Coruña",
+      locality: "",
+      privateAddress: "",
+    };
+  }
+
+  if (normalizedLocation.includes("santiago")) {
+    return {
+      postalCode: "15705",
+      municipality: "Santiago de Compostela",
+      locality: "",
+      privateAddress: "",
+    };
+  }
+
+  return {
+    postalCode: "",
+    municipality: professional.location || "",
+    locality: "",
+    privateAddress: "",
+  };
+}
+
+function formatWorkBaseSummary(base: WorkBaseDraft, radiusKm: number) {
+  const normalizedMunicipality = normalizeSpecialtySearch(base.municipality);
+  const normalizedLocality = normalizeSpecialtySearch(base.locality);
+  const locality =
+    normalizedLocality && normalizedLocality !== normalizedMunicipality
+      ? base.locality
+      : "";
+  const area = [locality, base.municipality].filter(Boolean).join(" · ");
+  return `${area || "Zona pendiente"} · ${radiusKm} km`;
 }
 
 function getInitialEditableSpecialties(professional: Professional): EditableSpecialty[] {
