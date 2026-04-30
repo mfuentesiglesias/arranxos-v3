@@ -12,8 +12,13 @@ import { Icon } from "@/components/ui/icon";
 import { Input, Textarea } from "@/components/ui/input";
 import { RatingStars } from "@/components/pros/rating-stars";
 import { StrikeBadge } from "@/components/pros/strike-badge";
+import { getSeedCatalogServices, slugifyCatalogText } from "@/lib/catalog";
 import { currentPro, reviews, defaultAdminConfig } from "@/lib/data";
 import { useSession } from "@/lib/store";
+import type { CatalogService, Professional } from "@/lib/types";
+
+const catalogServices = getSeedCatalogServices();
+const SPECIALTY_RADIUS_OPTIONS = [5, 10, 25, 50, 100] as const;
 
 type ProfilePanelId =
   | "edit"
@@ -34,9 +39,28 @@ type ProfilePanelAction = {
   onClick?: () => void;
 };
 
+type EditableSpecialty = {
+  id: string;
+  label: string;
+  source: "catalog" | "legacy";
+  categoryName?: string;
+  serviceId?: string;
+};
+
 export default function PerfilProPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<ProfilePanelId | null>(null);
+  const [savedSpecialties, setSavedSpecialties] = useState<EditableSpecialty[]>(() =>
+    getInitialEditableSpecialties(currentPro),
+  );
+  const [specialtiesDraft, setSpecialtiesDraft] = useState<EditableSpecialty[]>(() =>
+    getInitialEditableSpecialties(currentPro),
+  );
+  const [specialtySearch, setSpecialtySearch] = useState("");
+  const [savedBaseCity, setSavedBaseCity] = useState(currentPro.location || "Vigo");
+  const [baseCityDraft, setBaseCityDraft] = useState(currentPro.location || "Vigo");
+  const [savedRadiusKm, setSavedRadiusKm] = useState(currentPro.radiusKm ?? 25);
+  const [radiusDraft, setRadiusDraft] = useState(currentPro.radiusKm ?? 25);
   const [profileDraft, setProfileDraft] = useState({
     name: currentPro.name,
     bio: currentPro.bio ?? "",
@@ -57,13 +81,79 @@ export default function PerfilProPage() {
   const myReviews = reviews
     .filter((r) => r.targetId === "p1")
     .slice(0, 3);
-  const specialtyList = [currentPro.specialty, ...(currentPro.specialties ?? [])].filter(
-    (value, index, values) => values.indexOf(value) === index,
-  );
+  const displayedPrimarySpecialty = savedSpecialties[0]?.label ?? currentPro.specialty;
+  const normalizedSpecialtySearch = normalizeSpecialtySearch(specialtySearch.trim());
+  const specialtySuggestions = catalogServices
+    .filter(
+      (service) =>
+        !specialtiesDraft.some(
+          (selected) =>
+            selected.serviceId === service.id ||
+            normalizeSpecialtySearch(selected.label) === normalizeSpecialtySearch(service.name),
+        ),
+    )
+    .filter((service) => {
+      if (!normalizedSpecialtySearch) return true;
+
+      const haystack = [
+        service.name,
+        service.categoryName,
+        ...(service.aliases ?? []),
+      ]
+        .map(normalizeSpecialtySearch)
+        .join(" ");
+
+      return haystack.includes(normalizedSpecialtySearch);
+    })
+    .slice(0, normalizedSpecialtySearch ? 8 : 6);
+
+  const syncSpecialtiesDraftFromSaved = () => {
+    setSpecialtiesDraft(savedSpecialties);
+    setBaseCityDraft(savedBaseCity);
+    setRadiusDraft(savedRadiusKm);
+    setSpecialtySearch("");
+    setSpecialtiesSaved(false);
+  };
 
   const openPanel = (panelId: ProfilePanelId) => {
+    if (panelId === "specialties") {
+      syncSpecialtiesDraftFromSaved();
+    }
     setSettingsOpen(false);
     setActivePanel(panelId);
+  };
+
+  const addSpecialty = (service: CatalogService) => {
+    setSpecialtiesSaved(false);
+    setSpecialtiesDraft((current) => [
+      ...current,
+      {
+        id: `service-${service.id}`,
+        label: service.name,
+        source: "catalog",
+        categoryName: service.categoryName,
+        serviceId: service.id,
+      },
+    ]);
+    setSpecialtySearch("");
+  };
+
+  const removeSpecialty = (specialtyId: string) => {
+    setSpecialtiesSaved(false);
+    setSpecialtiesDraft((current) =>
+      current.filter((specialty) => specialty.id !== specialtyId),
+    );
+  };
+
+  const saveSpecialties = () => {
+    setSavedSpecialties(specialtiesDraft);
+    setSavedBaseCity(baseCityDraft.trim() || currentPro.location || "Vigo");
+    setSavedRadiusKm(radiusDraft);
+    setProfileDraft((current) => ({
+      ...current,
+      location: baseCityDraft.trim() || current.location,
+    }));
+    setSpecialtiesSaved(true);
   };
 
   const sections: ProfilePanelAction[][] = [
@@ -204,48 +294,159 @@ export default function PerfilProPage() {
                 Especialidades actuales
               </div>
               <div className="flex flex-wrap gap-2">
-                {specialtyList.map((specialty) => (
-                  <span
-                    key={specialty}
-                    className="rounded-full bg-coral-50 px-3 py-1.5 text-[12px] font-bold text-coral-700"
+                {specialtiesDraft.map((specialty, index) => (
+                  <div
+                    key={specialty.id}
+                    data-testid={`profile-specialty-chip-${slugifyCatalogText(specialty.label)}`}
+                    className="inline-flex max-w-full items-center gap-2 rounded-full bg-coral-50 px-3 py-1.5 text-[12px] font-semibold text-coral-700"
                   >
-                    {specialty}
-                  </span>
+                    <span className="truncate">
+                      {specialty.label}
+                      {index === 0 ? " · principal" : ""}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeSpecialty(specialty.id)}
+                      className="rounded-full bg-coral-100 px-1.5 py-0.5 text-[10px] font-bold text-coral-700"
+                      aria-label={`Quitar ${specialty.label}`}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+              {specialtiesDraft.length === 0 && (
+                <div className="mt-3 rounded-2xl border border-amber-100 bg-amber-50 px-3.5 py-3 text-[12px] text-amber-700 leading-snug">
+                  Añade al menos una especialidad para que podamos recomendarte trabajos.
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[13px] font-semibold text-ink-500">
+                Buscar especialidad o servicio
+              </label>
+              <Input
+                value={specialtySearch}
+                onChange={(event) => {
+                  setSpecialtiesSaved(false);
+                  setSpecialtySearch(event.target.value);
+                }}
+                placeholder="Buscar especialidad o servicio"
+                data-testid="profile-specialties-search"
+                note="Puedes añadir varias especialidades. La primera seguirá siendo la principal en esta demo."
+              />
+              <div className="rounded-2xl border border-sand-200 bg-white overflow-hidden">
+                {specialtySuggestions.length > 0 ? (
+                  <div className="divide-y divide-sand-200/70">
+                    {specialtySuggestions.map((service) => (
+                      <button
+                        key={service.id}
+                        type="button"
+                        onClick={() => addSpecialty(service)}
+                        className="w-full px-4 py-3 text-left transition active:bg-sand-50"
+                      >
+                        <div className="font-semibold text-[13px] text-ink-800">
+                          {service.name}
+                        </div>
+                        <div className="text-[11px] text-ink-400">
+                          {service.categoryName}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : specialtySearch.trim() ? (
+                  <div className="px-4 py-3 text-[12px] leading-snug">
+                    <div className="font-semibold text-ink-700">
+                      No encontramos esa especialidad.
+                    </div>
+                    <div className="text-ink-400 mt-1">
+                      Prueba con otro servicio del catálogo disponible en esta demo.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="px-4 py-3 text-[12px] text-ink-400 leading-snug">
+                    Empieza a escribir para filtrar servicios o elige una sugerencia.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <Input
+              label="Ciudad base de trabajo"
+              value={baseCityDraft}
+              onChange={(event) => {
+                setSpecialtiesSaved(false);
+                setBaseCityDraft(event.target.value);
+              }}
+              placeholder="Ej. Vigo"
+              data-testid="profile-base-city"
+            />
+
+            <div className="rounded-2xl border border-sand-200/70 bg-white p-3.5">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div>
+                  <div className="font-bold text-[13px] text-ink-800">
+                    Radio de acción habitual
+                  </div>
+                  <div className="text-[11px] text-ink-400 leading-snug">
+                    Ajuste local de demo. Todavía no modifica el matching de oportunidades.
+                  </div>
+                </div>
+                <div className="rounded-full bg-coral-50 px-3 py-1 text-[12px] font-bold text-coral-700 whitespace-nowrap">
+                  {radiusDraft} km
+                </div>
+              </div>
+              <input
+                type="range"
+                min={SPECIALTY_RADIUS_OPTIONS[0]}
+                max={SPECIALTY_RADIUS_OPTIONS[SPECIALTY_RADIUS_OPTIONS.length - 1]}
+                step={5}
+                value={radiusDraft}
+                onChange={(event) => {
+                  setSpecialtiesSaved(false);
+                  setRadiusDraft(Number(event.target.value));
+                }}
+                className="w-full accent-[#FF5A5F]"
+                aria-label="Radio de acción habitual"
+                data-testid="profile-radius"
+              />
+              <div className="mt-3 flex items-center justify-between gap-2">
+                {SPECIALTY_RADIUS_OPTIONS.map((km) => (
+                  <button
+                    key={km}
+                    type="button"
+                    onClick={() => {
+                      setSpecialtiesSaved(false);
+                      setRadiusDraft(km);
+                    }}
+                    className={`min-w-[42px] rounded-full px-2.5 py-1 text-[11px] font-bold transition ${
+                      radiusDraft === km
+                        ? "bg-coral-50 text-coral-700"
+                        : "bg-sand-100 text-ink-500"
+                    }`}
+                  >
+                    {km}
+                  </button>
                 ))}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-[12px]">
-              <div className="rounded-2xl border border-sand-200/70 bg-white px-3.5 py-3">
-                <div className="text-ink-400 font-semibold uppercase tracking-wide text-[10.5px] mb-1">
-                  Zona visible
-                </div>
-                <div className="font-bold text-ink-800">{currentPro.zone ?? currentPro.location}</div>
-              </div>
-              <div className="rounded-2xl border border-sand-200/70 bg-white px-3.5 py-3">
-                <div className="text-ink-400 font-semibold uppercase tracking-wide text-[10.5px] mb-1">
-                  Radio actual
-                </div>
-                <div className="font-bold text-ink-800">
-                  {currentPro.radiusKm ? `${currentPro.radiusKm} km` : "Pendiente"}
-                </div>
-              </div>
-            </div>
+
             <div className="rounded-2xl border border-amber-100 bg-amber-50 px-3.5 py-3 text-[12px] text-amber-700 leading-snug">
-              La edición avanzada de especialidades, zonas y radio se conectará en una siguiente fase sin tocar todavía el matching ni el catálogo.
+              La edición avanzada ya es usable en esta demo, pero todavía no cambia el matching ni crea nuevas solicitudes de catálogo.
             </div>
             {specialtiesSaved && (
               <div className="rounded-2xl border border-teal-100 bg-teal-50 px-3.5 py-3 text-[12px] font-semibold text-teal-700">
-                Preferencias revisadas en demo.
+                Especialidades y zona actualizadas en demo.
               </div>
             )}
             <Button
               full
-              variant="outline"
-              onClick={() => {
-                setSpecialtiesSaved(true);
-              }}
+              onClick={saveSpecialties}
+              disabled={specialtiesDraft.length === 0}
+              testId="profile-save-specialties"
             >
-              Editar especialidades
+              Guardar cambios
             </Button>
           </div>
         )}
@@ -483,8 +684,20 @@ export default function PerfilProPage() {
                 {profileDraft.name}
               </div>
               <div className="text-[12.5px] text-ink-500">
-                {currentPro.specialty} · {profileDraft.location}
+                {displayedPrimarySpecialty} · {profileDraft.location}
               </div>
+              {savedSpecialties.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {savedSpecialties.slice(0, 3).map((specialty) => (
+                    <span
+                      key={specialty.id}
+                      className="rounded-full bg-sand-100 px-2 py-0.5 text-[10.5px] font-semibold text-ink-500"
+                    >
+                      {specialty.label}
+                    </span>
+                  ))}
+                </div>
+              )}
               <div className="flex items-center gap-2 mt-1">
                 <RatingStars value={currentPro.rating} />
                 <span className="text-[12px] font-bold text-ink-800">
@@ -635,6 +848,7 @@ export default function PerfilProPage() {
                 <button
                   key={item.label}
                   type="button"
+                  data-testid={item.panelId ? `profile-${item.panelId}` : undefined}
                   onClick={() => {
                     if (item.panelId) {
                       openPanel(item.panelId);
@@ -655,6 +869,47 @@ export default function PerfilProPage() {
       </ScreenBody>
     </div>
   );
+}
+
+function normalizeSpecialtySearch(text: string) {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function getInitialEditableSpecialties(professional: Professional): EditableSpecialty[] {
+  const seen = new Set<string>();
+
+  return [professional.specialty, ...(professional.specialties ?? [])]
+    .filter((value): value is string => Boolean(value))
+    .filter((value) => {
+      const normalized = normalizeSpecialtySearch(value);
+      if (!normalized || seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    })
+    .map((value) => {
+      const matchedService = catalogServices.find(
+        (service) => normalizeSpecialtySearch(service.name) === normalizeSpecialtySearch(value),
+      );
+
+      if (matchedService) {
+        return {
+          id: `service-${matchedService.id}`,
+          label: matchedService.name,
+          source: "catalog" as const,
+          categoryName: matchedService.categoryName,
+          serviceId: matchedService.id,
+        };
+      }
+
+      return {
+        id: `legacy-${slugifyCatalogText(value)}`,
+        label: value,
+        source: "legacy" as const,
+      };
+    });
 }
 
 function getPanelTitle(panelId: ProfilePanelId | null) {
