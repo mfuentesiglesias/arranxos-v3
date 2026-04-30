@@ -151,6 +151,7 @@ export function MapView({
                 isSelected && "z-20",
               )}
               style={{ left: `${pin.x}%`, top: `${pin.y}%` }}
+              data-testid={`map-pin-${pin.id}`}
             >
               {onPinClick ? (
                 <button

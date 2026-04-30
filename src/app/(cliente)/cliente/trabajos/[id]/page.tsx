@@ -286,7 +286,12 @@ function Inner({ id }: { id: string }) {
             <div className="text-[11.5px] text-coral-700/80 leading-snug mb-3">
               No vemos profesionales aprobados en tu zona para este trabajo.
             </div>
-            <Button size="sm" full onClick={() => createSearchTicket(job.id, "no_pros_in_zone")}>
+            <Button
+              size="sm"
+              full
+              onClick={() => createSearchTicket(job.id, "no_pros_in_zone")}
+              testId="create-search-ticket"
+            >
               Crear ticket de búsqueda
             </Button>
           </Card>
@@ -307,7 +312,12 @@ function Inner({ id }: { id: string }) {
             <div className="text-[11.5px] text-coral-700/80 leading-snug mb-3">
               Han pasado {adminConfig.searchTicketNoResponseDays} días sin respuesta útil tras las invitaciones.
             </div>
-            <Button size="sm" full onClick={() => createSearchTicket(job.id, "no_useful_response")}>
+            <Button
+              size="sm"
+              full
+              onClick={() => createSearchTicket(job.id, "no_useful_response")}
+              testId="create-search-ticket"
+            >
               Crear ticket de búsqueda
             </Button>
           </Card>

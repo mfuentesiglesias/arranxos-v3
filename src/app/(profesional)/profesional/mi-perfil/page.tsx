@@ -619,13 +619,14 @@ export default function PerfilProPage() {
                 </div>
               );
               if (item.onClick) {
-                return (
-                  <button
-                    key={item.label}
-                    type="button"
-                    onClick={item.onClick}
-                    className="w-full text-left"
-                  >
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  data-testid={item.panelId ? `profile-${item.panelId}` : undefined}
+                  onClick={item.onClick}
+                  className="w-full text-left"
+                >
                     {content}
                   </button>
                 );

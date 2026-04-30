@@ -53,9 +53,9 @@ export default function AdminTicketsPage() {
           />
         </div>
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2" data-testid="admin-search-tickets">
           {filtered.map((t) => (
-            <Card key={t.id} className="!p-3">
+            <Card key={t.id} className="!p-3" testId={`search-ticket-${t.id}`}>
               <div className="flex items-center gap-2 mb-1">
                 <span
                   className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${

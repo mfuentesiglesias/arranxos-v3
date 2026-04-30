@@ -34,6 +34,7 @@ interface Props {
   className?: string;
   type?: "button" | "submit";
   icon?: ReactNode;
+  testId?: string;
 }
 
 const sizes = {
@@ -53,6 +54,7 @@ export function Button({
   className,
   type = "button",
   icon,
+  testId,
 }: Props) {
   const cls = cn(
     "inline-flex items-center justify-center gap-2 transition disabled:opacity-50 disabled:pointer-events-none",
@@ -63,13 +65,13 @@ export function Button({
   );
   if (href)
     return (
-      <Link href={href} className={cls} aria-disabled={disabled}>
+      <Link href={href} className={cls} aria-disabled={disabled} data-testid={testId}>
         {icon}
         {children}
       </Link>
     );
   return (
-    <button type={type} onClick={onClick} disabled={disabled} className={cls}>
+    <button type={type} onClick={onClick} disabled={disabled} className={cls} data-testid={testId}>
       {icon}
       {children}
     </button>

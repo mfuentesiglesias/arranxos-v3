@@ -191,6 +191,8 @@ function Inner() {
             {(["lista", "mapa"] as const).map((v) => (
               <button
                 key={v}
+                type="button"
+                data-testid={v === "lista" ? "view-lista" : "view-mapa"}
                 onClick={() => setView(v)}
                 className={`px-3 py-1.5 rounded-full transition capitalize ${
                   view === v ? "bg-white text-ink-800 shadow-card" : "text-ink-400"
@@ -211,6 +213,8 @@ function Inner() {
             className="flex-1 bg-transparent outline-none text-[14px] text-ink-800 placeholder:text-ink-400"
           />
           <button
+            type="button"
+            data-testid="open-filters"
             onClick={openFilters}
             className="text-coral-600 font-bold text-[12px] flex items-center gap-1"
           >
@@ -241,6 +245,7 @@ function Inner() {
         onClose={() => setFiltersOpen(false)}
         title="Filtros"
         description="Ajusta cómo quieres explorar oportunidades en esta demo."
+        testId="filters-panel"
       >
         <div className="flex flex-col gap-4 pb-1">
           <FilterSection
@@ -364,6 +369,7 @@ function Inner() {
                 onChange={(e) => setMaxKm(Number(e.target.value))}
                 className="w-full accent-[#FF5A5F]"
                 aria-label="Radio de búsqueda"
+                data-testid="map-radius-slider"
               />
 
               <div className="mt-3 flex items-center justify-between gap-2">
@@ -404,6 +410,7 @@ function Inner() {
               <div
                 key={job.id}
                 id={`job-card-${job.id}`}
+                data-testid={`job-card-${job.id}`}
                 ref={(element) => {
                   jobRefs.current[job.id] = element;
                 }}

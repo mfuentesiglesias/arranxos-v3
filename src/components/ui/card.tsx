@@ -8,9 +8,10 @@ interface Props {
   onClick?: () => void;
   href?: string;
   padded?: boolean;
+  testId?: string;
 }
 
-export function Card({ children, className, onClick, href, padded = true }: Props) {
+export function Card({ children, className, onClick, href, padded = true, testId }: Props) {
   const base = cn(
     "rounded-2xl bg-white border border-sand-200/70 shadow-card transition",
     padded && "p-4",
@@ -19,15 +20,15 @@ export function Card({ children, className, onClick, href, padded = true }: Prop
   );
   if (href)
     return (
-      <Link href={href} className={base}>
+      <Link href={href} className={base} data-testid={testId}>
         {children}
       </Link>
     );
   if (onClick)
     return (
-      <div onClick={onClick} className={base}>
+      <div onClick={onClick} className={base} data-testid={testId}>
         {children}
       </div>
     );
-  return <div className={base}>{children}</div>;
+  return <div className={base} data-testid={testId}>{children}</div>;
 }

@@ -105,6 +105,16 @@ export default function LoginPage() {
               {demoAccesses.map((demo) => (
                 <button
                   key={demo.key}
+                  type="button"
+                  data-testid={
+                    demo.key === "client"
+                      ? "demo-client"
+                      : demo.key === "professional_pending"
+                      ? "demo-pro-pending"
+                      : demo.key === "professional_approved"
+                      ? "demo-pro-approved"
+                      : "demo-admin"
+                  }
                   onClick={() => {
                     enterDemoAccess(demo.key);
                     router.push(demo.target);

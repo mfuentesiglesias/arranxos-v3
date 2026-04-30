@@ -20,6 +20,7 @@ interface Props {
   items?: HeaderActionItem[];
   onClose: () => void;
   children?: ReactNode;
+  testId?: string;
 }
 
 export function HeaderActionSheet({
@@ -29,12 +30,14 @@ export function HeaderActionSheet({
   items = [],
   onClose,
   children,
+  testId,
 }: Props) {
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[350] bg-black/45" onClick={onClose}>
       <div
+        data-testid={testId}
         className="absolute inset-x-0 bottom-0 top-[calc(env(safe-area-inset-top)+0.75rem)] flex flex-col overflow-hidden rounded-t-3xl bg-white px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 shadow-cardHover animate-slideUp md:left-1/2 md:right-auto md:top-1/2 md:bottom-auto md:w-[360px] md:max-h-[min(80vh,640px)] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-3xl"
         onClick={(event) => event.stopPropagation()}
       >
