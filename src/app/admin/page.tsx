@@ -92,6 +92,12 @@ export default function AdminDashboard() {
       icon: "search",
       sub: `${openTickets} sin cubrir`,
     },
+    {
+      href: "/admin/solicitudes-catalogo",
+      label: "Solicitudes de catálogo",
+      icon: "layers",
+      sub: "Revisar nuevas especialidades propuestas por profesionales",
+    },
     { href: "/admin/configuracion", label: "Configuración", icon: "settings", sub: `Comisión ${defaultAdminConfig.commissionPct}% · auto-release ${defaultAdminConfig.autoReleaseDays}d` },
   ];
 

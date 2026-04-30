@@ -2,6 +2,12 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
+  buildApprovedCatalogServiceFromRequest,
+  getSeedCatalogServices,
+  normalizeCatalogText,
+  slugifyCatalogText,
+} from "./catalog";
+import {
   defaultAdminConfig,
   disputes as seedDisputes,
   jobs,
@@ -14,6 +20,8 @@ import {
 } from "./domain/policies";
 import type {
   AdminConfig,
+  CatalogRequest,
+  CatalogService,
   Dispute,
   Job,
   Notification,
@@ -83,6 +91,28 @@ export interface JobOutreachMeta {
   searchTicketId?: string;
 }
 
+export type CreateCatalogRequestInput = Pick<
+  CatalogRequest,
+  | "requestedName"
+  | "suggestedCategoryId"
+  | "suggestedCategoryName"
+  | "description"
+  | "requestedByUserId"
+  | "requestedByName"
+  | "requestedByRole"
+>;
+
+export type CreateCatalogRequestResult =
+  | { ok: true; request: CatalogRequest }
+  | { ok: false; reason: "empty" | "duplicate_request" | "duplicate_service" };
+
+export interface ApproveCatalogRequestOptions {
+  categoryId: string;
+  categoryName: string;
+  reviewedByAdminId?: string;
+  serviceName?: string;
+}
+
 export interface SessionState {
   role: UserRole;
   proStatus: ProStatus;
@@ -143,7 +173,26 @@ export interface SessionState {
     ticketId: string,
     status: SearchTicket["status"],
   ) => void;
+  catalogRequests: CatalogRequest[];
+  approvedCatalogServices: CatalogService[];
+  createCatalogRequest: (
+    input: CreateCatalogRequestInput,
+  ) => CreateCatalogRequestResult;
+  approveCatalogRequest: (
+    requestId: string,
+    options: ApproveCatalogRequestOptions,
+  ) => CatalogRequest | undefined;
+  rejectCatalogRequest: (
+    requestId: string,
+    reason?: string,
+  ) => CatalogRequest | undefined;
 }
+
+const ACTIVE_CATALOG_REQUEST_STATUSES = new Set<CatalogRequest["status"]>([
+  "pending",
+  "reviewing",
+  "approved",
+]);
 
 function cloneAdminConfig(config: AdminConfig = defaultAdminConfig): AdminConfig {
   return {
@@ -169,6 +218,26 @@ function cloneDisputes(disputes: Dispute[] = seedDisputes) {
 
 function cloneSearchTickets(searchTickets: SearchTicket[] = seedSearchTickets) {
   return searchTickets.map((ticket) => ({ ...ticket }));
+}
+
+function hasCatalogServiceNamed(services: CatalogService[] = [], requestedName: string) {
+  const normalizedRequestedName = normalizeCatalogText(requestedName);
+  return services.some(
+    (service) =>
+      service.active && normalizeCatalogText(service.name) === normalizedRequestedName,
+  );
+}
+
+function hasActiveCatalogRequestNamed(
+  requests: CatalogRequest[] = [],
+  requestedName: string,
+) {
+  const normalizedRequestedName = normalizeCatalogText(requestedName);
+  return requests.some(
+    (request) =>
+      ACTIVE_CATALOG_REQUEST_STATUSES.has(request.status) &&
+      normalizeCatalogText(request.requestedName) === normalizedRequestedName,
+  );
 }
 
 function applyAgreementSnapshot(job: Job, agreement?: AgreementState): Job {
@@ -256,6 +325,14 @@ export function getEffectiveSearchTickets(state: SessionState) {
   return state.searchTickets;
 }
 
+export function getEffectiveCatalogRequests(state: SessionState) {
+  return state.catalogRequests ?? [];
+}
+
+export function getEffectiveApprovedCatalogServices(state: SessionState) {
+  return state.approvedCatalogServices ?? [];
+}
+
 export function getJobOutreachMeta(state: SessionState, jobId: string) {
   return state.jobOutreachMeta[jobId];
 }
@@ -339,6 +416,8 @@ export const useSession = create<SessionState>()(
           disputes: cloneDisputes(),
           searchTickets: cloneSearchTickets(),
           jobOutreachMeta: {},
+          catalogRequests: [],
+          approvedCatalogServices: [],
         }),
       draft: {},
       setDraft: (patch) =>
@@ -361,6 +440,8 @@ export const useSession = create<SessionState>()(
       disputes: cloneDisputes(),
       searchTickets: cloneSearchTickets(),
       jobOutreachMeta: {},
+      catalogRequests: [],
+      approvedCatalogServices: [],
       jobOverrides: {},
       patchJobOverride: (jobId, patch) =>
         set((s) => ({
@@ -754,6 +835,126 @@ export const useSession = create<SessionState>()(
             ticket.id === ticketId ? { ...ticket, status } : ticket,
           ),
         })),
+      createCatalogRequest: (input) => {
+        let result: CreateCatalogRequestResult = { ok: false, reason: "empty" };
+
+        set((s) => {
+          const requestedName = input.requestedName.trim();
+          if (!requestedName) {
+            result = { ok: false, reason: "empty" };
+            return {};
+          }
+
+          const currentRequests = s.catalogRequests ?? [];
+          const approvedServices = s.approvedCatalogServices ?? [];
+          if (hasActiveCatalogRequestNamed(currentRequests, requestedName)) {
+            result = { ok: false, reason: "duplicate_request" };
+            return {};
+          }
+
+          if (
+            hasCatalogServiceNamed(approvedServices, requestedName) ||
+            hasCatalogServiceNamed(getSeedCatalogServices(), requestedName)
+          ) {
+            result = { ok: false, reason: "duplicate_service" };
+            return {};
+          }
+
+          const createdAt = new Date().toISOString();
+          const request: CatalogRequest = {
+            id: `catalog-request-${slugifyCatalogText(requestedName)}-${Date.now()}`,
+            requestedName,
+            suggestedCategoryId: input.suggestedCategoryId,
+            suggestedCategoryName: input.suggestedCategoryName,
+            description: input.description,
+            requestedByUserId: input.requestedByUserId,
+            requestedByName: input.requestedByName,
+            requestedByRole: input.requestedByRole,
+            status: "pending",
+            createdAt,
+          };
+
+          result = { ok: true, request };
+          return { catalogRequests: [request, ...currentRequests] };
+        });
+
+        return result;
+      },
+      approveCatalogRequest: (requestId, options) => {
+        let approvedRequest: CatalogRequest | undefined;
+
+        set((s) => {
+          const currentRequests = s.catalogRequests ?? [];
+          const request = currentRequests.find((entry) => entry.id === requestId);
+          if (!request) return {};
+
+          const reviewedAt = new Date().toISOString();
+          const service = buildApprovedCatalogServiceFromRequest(
+            request,
+            { id: options.categoryId, name: options.categoryName },
+            options.serviceName,
+          );
+          const currentApprovedServices = s.approvedCatalogServices ?? [];
+          const existingApprovedService = currentApprovedServices.find(
+            (entry) =>
+              entry.active &&
+              normalizeCatalogText(entry.name) === normalizeCatalogText(service.name),
+          );
+          const existingSeedService = getSeedCatalogServices().find(
+            (entry) =>
+              entry.active &&
+              normalizeCatalogText(entry.name) === normalizeCatalogText(service.name),
+          );
+          const effectiveService = existingApprovedService ?? existingSeedService ?? service;
+
+          approvedRequest = {
+            ...request,
+            suggestedCategoryId: options.categoryId,
+            suggestedCategoryName: options.categoryName,
+            status: "approved",
+            reviewedAt,
+            reviewedByAdminId: options.reviewedByAdminId,
+            rejectionReason: undefined,
+            approvedServiceId: effectiveService.id,
+          };
+
+          return {
+            catalogRequests: currentRequests.map((entry) =>
+              entry.id === requestId ? approvedRequest! : entry,
+            ),
+            approvedCatalogServices:
+              existingApprovedService || existingSeedService
+                ? currentApprovedServices
+                : [service, ...currentApprovedServices],
+          };
+        });
+
+        return approvedRequest;
+      },
+      rejectCatalogRequest: (requestId, reason) => {
+        let rejectedRequest: CatalogRequest | undefined;
+
+        set((s) => {
+          const currentRequests = s.catalogRequests ?? [];
+          const request = currentRequests.find((entry) => entry.id === requestId);
+          if (!request) return {};
+
+          rejectedRequest = {
+            ...request,
+            status: "rejected",
+            reviewedAt: new Date().toISOString(),
+            rejectionReason: reason?.trim() || "Rechazada en demo por admin",
+          };
+
+          return {
+            catalogRequests: currentRequests.map((entry) =>
+              entry.id === requestId ? rejectedRequest! : entry,
+            ),
+          };
+        });
+
+        return rejectedRequest;
+      },
     }),
     { name: "arranxos-session" },
   ),

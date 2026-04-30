@@ -1,5 +1,5 @@
 import { categoryGroups } from "@/lib/data";
-import type { CatalogService, Job, Professional } from "@/lib/types";
+import type { CatalogRequest, CatalogService, Category, Job, Professional } from "@/lib/types";
 
 type ProfessionalWithSelectedServiceIds = Professional & {
   selectedServiceIds?: string[];
@@ -96,6 +96,50 @@ export function getSeedCatalogServices(): CatalogService[] {
       })),
     ),
   );
+}
+
+function dedupeCatalogServices(services: CatalogService[]) {
+  const seenIds = new Set<string>();
+  const seenNames = new Set<string>();
+
+  return services.filter((service) => {
+    if (!service.active) return false;
+
+    const normalizedName = normalizeCatalogText(service.name);
+    if (!normalizedName || seenIds.has(service.id) || seenNames.has(normalizedName)) {
+      return false;
+    }
+
+    seenIds.add(service.id);
+    seenNames.add(normalizedName);
+    return true;
+  });
+}
+
+export function getEffectiveCatalogServices(
+  approvedServices: CatalogService[] = [],
+) {
+  return dedupeCatalogServices([
+    ...getSeedCatalogServices(),
+    ...approvedServices.map((service) => ({ ...service })),
+  ]);
+}
+
+export function buildApprovedCatalogServiceFromRequest(
+  request: CatalogRequest,
+  category: Pick<Category, "id" | "name">,
+  serviceName = request.requestedName,
+): CatalogService {
+  return {
+    id: `${category.id}-${slugifyCatalogText(serviceName)}`,
+    categoryId: category.id,
+    categoryName: category.name,
+    name: serviceName.trim(),
+    description: request.description,
+    active: true,
+    source: "admin_approved",
+    createdFromRequestId: request.id,
+  };
 }
 
 export function getCatalogServiceById(

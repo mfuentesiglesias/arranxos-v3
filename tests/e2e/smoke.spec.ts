@@ -23,7 +23,8 @@ async function loginWithDemoAccess(page: Page, testId: string) {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
+  await page.goto("/");
+  await page.evaluate(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
   });
@@ -86,4 +87,36 @@ test("admin tickets búsqueda carga listado", async ({ page }) => {
   await expectVisibleByTestId(page, "admin-search-tickets");
 
   await expect(byTestIdPrefix(page, "search-ticket-")).toBeVisible();
+});
+
+test("solicitud de catálogo: pro solicita, admin aprueba y pro la encuentra", async ({ page }) => {
+  const specialtyName = "Pulido marmol demo";
+  const specialtySlug = "pulido-marmol-demo";
+
+  await loginWithDemoAccess(page, "demo-pro-approved");
+  await page.goto("/profesional/mi-perfil");
+
+  await clickByTestId(page, "profile-specialties");
+  await expectVisibleByTestId(page, "profile-specialties-search");
+  await byTestId(page, "profile-specialties-search").fill(specialtyName);
+  await expectVisibleByTestId(page, "request-new-specialty");
+  await clickByTestId(page, "request-new-specialty");
+  await expectVisibleByTestId(page, "catalog-request-feedback");
+  await expectVisibleByTestId(page, `catalog-request-${specialtySlug}`);
+
+  await loginWithDemoAccess(page, "demo-admin");
+  await page.goto("/admin/solicitudes-catalogo");
+  await expectVisibleByTestId(page, "admin-catalog-requests");
+  await expectVisibleByTestId(page, `admin-catalog-request-${specialtySlug}`);
+  await clickByTestId(page, `approve-catalog-request-${specialtySlug}`);
+  await expect(byTestId(page, `catalog-request-status-${specialtySlug}`)).toContainText(
+    "Aprobada",
+  );
+
+  await loginWithDemoAccess(page, "demo-pro-approved");
+  await page.goto("/profesional/mi-perfil");
+  await clickByTestId(page, "profile-specialties");
+  await expectVisibleByTestId(page, "profile-specialties-search");
+  await byTestId(page, "profile-specialties-search").fill(specialtyName);
+  await expectVisibleByTestId(page, `profile-specialty-suggestion-${specialtySlug}`);
 });

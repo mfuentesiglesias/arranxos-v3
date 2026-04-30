@@ -12,12 +12,20 @@ import { Icon } from "@/components/ui/icon";
 import { Input, Textarea } from "@/components/ui/input";
 import { RatingStars } from "@/components/pros/rating-stars";
 import { StrikeBadge } from "@/components/pros/strike-badge";
-import { getSeedCatalogServices, slugifyCatalogText } from "@/lib/catalog";
+import {
+  getEffectiveCatalogServices,
+  getSeedCatalogServices,
+  slugifyCatalogText,
+} from "@/lib/catalog";
 import { currentPro, reviews, defaultAdminConfig } from "@/lib/data";
-import { useSession } from "@/lib/store";
+import {
+  getEffectiveApprovedCatalogServices,
+  getEffectiveCatalogRequests,
+  useSession,
+} from "@/lib/store";
 import type { CatalogRequest, CatalogService, Professional } from "@/lib/types";
 
-const catalogServices = getSeedCatalogServices();
+const seedCatalogServices = getSeedCatalogServices();
 const SPECIALTY_RADIUS_OPTIONS = [5, 10, 25, 50, 100] as const;
 const POSTAL_CODE_LOOKUP = {
   "15824": { municipality: "O Pino", locality: "Boavista" },
@@ -78,7 +86,6 @@ export default function PerfilProPage() {
   );
   const [savedRadiusKm, setSavedRadiusKm] = useState(currentPro.radiusKm ?? 25);
   const [radiusDraft, setRadiusDraft] = useState(currentPro.radiusKm ?? 25);
-  const [catalogRequests, setCatalogRequests] = useState<CatalogRequest[]>([]);
   const [catalogRequestFeedback, setCatalogRequestFeedback] = useState<string | null>(null);
   const [profileDraft, setProfileDraft] = useState({
     name: currentPro.name,
@@ -97,6 +104,10 @@ export default function PerfilProPage() {
   });
   const router = useRouter();
   const reset = useSession((s) => s.reset);
+  const storeCatalogRequests = useSession(getEffectiveCatalogRequests);
+  const approvedCatalogServices = useSession(getEffectiveApprovedCatalogServices);
+  const createCatalogRequest = useSession((s) => s.createCatalogRequest);
+  const catalogServices = getEffectiveCatalogServices(approvedCatalogServices);
   const myReviews = reviews
     .filter((r) => r.targetId === "p1")
     .slice(0, 3);
@@ -128,8 +139,20 @@ export default function PerfilProPage() {
     )
     .slice(0, normalizedSpecialtySearch ? 8 : 6);
   const requestableSpecialtySearch = specialtySearch.trim();
+  const duplicateCatalogRequest = normalizedSpecialtySearch
+    ? storeCatalogRequests.find(
+        (request) =>
+          isActiveOrApprovedCatalogRequest(request) &&
+          normalizeSpecialtySearch(request.requestedName) === normalizedSpecialtySearch,
+      )
+    : undefined;
   const canRequestNewSpecialty =
-    requestableSpecialtySearch.length > 0 && matchingCatalogServices.length === 0;
+    requestableSpecialtySearch.length > 0 &&
+    matchingCatalogServices.length === 0 &&
+    !duplicateCatalogRequest;
+  const professionalCatalogRequests = storeCatalogRequests.filter(
+    (request) => request.requestedByUserId === currentPro.id,
+  );
 
   const syncSpecialtiesDraftFromSaved = () => {
     setSpecialtiesDraft(savedSpecialties);
@@ -176,28 +199,25 @@ export default function PerfilProPage() {
     const requestedName = requestableSpecialtySearch.trim();
     if (!requestedName) return;
 
-    const normalizedRequestedName = normalizeSpecialtySearch(requestedName);
-    const alreadyRequested = catalogRequests.some(
-      (request) => normalizeSpecialtySearch(request.requestedName) === normalizedRequestedName,
-    );
-
-    if (alreadyRequested) {
-      setCatalogRequestFeedback("Esta especialidad ya está solicitada en esta demo.");
-      return;
-    }
-
-    const request: CatalogRequest = {
-      id: `catalog-request-${slugifyCatalogText(requestedName)}-${Date.now()}`,
+    const suggestedCategory = inferSuggestedCategory(requestedName, catalogServices);
+    const result = createCatalogRequest({
       requestedName,
-      suggestedCategoryName: inferSuggestedCategoryName(requestedName),
+      suggestedCategoryId: suggestedCategory?.id,
+      suggestedCategoryName: suggestedCategory?.name,
       requestedByUserId: currentPro.id || "p1",
       requestedByName: currentPro.name,
       requestedByRole: "professional",
-      status: "pending",
-      createdAt: new Date().toISOString(),
-    };
+    });
 
-    setCatalogRequests((current) => [request, ...current]);
+    if (!result.ok) {
+      setCatalogRequestFeedback(
+        result.reason === "duplicate_service"
+          ? "Esta especialidad ya existe en el catálogo de la demo."
+          : "Esta especialidad ya está solicitada en esta demo.",
+      );
+      return;
+    }
+
     setCatalogRequestFeedback("Solicitud enviada a revisión en demo");
   };
 
@@ -414,6 +434,7 @@ export default function PerfilProPage() {
                         key={service.id}
                         type="button"
                         onClick={() => addSpecialty(service)}
+                        data-testid={`profile-specialty-suggestion-${slugifyCatalogText(service.name)}`}
                         className="w-full px-4 py-3 text-left transition active:bg-sand-50"
                       >
                         <div className="font-semibold text-[13px] text-ink-800">
@@ -444,6 +465,15 @@ export default function PerfilProPage() {
                       Solicitar nueva especialidad
                     </Button>
                   </div>
+                ) : duplicateCatalogRequest ? (
+                  <div className="px-4 py-3 text-[12px] leading-snug">
+                    <div className="font-semibold text-ink-700">
+                      Ya existe una solicitud con ese nombre.
+                    </div>
+                    <div className="text-ink-400 mt-1">
+                      Estado: {getCatalogRequestStatusLabel(duplicateCatalogRequest.status)}.
+                    </div>
+                  </div>
                 ) : specialtySearch.trim() ? (
                   <div className="px-4 py-3 text-[12px] leading-snug">
                     <div className="font-semibold text-ink-700">
@@ -471,13 +501,13 @@ export default function PerfilProPage() {
                   {catalogRequestFeedback}
                 </div>
               )}
-              {catalogRequests.length > 0 && (
+              {professionalCatalogRequests.length > 0 && (
                 <div className="rounded-2xl border border-sand-200/70 bg-sand-50/70 p-3.5">
                   <div className="font-bold text-[13px] text-ink-800 mb-2">
                     Solicitudes enviadas
                   </div>
                   <div className="flex flex-col gap-2">
-                    {catalogRequests.map((request) => (
+                    {professionalCatalogRequests.map((request) => (
                       <div
                         key={request.id}
                         data-testid={`catalog-request-${slugifyCatalogText(request.requestedName)}`}
@@ -487,15 +517,19 @@ export default function PerfilProPage() {
                           <div className="font-bold text-[12.5px] text-ink-800">
                             {request.requestedName}
                           </div>
-                          <span className="ml-auto rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
-                            Pendiente de revisión
+                          <span
+                            className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-bold ${getCatalogRequestStatusClassName(request.status)}`}
+                          >
+                            {getCatalogRequestStatusLabel(request.status)}
                           </span>
                         </div>
                         <div className="text-[11.5px] text-ink-400 leading-snug">
                           {request.suggestedCategoryName
                             ? `Sugerencia: ${request.suggestedCategoryName} · `
                             : ""}
-                          Creada ahora
+                          {request.reviewedAt
+                            ? `Revisada ${request.reviewedAt.slice(0, 10)}`
+                            : `Creada ${request.createdAt.slice(0, 10)}`}
                         </div>
                       </div>
                     ))}
@@ -1073,9 +1107,9 @@ function getWorkBaseLookup(postalCode: string) {
   return POSTAL_CODE_LOOKUP[postalCode as keyof typeof POSTAL_CODE_LOOKUP];
 }
 
-function inferSuggestedCategoryName(requestedName: string) {
+function inferSuggestedCategory(requestedName: string, services: CatalogService[]) {
   const normalizedRequestedName = normalizeSpecialtySearch(requestedName);
-  const categoryMatch = catalogServices.find((service) => {
+  const categoryMatch = services.find((service) => {
     const normalizedCategory = normalizeSpecialtySearch(service.categoryName);
     return (
       normalizedCategory.includes(normalizedRequestedName) ||
@@ -1083,7 +1117,37 @@ function inferSuggestedCategoryName(requestedName: string) {
     );
   });
 
-  return categoryMatch?.categoryName;
+  return categoryMatch
+    ? { id: categoryMatch.categoryId, name: categoryMatch.categoryName }
+    : undefined;
+}
+
+function isActiveOrApprovedCatalogRequest(request: CatalogRequest) {
+  return ["pending", "reviewing", "approved"].includes(request.status);
+}
+
+function getCatalogRequestStatusLabel(status: CatalogRequest["status"]) {
+  return (
+    {
+      pending: "Pendiente de revisión",
+      reviewing: "En revisión",
+      approved: "Aprobada",
+      rejected: "Rechazada",
+      merged: "Fusionada",
+    } satisfies Record<CatalogRequest["status"], string>
+  )[status];
+}
+
+function getCatalogRequestStatusClassName(status: CatalogRequest["status"]) {
+  return (
+    {
+      pending: "bg-amber-50 text-amber-700",
+      reviewing: "bg-sand-100 text-ink-600",
+      approved: "bg-teal-50 text-teal-700",
+      rejected: "bg-rose-50 text-rose-600",
+      merged: "bg-sky-50 text-sky-700",
+    } satisfies Record<CatalogRequest["status"], string>
+  )[status];
 }
 
 function getInitialWorkBase(professional: Professional): WorkBaseDraft {
@@ -1147,7 +1211,7 @@ function getInitialEditableSpecialties(professional: Professional): EditableSpec
       return true;
     })
     .map((value) => {
-      const matchedService = catalogServices.find(
+      const matchedService = seedCatalogServices.find(
         (service) => normalizeSpecialtySearch(service.name) === normalizeSpecialtySearch(value),
       );
 

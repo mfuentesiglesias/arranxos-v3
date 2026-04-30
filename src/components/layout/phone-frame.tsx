@@ -69,6 +69,7 @@ const NAV_GROUPS: Array<{ group: string; screens: { href: string; label: string 
       { href: "/admin/disputas", label: "Disputas" },
       { href: "/admin/valoraciones", label: "Valoraciones" },
       { href: "/admin/tickets-busqueda", label: "Tickets búsqueda" },
+      { href: "/admin/solicitudes-catalogo", label: "Solicitudes catálogo" },
       { href: "/admin/configuracion", label: "Configuración" },
     ],
   },
