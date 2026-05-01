@@ -1,5 +1,12 @@
 import { categoryGroups } from "@/lib/data";
-import type { CatalogRequest, CatalogService, Category, Job, Professional } from "@/lib/types";
+import type {
+  CatalogCategory,
+  CatalogRequest,
+  CatalogService,
+  Category,
+  Job,
+  Professional,
+} from "@/lib/types";
 
 type ProfessionalWithSelectedServiceIds = Professional & {
   selectedServiceIds?: string[];
@@ -35,6 +42,12 @@ export function slugifyCatalogText(text: string) {
 
 export function normalizeCatalogText(text: string) {
   return slugifyCatalogText(text).replace(/-/g, " ").trim();
+}
+
+export function formatCatalogServiceName(text: string) {
+  const collapsed = text.replace(/\s+/g, " ").trim();
+  if (!collapsed) return "";
+  return collapsed.charAt(0).toUpperCase() + collapsed.slice(1);
 }
 
 function catalogTextsAreRelated(a: string, b: string) {
@@ -98,6 +111,64 @@ export function getSeedCatalogServices(): CatalogService[] {
   );
 }
 
+function dedupeCatalogCategories(categories: CatalogCategory[]) {
+  const seenIds = new Set<string>();
+  const seenNames = new Set<string>();
+
+  return categories.filter((category) => {
+    if (!category.active) return false;
+
+    const normalizedName = normalizeCatalogText(category.name);
+    if (!normalizedName || seenIds.has(category.id) || seenNames.has(normalizedName)) {
+      return false;
+    }
+
+    seenIds.add(category.id);
+    seenNames.add(normalizedName);
+    return true;
+  });
+}
+
+export function getSeedCatalogCategories(): CatalogCategory[] {
+  return categoryGroups.flatMap((group) =>
+    group.categories.map((category) => ({
+      id: category.id,
+      name: category.name,
+      icon: category.icon,
+      group: group.group,
+      color: group.color,
+      active: true,
+      source: "seed" as const,
+    })),
+  );
+}
+
+export function getEffectiveCatalogCategories(
+  approvedCategories: CatalogCategory[] = [],
+) {
+  return dedupeCatalogCategories([
+    ...getSeedCatalogCategories(),
+    ...approvedCategories.map((category) => ({ ...category })),
+  ]);
+}
+
+export function buildApprovedCatalogCategoryFromName(
+  name: string,
+  requestId?: string,
+): CatalogCategory {
+  const categoryName = formatCatalogServiceName(name);
+
+  return {
+    id: `admin-cat-${slugifyCatalogText(categoryName)}`,
+    name: categoryName,
+    group: "Admin",
+    color: "#EEF4FB",
+    active: true,
+    source: "admin_approved",
+    createdFromRequestId: requestId,
+  };
+}
+
 function dedupeCatalogServices(services: CatalogService[]) {
   const seenIds = new Set<string>();
   const seenNames = new Set<string>();
@@ -134,7 +205,7 @@ export function buildApprovedCatalogServiceFromRequest(
     id: `${category.id}-${slugifyCatalogText(serviceName)}`,
     categoryId: category.id,
     categoryName: category.name,
-    name: serviceName.trim(),
+    name: formatCatalogServiceName(serviceName),
     description: request.description,
     active: true,
     source: "admin_approved",

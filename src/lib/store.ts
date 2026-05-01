@@ -2,7 +2,11 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
+  buildApprovedCatalogCategoryFromName,
   buildApprovedCatalogServiceFromRequest,
+  formatCatalogServiceName,
+  getEffectiveCatalogCategories,
+  getEffectiveCatalogServices,
   getSeedCatalogServices,
   normalizeCatalogText,
   slugifyCatalogText,
@@ -20,6 +24,7 @@ import {
 } from "./domain/policies";
 import type {
   AdminConfig,
+  CatalogCategory,
   CatalogRequest,
   CatalogService,
   Dispute,
@@ -113,6 +118,20 @@ export interface ApproveCatalogRequestOptions {
   serviceName?: string;
 }
 
+export interface MergeCatalogRequestOptions {
+  mergedIntoServiceId: string;
+  reviewedByAdminId?: string;
+}
+
+export interface CreateApprovedCatalogCategoryInput {
+  name: string;
+  createdFromRequestId?: string;
+}
+
+export type CreateApprovedCatalogCategoryResult =
+  | { ok: true; category: CatalogCategory; created: boolean }
+  | { ok: false; reason: "empty" };
+
 export interface SessionState {
   role: UserRole;
   proStatus: ProStatus;
@@ -175,9 +194,13 @@ export interface SessionState {
   ) => void;
   catalogRequests: CatalogRequest[];
   approvedCatalogServices: CatalogService[];
+  approvedCatalogCategories: CatalogCategory[];
   createCatalogRequest: (
     input: CreateCatalogRequestInput,
   ) => CreateCatalogRequestResult;
+  createApprovedCatalogCategory: (
+    input: CreateApprovedCatalogCategoryInput,
+  ) => CreateApprovedCatalogCategoryResult;
   approveCatalogRequest: (
     requestId: string,
     options: ApproveCatalogRequestOptions,
@@ -185,6 +208,10 @@ export interface SessionState {
   rejectCatalogRequest: (
     requestId: string,
     reason?: string,
+  ) => CatalogRequest | undefined;
+  mergeCatalogRequest: (
+    requestId: string,
+    options: MergeCatalogRequestOptions,
   ) => CatalogRequest | undefined;
 }
 
@@ -333,6 +360,10 @@ export function getEffectiveApprovedCatalogServices(state: SessionState) {
   return state.approvedCatalogServices ?? [];
 }
 
+export function getEffectiveApprovedCatalogCategories(state: SessionState) {
+  return state.approvedCatalogCategories ?? [];
+}
+
 export function getJobOutreachMeta(state: SessionState, jobId: string) {
   return state.jobOutreachMeta[jobId];
 }
@@ -418,6 +449,7 @@ export const useSession = create<SessionState>()(
           jobOutreachMeta: {},
           catalogRequests: [],
           approvedCatalogServices: [],
+          approvedCatalogCategories: [],
         }),
       draft: {},
       setDraft: (patch) =>
@@ -442,6 +474,7 @@ export const useSession = create<SessionState>()(
       jobOutreachMeta: {},
       catalogRequests: [],
       approvedCatalogServices: [],
+      approvedCatalogCategories: [],
       jobOverrides: {},
       patchJobOverride: (jobId, patch) =>
         set((s) => ({
@@ -880,6 +913,39 @@ export const useSession = create<SessionState>()(
 
         return result;
       },
+      createApprovedCatalogCategory: (input) => {
+        let result: CreateApprovedCatalogCategoryResult = { ok: false, reason: "empty" };
+
+        set((s) => {
+          const categoryName = formatCatalogServiceName(input.name);
+          if (!categoryName) {
+            result = { ok: false, reason: "empty" };
+            return {};
+          }
+
+          const approvedCategories = s.approvedCatalogCategories ?? [];
+          const existingCategory = getEffectiveCatalogCategories(approvedCategories).find(
+            (category) =>
+              normalizeCatalogText(category.name) === normalizeCatalogText(categoryName),
+          );
+
+          if (existingCategory) {
+            result = { ok: true, category: existingCategory, created: false };
+            return {};
+          }
+
+          const category = buildApprovedCatalogCategoryFromName(
+            categoryName,
+            input.createdFromRequestId,
+          );
+          result = { ok: true, category, created: true };
+          return {
+            approvedCatalogCategories: [category, ...approvedCategories],
+          };
+        });
+
+        return result;
+      },
       approveCatalogRequest: (requestId, options) => {
         let approvedRequest: CatalogRequest | undefined;
 
@@ -887,12 +953,27 @@ export const useSession = create<SessionState>()(
           const currentRequests = s.catalogRequests ?? [];
           const request = currentRequests.find((entry) => entry.id === requestId);
           if (!request) return {};
+          if (!options.categoryId.trim() || !options.categoryName.trim()) return {};
+
+          const serviceName = formatCatalogServiceName(
+            options.serviceName ?? request.requestedName,
+          );
+          if (!serviceName) return {};
+
+          const category = getEffectiveCatalogCategories(
+            s.approvedCatalogCategories ?? [],
+          ).find(
+            (entry) =>
+              entry.id === options.categoryId &&
+              normalizeCatalogText(entry.name) === normalizeCatalogText(options.categoryName),
+          );
+          if (!category) return {};
 
           const reviewedAt = new Date().toISOString();
           const service = buildApprovedCatalogServiceFromRequest(
             request,
-            { id: options.categoryId, name: options.categoryName },
-            options.serviceName,
+            { id: category.id, name: category.name },
+            serviceName,
           );
           const currentApprovedServices = s.approvedCatalogServices ?? [];
           const existingApprovedService = currentApprovedServices.find(
@@ -905,27 +986,27 @@ export const useSession = create<SessionState>()(
               entry.active &&
               normalizeCatalogText(entry.name) === normalizeCatalogText(service.name),
           );
-          const effectiveService = existingApprovedService ?? existingSeedService ?? service;
+          if (existingApprovedService || existingSeedService) {
+            return {};
+          }
 
           approvedRequest = {
             ...request,
-            suggestedCategoryId: options.categoryId,
-            suggestedCategoryName: options.categoryName,
+            suggestedCategoryId: category.id,
+            suggestedCategoryName: category.name,
             status: "approved",
             reviewedAt,
             reviewedByAdminId: options.reviewedByAdminId,
             rejectionReason: undefined,
-            approvedServiceId: effectiveService.id,
+            mergedIntoServiceId: undefined,
+            approvedServiceId: service.id,
           };
 
           return {
             catalogRequests: currentRequests.map((entry) =>
               entry.id === requestId ? approvedRequest! : entry,
             ),
-            approvedCatalogServices:
-              existingApprovedService || existingSeedService
-                ? currentApprovedServices
-                : [service, ...currentApprovedServices],
+            approvedCatalogServices: [service, ...currentApprovedServices],
           };
         });
 
@@ -944,6 +1025,8 @@ export const useSession = create<SessionState>()(
             status: "rejected",
             reviewedAt: new Date().toISOString(),
             rejectionReason: reason?.trim() || "Rechazada en demo por admin",
+            mergedIntoServiceId: undefined,
+            approvedServiceId: undefined,
           };
 
           return {
@@ -954,6 +1037,43 @@ export const useSession = create<SessionState>()(
         });
 
         return rejectedRequest;
+      },
+      mergeCatalogRequest: (requestId, options) => {
+        let mergedRequest: CatalogRequest | undefined;
+
+        set((s) => {
+          const currentRequests = s.catalogRequests ?? [];
+          const request = currentRequests.find((entry) => entry.id === requestId);
+          if (!request) return {};
+
+          const effectiveServices = getEffectiveCatalogServices(
+            s.approvedCatalogServices ?? [],
+          );
+          const mergedService = effectiveServices.find(
+            (service) => service.id === options.mergedIntoServiceId,
+          );
+          if (!mergedService) return {};
+
+          mergedRequest = {
+            ...request,
+            status: "merged",
+            reviewedAt: new Date().toISOString(),
+            reviewedByAdminId: options.reviewedByAdminId,
+            rejectionReason: undefined,
+            approvedServiceId: undefined,
+            suggestedCategoryId: mergedService.categoryId,
+            suggestedCategoryName: mergedService.categoryName,
+            mergedIntoServiceId: mergedService.id,
+          };
+
+          return {
+            catalogRequests: currentRequests.map((entry) =>
+              entry.id === requestId ? mergedRequest! : entry,
+            ),
+          };
+        });
+
+        return mergedRequest;
       },
     }),
     { name: "arranxos-session" },

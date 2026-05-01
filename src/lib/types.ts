@@ -189,6 +189,17 @@ export interface CatalogService {
   createdFromRequestId?: string;
 }
 
+export interface CatalogCategory {
+  id: string;
+  name: string;
+  icon?: string;
+  group?: string;
+  color?: string;
+  active: boolean;
+  source: "seed" | "admin_approved";
+  createdFromRequestId?: string;
+}
+
 export interface CatalogRequest {
   id: string;
   requestedName: string;

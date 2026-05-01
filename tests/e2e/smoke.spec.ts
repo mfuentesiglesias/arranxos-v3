@@ -90,8 +90,11 @@ test("admin tickets búsqueda carga listado", async ({ page }) => {
 });
 
 test("solicitud de catálogo: pro solicita, admin aprueba y pro la encuentra", async ({ page }) => {
-  const specialtyName = "Pulido marmol demo";
-  const specialtySlug = "pulido-marmol-demo";
+  const specialtyName = "ebanista";
+  const specialtySlug = "ebanista";
+  const finalCatalogName = "Ebanistería y carpintería fina";
+  const finalCatalogSlug = "ebanisteria-y-carpinteria-fina";
+  const categoryName = "Carpintería y madera";
 
   await loginWithDemoAccess(page, "demo-pro-approved");
   await page.goto("/profesional/mi-perfil");
@@ -108,6 +111,11 @@ test("solicitud de catálogo: pro solicita, admin aprueba y pro la encuentra", a
   await page.goto("/admin/solicitudes-catalogo");
   await expectVisibleByTestId(page, "admin-catalog-requests");
   await expectVisibleByTestId(page, `admin-catalog-request-${specialtySlug}`);
+  await byTestId(page, `catalog-request-final-name-${specialtySlug}`).fill(finalCatalogName);
+  await byTestId(page, `catalog-request-category-search-${specialtySlug}`).fill("Carpintería");
+  await byTestId(page, `catalog-request-new-category-name-${specialtySlug}`).fill(categoryName);
+  await clickByTestId(page, `create-catalog-category-${specialtySlug}`);
+  await expectVisibleByTestId(page, `catalog-request-selected-category-${specialtySlug}`);
   await clickByTestId(page, `approve-catalog-request-${specialtySlug}`);
   await expect(byTestId(page, `catalog-request-status-${specialtySlug}`)).toContainText(
     "Aprobada",
@@ -117,6 +125,6 @@ test("solicitud de catálogo: pro solicita, admin aprueba y pro la encuentra", a
   await page.goto("/profesional/mi-perfil");
   await clickByTestId(page, "profile-specialties");
   await expectVisibleByTestId(page, "profile-specialties-search");
-  await byTestId(page, "profile-specialties-search").fill(specialtyName);
-  await expectVisibleByTestId(page, `profile-specialty-suggestion-${specialtySlug}`);
+  await byTestId(page, "profile-specialties-search").fill(finalCatalogName);
+  await expectVisibleByTestId(page, `profile-specialty-suggestion-${finalCatalogSlug}`);
 });
