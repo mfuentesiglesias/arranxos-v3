@@ -79,6 +79,32 @@ test("cliente j36: crear ticket de búsqueda", async ({ page }) => {
   await expect(page.getByText("Ticket de búsqueda creado").first()).toBeVisible();
 });
 
+test("cliente publica trabajo y lo ve en detalle y listado", async ({ page }) => {
+  const jobTitle = "Armario a medida demo entrada";
+
+  await loginWithDemoAccess(page, "demo-client");
+  await page.goto("/cliente/publicar");
+  await byTestId(page, "client-publish-category-search").fill("Carpintería");
+  await clickByTestId(page, "client-category-carpinteria-y-madera");
+  await expectVisibleByTestId(page, "client-service-muebles-a-medida");
+  await clickByTestId(page, "client-service-muebles-a-medida");
+  await page.getByRole("button", { name: "Continuar" }).first().click();
+  await page.getByPlaceholder("Ej. Reparar cuadro eléctrico en piso").first().fill(jobTitle);
+  await page
+    .getByPlaceholder("Describe qué necesitas. Cuanto más detalle, mejor.")
+    .first()
+    .fill("Necesito un armario a medida para la entrada de casa.");
+  await page.locator("select").nth(1).selectOption("700–1.500€");
+  await page.getByRole("button", { name: "Revisar y publicar" }).first().click();
+  await expectVisibleByTestId(page, "client-publish-review-summary");
+  await page.getByRole("button", { name: "Publicar trabajo" }).first().click();
+  await expect(page).toHaveURL(/\/cliente\/trabajos\/demo-job-/);
+  await expect(page.getByText(jobTitle).first()).toBeVisible();
+
+  await page.goto("/cliente/trabajos");
+  await expect(page.getByText(jobTitle).first()).toBeVisible();
+});
+
 test("admin tickets búsqueda carga listado", async ({ page }) => {
   await loginWithDemoAccess(page, "demo-admin");
   await expect(page).toHaveURL(/\/admin/);

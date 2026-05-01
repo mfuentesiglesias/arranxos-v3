@@ -3,15 +3,18 @@ import { useState } from "react";
 import { StatusBar } from "@/components/layout/status-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
 import { JobCard } from "@/components/jobs/job-card";
-import { jobs } from "@/lib/data";
 import Link from "next/link";
 import { Icon } from "@/components/ui/icon";
+import { getEffectiveJobs, useSession } from "@/lib/store";
 
 type Filter = "activos" | "pendientes" | "completados" | "cancelados";
 
 export default function TrabajosPage() {
   const [filter, setFilter] = useState<Filter>("activos");
-  const mine = jobs.filter((j) => j.clientId === "u1");
+  const session = useSession();
+  const currentClientId = session.currentClientId;
+  const effectiveJobs = getEffectiveJobs(session);
+  const mine = effectiveJobs.filter((j) => j.clientId === currentClientId);
 
   const groups: Record<Filter, typeof mine> = {
     activos: mine.filter((j) =>

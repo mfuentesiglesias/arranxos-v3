@@ -16,6 +16,7 @@ import {
   slugifyCatalogText,
 } from "./catalog";
 import {
+  currentClient,
   defaultAdminConfig,
   disputes as seedDisputes,
   jobs,
@@ -158,6 +159,19 @@ export interface UpdateProfessionalCatalogProfileInput
   workBase?: Partial<ProfessionalCatalogWorkBase>;
 }
 
+export interface CreateClientJobInput {
+  categoryId: string;
+  categoryName: string;
+  serviceId?: string;
+  serviceName: string;
+  title: string;
+  description: string;
+  location: string;
+  priceRange: string;
+  urgent: boolean;
+  questionnaire?: Record<string, string>;
+}
+
 export interface SessionState {
   role: UserRole;
   proStatus: ProStatus;
@@ -218,6 +232,8 @@ export interface SessionState {
     ticketId: string,
     status: SearchTicket["status"],
   ) => void;
+  createdJobs: Job[];
+  createClientJob: (input: CreateClientJobInput) => Job;
   professionalProfileOverrides: Record<string, ProfessionalCatalogProfile>;
   updateProfessionalCatalogProfile: (
     professionalId: string,
@@ -276,6 +292,150 @@ function cloneDisputes(disputes: Dispute[] = seedDisputes) {
 
 function cloneSearchTickets(searchTickets: SearchTicket[] = seedSearchTickets) {
   return searchTickets.map((ticket) => ({ ...ticket }));
+}
+
+function cloneJob(job: Job): Job {
+  return {
+    ...job,
+    photos: job.photos ? [...job.photos] : undefined,
+    questionnaire: job.questionnaire ? { ...job.questionnaire } : undefined,
+  };
+}
+
+function cloneCreatedJobs(createdJobs: Job[] = []) {
+  return createdJobs.map((job) => cloneJob(job));
+}
+
+function resolveClientSnapshot(currentClientId: string) {
+  if (currentClientId === currentClient.id) {
+    return {
+      id: currentClient.id,
+      name: currentClient.name,
+      avatar: currentClient.avatar,
+      rating: currentClient.rating ?? 0,
+    };
+  }
+
+  const matchingSeedJob = jobs.find((job) => job.clientId === currentClientId);
+  if (matchingSeedJob) {
+    return {
+      id: matchingSeedJob.clientId,
+      name: matchingSeedJob.clientName,
+      avatar: matchingSeedJob.clientAvatar,
+      rating: matchingSeedJob.clientRating,
+    };
+  }
+
+  return {
+    id: currentClientId,
+    name: currentClient.name,
+    avatar: currentClient.avatar,
+    rating: currentClient.rating ?? 0,
+  };
+}
+
+function getApproximateLocationLabel(location: string) {
+  const trimmedLocation = location.trim();
+  return trimmedLocation ? `${trimmedLocation} (aprox.)` : "Zona pendiente (aprox.)";
+}
+
+const LOCATION_COORDINATES: Record<string, { lat: number; lng: number }> = {
+  Vigo: { lat: 42.2406, lng: -8.7207 },
+  "A Coruña": { lat: 43.3623, lng: -8.4115 },
+  "Santiago de Compostela": { lat: 42.8782, lng: -8.5448 },
+  Pontevedra: { lat: 42.4338, lng: -8.648 },
+  Ourense: { lat: 42.3358, lng: -7.8639 },
+  Lugo: { lat: 43.0121, lng: -7.5559 },
+  Ferrol: { lat: 43.4846, lng: -8.2353 },
+  Sanxenxo: { lat: 42.3995, lng: -8.8069 },
+  Cangas: { lat: 42.2648, lng: -8.7828 },
+  "Otra ciudad": { lat: 42.2406, lng: -8.7207 },
+};
+
+function getCoordinatesForLocation(location: string) {
+  return LOCATION_COORDINATES[location] ?? LOCATION_COORDINATES[currentClient.location] ?? {
+    lat: 42.2406,
+    lng: -8.7207,
+  };
+}
+
+function parsePriceRange(priceRange: string) {
+  const normalizedPriceRange = priceRange.trim();
+
+  if (normalizedPriceRange === "Menos de 100€") {
+    return { priceMin: 0, priceMax: 100 };
+  }
+
+  if (normalizedPriceRange === "100–300€") {
+    return { priceMin: 100, priceMax: 300 };
+  }
+
+  if (normalizedPriceRange === "300–700€") {
+    return { priceMin: 300, priceMax: 700 };
+  }
+
+  if (normalizedPriceRange === "700–1.500€") {
+    return { priceMin: 700, priceMax: 1500 };
+  }
+
+  if (normalizedPriceRange === "1.500–3.000€") {
+    return { priceMin: 1500, priceMax: 3000 };
+  }
+
+  if (normalizedPriceRange === "Más de 3.000€") {
+    return { priceMin: 3000, priceMax: 6000 };
+  }
+
+  if (normalizedPriceRange === "No tengo idea, quiero que me propongan") {
+    return { priceMin: 0, priceMax: 3000 };
+  }
+
+  return { priceMin: 0, priceMax: 0 };
+}
+
+function buildClientCreatedJob(
+  input: CreateClientJobInput,
+  currentClientId: string,
+  existingJobs: Job[],
+) {
+  const clientSnapshot = resolveClientSnapshot(currentClientId);
+  const postedAt = new Date().toISOString();
+  const { priceMin, priceMax } = parsePriceRange(input.priceRange);
+  const coordinates = getCoordinatesForLocation(input.location);
+  let jobId = `demo-job-${Date.now()}`;
+
+  while (existingJobs.some((job) => job.id === jobId)) {
+    jobId = `demo-job-${Date.now()}-${Math.round(Math.random() * 1000)}`;
+  }
+
+  return {
+    id: jobId,
+    title: input.title.trim() || "Trabajo sin título",
+    categoryId: input.categoryId,
+    category: input.categoryName,
+    service: input.serviceName,
+    location: input.location,
+    locationApprox: getApproximateLocationLabel(input.location),
+    lat: coordinates.lat,
+    lng: coordinates.lng,
+    status: "published" as const,
+    priceMin,
+    priceMax,
+    requests: 0,
+    posted: "ahora",
+    postedAt,
+    clientId: clientSnapshot.id,
+    clientName: clientSnapshot.name,
+    clientAvatar: clientSnapshot.avatar,
+    clientRating: clientSnapshot.rating,
+    description: input.description.trim(),
+    questionnaire: {
+      ...(input.questionnaire ?? {}),
+      budgetLabel: input.priceRange,
+      urgent: input.urgent ? "Sí" : "No",
+      ...(input.serviceId ? { serviceId: input.serviceId } : {}),
+    },
+  } satisfies Job;
 }
 
 function cloneProfessionalWorkBase(
@@ -392,15 +552,21 @@ export function getCurrentProfessionalId(state: SessionState) {
   return state.currentProfessionalId;
 }
 
+export function getCurrentClientId(state: SessionState) {
+  return state.currentClientId;
+}
+
 export function getEffectiveJobs(state: SessionState) {
-  return jobs.map((job) => {
+  const effectiveJobs = [...(state.createdJobs ?? []).map(cloneJob), ...jobs];
+
+  return effectiveJobs.map((job) => {
     const withOverrides = applyJobOverride(job, state.jobOverrides[job.id]);
     return applyAgreementSnapshot(withOverrides, state.agreements[job.id]);
   });
 }
 
 export function getEffectiveJobById(state: SessionState, jobId: string) {
-  const job = jobs.find((entry) => entry.id === jobId);
+  const job = [...(state.createdJobs ?? []), ...jobs].find((entry) => entry.id === jobId);
   if (!job) return undefined;
 
   const withOverrides = applyJobOverride(job, state.jobOverrides[job.id]);
@@ -537,6 +703,7 @@ export const useSession = create<SessionState>()(
           notifications: cloneNotifications(),
           disputes: cloneDisputes(),
           searchTickets: cloneSearchTickets(),
+          createdJobs: [],
           jobOutreachMeta: {},
           professionalProfileOverrides: {},
           catalogRequests: [],
@@ -563,6 +730,7 @@ export const useSession = create<SessionState>()(
       notifications: cloneNotifications(),
       disputes: cloneDisputes(),
       searchTickets: cloneSearchTickets(),
+      createdJobs: [],
       jobOutreachMeta: {},
       professionalProfileOverrides: {},
       catalogRequests: [],
@@ -961,6 +1129,23 @@ export const useSession = create<SessionState>()(
             ticket.id === ticketId ? { ...ticket, status } : ticket,
           ),
         })),
+      createClientJob: (input) => {
+        let createdJob = buildClientCreatedJob(input, currentClient.id, jobs);
+
+        set((s) => {
+          createdJob = buildClientCreatedJob(
+            input,
+            s.currentClientId,
+            [...(s.createdJobs ?? []), ...jobs],
+          );
+
+          return {
+            createdJobs: [createdJob, ...cloneCreatedJobs(s.createdJobs ?? [])],
+          };
+        });
+
+        return createdJob;
+      },
       updateProfessionalCatalogProfile: (professionalId, patch) => {
         let nextProfile = mergeProfessionalCatalogProfile(undefined, patch);
 

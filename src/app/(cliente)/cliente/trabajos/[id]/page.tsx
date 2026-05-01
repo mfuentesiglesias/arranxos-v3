@@ -57,7 +57,7 @@ function Inner({ id }: { id: string }) {
     agreement: resolvedAgreement,
     completionDeadline: job.completionDeadline,
   });
-  const requestingPros = professionals.slice(0, Math.max(2, job.requests));
+  const requestingPros = professionals.slice(0, Math.max(0, job.requests));
   const assignedPro = job.assignedProId
     ? professionals.find((p) => p.id === job.assignedProId)
     : null;

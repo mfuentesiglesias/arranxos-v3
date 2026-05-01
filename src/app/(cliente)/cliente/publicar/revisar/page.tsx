@@ -23,6 +23,7 @@ function RevisarInner() {
   const params = useSearchParams();
   const approvedCatalogCategories = useSession(getEffectiveApprovedCatalogCategories);
   const approvedCatalogServices = useSession(getEffectiveApprovedCatalogServices);
+  const createClientJob = useSession((s) => s.createClientJob);
   const effectiveCategories = getEffectiveCatalogCategories(approvedCatalogCategories);
   const effectiveServices = getEffectiveCatalogServices(approvedCatalogServices);
   const categoryId = params.get("categoryId") ?? params.get("cat") ?? "";
@@ -62,8 +63,22 @@ function RevisarInner() {
   const [publishing, setPublishing] = useState(false);
   const publish = () => {
     setPublishing(true);
-    // DEMO: jump to fake job id j1 in published state
-    setTimeout(() => router.push("/cliente/trabajos/j1?justPublished=1"), 900);
+    const createdJob = createClientJob({
+      categoryId: category?.id ?? categoryId,
+      categoryName,
+      serviceId: selectedService?.id ?? serviceId,
+      serviceName: service,
+      title,
+      description,
+      location,
+      priceRange,
+      urgent,
+      questionnaire: answers,
+    });
+    setTimeout(
+      () => router.push(`/cliente/trabajos/${createdJob.id}?justPublished=1`),
+      900,
+    );
   };
 
   return (
