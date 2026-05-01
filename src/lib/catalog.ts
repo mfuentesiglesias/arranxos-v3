@@ -184,6 +184,11 @@ export function normalizeApprovedCatalogCategory(
     return { ...category };
   }
 
+  const canonicalSeedCategory = getCanonicalSeedCategoryForApprovedCategory(category.name);
+  if (canonicalSeedCategory) {
+    return canonicalSeedCategory;
+  }
+
   const normalizedGroup = normalizeCatalogGroupValue(category.group);
   if (!normalizedGroup) {
     return { ...category };
@@ -285,12 +290,33 @@ export function getSeedCatalogCategories(): CatalogCategory[] {
   );
 }
 
+const LEGACY_APPROVED_CATEGORY_CANONICAL_SLUGS: Record<string, string> = {
+  carpinteria: "carpinteria-y-madera",
+  ebanisteria: "carpinteria-y-madera",
+  "carpinteria-madera": "carpinteria-y-madera",
+  metalisteria: "metalisteria-y-soldadura",
+  soldadura: "metalisteria-y-soldadura",
+  "metalisteria-soldadura": "metalisteria-y-soldadura",
+};
+
 function getSeedCatalogCategoryByName(categoryName: string) {
   const normalizedCategoryName = normalizeCatalogText(categoryName);
   if (!normalizedCategoryName) return undefined;
 
   return getSeedCatalogCategories().find(
     (category) => normalizeCatalogText(category.name) === normalizedCategoryName,
+  );
+}
+
+export function getCanonicalSeedCategoryForApprovedCategory(categoryName: string) {
+  const categorySlug = slugifyCatalogText(categoryName);
+  if (!categorySlug) return undefined;
+
+  const canonicalCategorySlug =
+    LEGACY_APPROVED_CATEGORY_CANONICAL_SLUGS[categorySlug] ?? categorySlug;
+
+  return getSeedCatalogCategories().find(
+    (category) => slugifyCatalogText(category.name) === canonicalCategorySlug,
   );
 }
 
@@ -326,7 +352,9 @@ function normalizeApprovedCatalogService(service: CatalogService): CatalogServic
     return { ...service };
   }
 
-  const matchingSeedCategory = getSeedCatalogCategoryByName(service.categoryName);
+  const matchingSeedCategory =
+    getCanonicalSeedCategoryForApprovedCategory(service.categoryName) ??
+    getSeedCatalogCategoryByName(service.categoryName);
   if (!matchingSeedCategory) {
     return { ...service };
   }
