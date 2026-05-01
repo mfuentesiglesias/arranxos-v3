@@ -31,53 +31,82 @@ export interface ProfessionalSpecialtyFilterOption {
 }
 
 export interface CatalogGroupPresentation {
+  value: string;
   label: string;
   icon: string;
   color: string;
 }
 
-export const DEFAULT_APPROVED_CATALOG_GROUP = "Hogar / Oficios";
+export const DEFAULT_APPROVED_CATALOG_GROUP = "Hogar";
 export const FALLBACK_APPROVED_CATALOG_GROUP = "Catálogo aprobado";
-export const ADMIN_APPROVED_CATEGORY_GROUP_OPTIONS = [
-  DEFAULT_APPROVED_CATALOG_GROUP,
-  "Rural / Agrario",
-  "Ganadería",
-  "Digital / Tecnológica",
-  "Motor / Movilidad",
-  "Eventos / Ocio",
-  "Turismo",
-  FALLBACK_APPROVED_CATALOG_GROUP,
-] as const;
+export const DEFAULT_APPROVED_CATALOG_GROUP_LABEL = "Hogar / Oficios";
 
-const seedCatalogGroupPresentations = new Map<string, CatalogGroupPresentation>(
+const seedCatalogGroupMeta = new Map(
   categoryGroups.map((group) => [
     group.group,
-    {
-      label: group.group,
-      icon: group.icon,
-      color: group.color,
-    },
+    { icon: group.icon, color: group.color },
   ]),
 );
 
-const customCatalogGroupPresentations = new Map<string, CatalogGroupPresentation>([
-  [
-    DEFAULT_APPROVED_CATALOG_GROUP,
-    {
-      label: DEFAULT_APPROVED_CATALOG_GROUP,
-      icon: "🏠",
-      color: "#EEF4FB",
-    },
-  ],
-  [
-    FALLBACK_APPROVED_CATALOG_GROUP,
-    {
-      label: FALLBACK_APPROVED_CATALOG_GROUP,
-      icon: "✨",
-      color: "#EEF4FB",
-    },
-  ],
-]);
+function getSeedCatalogGroupMeta(group: string, fallbackIcon = "•", fallbackColor = "#F4F2EE") {
+  const seedMeta = seedCatalogGroupMeta.get(group);
+  return {
+    icon: seedMeta?.icon ?? fallbackIcon,
+    color: seedMeta?.color ?? fallbackColor,
+  };
+}
+
+export const CATALOG_GROUP_OPTIONS: readonly CatalogGroupPresentation[] = [
+  {
+    value: DEFAULT_APPROVED_CATALOG_GROUP,
+    label: DEFAULT_APPROVED_CATALOG_GROUP_LABEL,
+    ...getSeedCatalogGroupMeta(DEFAULT_APPROVED_CATALOG_GROUP, "🏠", "#EEF4FB"),
+  },
+  {
+    value: "Rural / Agrario",
+    label: "Rural / Agrario",
+    ...getSeedCatalogGroupMeta("Rural / Agrario", "🚜", "#FEF5E7"),
+  },
+  {
+    value: "Ganadería",
+    label: "Ganadería",
+    ...getSeedCatalogGroupMeta("Ganadería", "🐄", "#FCE9CC"),
+  },
+  {
+    value: "Digital / Tecnológica",
+    label: "Digital / Tecnológica",
+    ...getSeedCatalogGroupMeta("Digital / Tecnológica", "💻", "#D6E4F3"),
+  },
+  {
+    value: "Motor / Movilidad",
+    label: "Motor / Movilidad",
+    ...getSeedCatalogGroupMeta("Motor / Movilidad", "🚗", "#FFE1E2"),
+  },
+  {
+    value: "Eventos / Ocio",
+    label: "Eventos / Ocio",
+    ...getSeedCatalogGroupMeta("Eventos / Ocio", "🎉", "#E2DAF4"),
+  },
+  {
+    value: "Turismo",
+    label: "Turismo",
+    ...getSeedCatalogGroupMeta("Turismo", "🗺", "#D6EDE7"),
+  },
+  {
+    value: FALLBACK_APPROVED_CATALOG_GROUP,
+    label: FALLBACK_APPROVED_CATALOG_GROUP,
+    icon: "✨",
+    color: "#EEF4FB",
+  },
+] as const;
+
+const catalogGroupOptionsByValue = new Map(
+  CATALOG_GROUP_OPTIONS.map((group) => [group.value, group]),
+);
+
+const catalogGroupOptionsByLabel = new Map(
+  CATALOG_GROUP_OPTIONS.map((group) => [group.label, group]),
+);
 
 export function slugifyCatalogText(text: string) {
   return text
@@ -99,21 +128,68 @@ export function formatCatalogServiceName(text: string) {
   return collapsed.charAt(0).toUpperCase() + collapsed.slice(1);
 }
 
-export function getCatalogGroupPresentation(group?: string): CatalogGroupPresentation {
+export function normalizeCatalogGroupValue(group?: string) {
   const trimmedGroup = group?.trim();
 
-  if (trimmedGroup) {
+  if (!trimmedGroup) return undefined;
+  if (trimmedGroup === "Admin") {
+    return DEFAULT_APPROVED_CATALOG_GROUP;
+  }
+
+  const matchingGroupOption =
+    catalogGroupOptionsByValue.get(trimmedGroup) ?? catalogGroupOptionsByLabel.get(trimmedGroup);
+  if (matchingGroupOption) {
+    return matchingGroupOption.value;
+  }
+
+  return trimmedGroup;
+}
+
+export function getCatalogGroupPresentation(group?: string): CatalogGroupPresentation {
+  const normalizedGroup = normalizeCatalogGroupValue(group);
+
+  if (normalizedGroup) {
     return (
-      customCatalogGroupPresentations.get(trimmedGroup) ??
-      seedCatalogGroupPresentations.get(trimmedGroup) ?? {
-        label: trimmedGroup,
+      catalogGroupOptionsByValue.get(normalizedGroup) ?? {
+        value: normalizedGroup,
+        label: normalizedGroup,
         icon: "•",
         color: "#F4F2EE",
       }
     );
   }
 
-  return customCatalogGroupPresentations.get(FALLBACK_APPROVED_CATALOG_GROUP)!;
+  return catalogGroupOptionsByValue.get(FALLBACK_APPROVED_CATALOG_GROUP)!;
+}
+
+export function applyApprovedCatalogCategoryGroup(
+  category: CatalogCategory,
+  group = DEFAULT_APPROVED_CATALOG_GROUP,
+): CatalogCategory {
+  const normalizedGroup = normalizeCatalogGroupValue(group) ?? DEFAULT_APPROVED_CATALOG_GROUP;
+  const groupPresentation = getCatalogGroupPresentation(normalizedGroup);
+
+  return {
+    ...category,
+    icon: groupPresentation.icon,
+    group: normalizedGroup,
+    color: groupPresentation.color,
+  };
+}
+
+export function normalizeApprovedCatalogCategory(
+  category: CatalogCategory,
+): CatalogCategory {
+  if (category.source !== "admin_approved") {
+    return { ...category };
+  }
+
+  const normalizedGroup = normalizeCatalogGroupValue(category.group);
+  if (!normalizedGroup) {
+    return { ...category };
+  }
+
+  return applyApprovedCatalogCategoryGroup(category, normalizedGroup);
 }
 
 function catalogTextsAreRelated(a: string, b: string) {
@@ -209,12 +285,23 @@ export function getSeedCatalogCategories(): CatalogCategory[] {
   );
 }
 
+function getSeedCatalogCategoryByName(categoryName: string) {
+  const normalizedCategoryName = normalizeCatalogText(categoryName);
+  if (!normalizedCategoryName) return undefined;
+
+  return getSeedCatalogCategories().find(
+    (category) => normalizeCatalogText(category.name) === normalizedCategoryName,
+  );
+}
+
 export function getEffectiveCatalogCategories(
   approvedCategories: CatalogCategory[] = [],
 ) {
   return dedupeCatalogCategories([
     ...getSeedCatalogCategories(),
-    ...approvedCategories.map((category) => ({ ...category })),
+    ...approvedCategories.map((category) =>
+      normalizeApprovedCatalogCategory(category),
+    ),
   ]);
 }
 
@@ -224,17 +311,30 @@ export function buildApprovedCatalogCategoryFromName(
   group = DEFAULT_APPROVED_CATALOG_GROUP,
 ): CatalogCategory {
   const categoryName = formatCatalogServiceName(name);
-  const groupPresentation = getCatalogGroupPresentation(group);
 
-  return {
+  return applyApprovedCatalogCategoryGroup({
     id: `admin-cat-${slugifyCatalogText(categoryName)}`,
     name: categoryName,
-    icon: groupPresentation.icon,
-    group: groupPresentation.label,
-    color: groupPresentation.color,
     active: true,
     source: "admin_approved",
     createdFromRequestId: requestId,
+  }, group);
+}
+
+function normalizeApprovedCatalogService(service: CatalogService): CatalogService {
+  if (service.source !== "admin_approved") {
+    return { ...service };
+  }
+
+  const matchingSeedCategory = getSeedCatalogCategoryByName(service.categoryName);
+  if (!matchingSeedCategory) {
+    return { ...service };
+  }
+
+  return {
+    ...service,
+    categoryId: matchingSeedCategory.id,
+    categoryName: matchingSeedCategory.name,
   };
 }
 
@@ -266,7 +366,7 @@ export function getEffectiveCatalogServices(
 ) {
   return dedupeCatalogServices([
     ...getSeedCatalogServices(),
-    ...approvedServices.map((service) => ({ ...service })),
+    ...approvedServices.map((service) => normalizeApprovedCatalogService(service)),
   ]);
 }
 

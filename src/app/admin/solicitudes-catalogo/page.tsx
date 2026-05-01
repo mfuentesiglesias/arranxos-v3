@@ -8,10 +8,11 @@ import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import {
-  ADMIN_APPROVED_CATEGORY_GROUP_OPTIONS,
+  CATALOG_GROUP_OPTIONS,
   DEFAULT_APPROVED_CATALOG_GROUP,
   FALLBACK_APPROVED_CATALOG_GROUP,
   formatCatalogServiceName,
+  getCatalogGroupPresentation,
   getEffectiveCatalogCategories,
   getEffectiveCatalogServices,
   normalizeCatalogText,
@@ -150,7 +151,7 @@ export default function AdminCatalogRequestsPage() {
     selectCategory(request.id, result.category);
     setFeedback(
       result.created
-        ? `${result.category.name} creada dentro de ${result.category.group ?? FALLBACK_APPROVED_CATALOG_GROUP}.`
+        ? `${result.category.name} creada dentro de ${getCatalogGroupPresentation(result.category.group ?? FALLBACK_APPROVED_CATALOG_GROUP).label}.`
         : `Ya existía la categoría ${result.category.name}; la dejamos seleccionada.`,
     );
   };
@@ -395,7 +396,7 @@ export default function AdminCatalogRequestsPage() {
                                         {category.name}
                                       </div>
                                       <div className="text-[11px] text-ink-400">
-                                        {category.group ?? "Catálogo"} · {category.source === "seed" ? "Seed" : "Admin"}
+                                        {getCatalogGroupPresentation(category.group ?? "Catálogo").label} · {category.source === "seed" ? "Seed" : "Admin"}
                                       </div>
                                     </button>
                                   ))}
@@ -419,9 +420,9 @@ export default function AdminCatalogRequestsPage() {
                                   }
                                   data-testid={`catalog-request-category-group-${slug}`}
                                 >
-                                  {ADMIN_APPROVED_CATEGORY_GROUP_OPTIONS.map((groupOption) => (
-                                    <option key={groupOption} value={groupOption}>
-                                      {groupOption}
+                                  {CATALOG_GROUP_OPTIONS.map((groupOption) => (
+                                    <option key={groupOption.value} value={groupOption.value}>
+                                      {groupOption.label}
                                     </option>
                                   ))}
                                 </Select>

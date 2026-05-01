@@ -92,8 +92,8 @@ test("admin tickets búsqueda carga listado", async ({ page }) => {
 test("solicitud de catálogo: pro solicita, admin aprueba y pro la encuentra", async ({ page }) => {
   const specialtyName = "ebanista";
   const specialtySlug = "ebanista";
-  const finalCatalogName = "Ebanistería y carpintería fina";
-  const finalCatalogSlug = "ebanisteria-y-carpinteria-fina";
+  const finalCatalogName = "Ebanistería artesanal a medida";
+  const finalCatalogSlug = "ebanisteria-artesanal-a-medida";
   const categoryName = "Carpintería y madera";
 
   await loginWithDemoAccess(page, "demo-pro-approved");
@@ -113,11 +113,10 @@ test("solicitud de catálogo: pro solicita, admin aprueba y pro la encuentra", a
   await expectVisibleByTestId(page, `admin-catalog-request-${specialtySlug}`);
   await byTestId(page, `catalog-request-final-name-${specialtySlug}`).fill(finalCatalogName);
   await byTestId(page, `catalog-request-category-search-${specialtySlug}`).fill("Carpintería");
-  await byTestId(page, `catalog-request-category-group-${specialtySlug}`).selectOption(
-    "Hogar / Oficios",
+  await clickByTestId(
+    page,
+    "catalog-request-category-result-carpinteria-y-madera",
   );
-  await byTestId(page, `catalog-request-new-category-name-${specialtySlug}`).fill(categoryName);
-  await clickByTestId(page, `create-catalog-category-${specialtySlug}`);
   await expectVisibleByTestId(page, `catalog-request-selected-category-${specialtySlug}`);
   await clickByTestId(page, `approve-catalog-request-${specialtySlug}`);
   await expect(byTestId(page, `catalog-request-status-${specialtySlug}`)).toContainText(

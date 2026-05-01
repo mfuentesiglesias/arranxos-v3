@@ -2,11 +2,14 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
+  applyApprovedCatalogCategoryGroup,
   DEFAULT_APPROVED_CATALOG_GROUP,
   buildApprovedCatalogCategoryFromName,
   buildApprovedCatalogServiceFromRequest,
   formatCatalogServiceName,
   getEffectiveCatalogCategories,
+  getSeedCatalogCategories,
+  normalizeApprovedCatalogCategory,
   getEffectiveCatalogServices,
   getSeedCatalogServices,
   normalizeCatalogText,
@@ -1034,14 +1037,53 @@ export const useSession = create<SessionState>()(
           }
 
           const approvedCategories = s.approvedCatalogCategories ?? [];
-          const existingCategory = getEffectiveCatalogCategories(approvedCategories).find(
+          const normalizedCategoryName = normalizeCatalogText(categoryName);
+          const existingSeedCategory = getSeedCatalogCategories().find(
             (category) =>
-              normalizeCatalogText(category.name) === normalizeCatalogText(categoryName),
+              normalizeCatalogText(category.name) === normalizedCategoryName,
           );
 
-          if (existingCategory) {
-            result = { ok: true, category: existingCategory, created: false };
+          if (existingSeedCategory) {
+            result = { ok: true, category: existingSeedCategory, created: false };
             return {};
+          }
+
+          const existingApprovedCategoryIndex = approvedCategories.findIndex(
+            (category) =>
+              normalizeCatalogText(category.name) === normalizedCategoryName,
+          );
+
+          if (existingApprovedCategoryIndex >= 0) {
+            const existingApprovedCategory = approvedCategories[existingApprovedCategoryIndex];
+            const normalizedExistingApprovedCategory = normalizeApprovedCatalogCategory(
+              existingApprovedCategory,
+            );
+            const shouldUpdateGroup =
+              Boolean(input.group?.trim()) ||
+              normalizedExistingApprovedCategory.group !== existingApprovedCategory.group;
+
+            const nextCategory = shouldUpdateGroup
+              ? applyApprovedCatalogCategoryGroup(
+                  normalizedExistingApprovedCategory,
+                  categoryGroup,
+                )
+              : normalizedExistingApprovedCategory;
+
+            result = { ok: true, category: nextCategory, created: false };
+
+            if (
+              nextCategory.group === existingApprovedCategory.group &&
+              nextCategory.icon === existingApprovedCategory.icon &&
+              nextCategory.color === existingApprovedCategory.color
+            ) {
+              return {};
+            }
+
+            return {
+              approvedCatalogCategories: approvedCategories.map((category, index) =>
+                index === existingApprovedCategoryIndex ? nextCategory : category,
+              ),
+            };
           }
 
           const category = buildApprovedCatalogCategoryFromName(

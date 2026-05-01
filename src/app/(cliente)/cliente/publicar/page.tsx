@@ -9,6 +9,7 @@ import {
   FALLBACK_APPROVED_CATALOG_GROUP,
   getEffectiveCatalogCategories,
   getCatalogGroupPresentation,
+  normalizeCatalogGroupValue,
   slugifyCatalogText,
 } from "@/lib/catalog";
 import { getEffectiveApprovedCatalogCategories, useSession } from "@/lib/store";
@@ -120,20 +121,20 @@ function groupCatalogCategories(categories: CatalogCategory[]) {
   >();
 
   categories.forEach((category) => {
-    const label =
-      category.group?.trim() ||
+    const canonicalGroup =
+      normalizeCatalogGroupValue(category.group) ||
       (category.source === "admin_approved"
         ? FALLBACK_APPROVED_CATALOG_GROUP
         : "Catálogo");
-    const groupPresentation = getCatalogGroupPresentation(label);
-    const current = groups.get(label) ?? {
-      label,
+    const groupPresentation = getCatalogGroupPresentation(canonicalGroup);
+    const current = groups.get(canonicalGroup) ?? {
+      label: groupPresentation.label,
       icon: groupPresentation.icon || category.icon || "•",
       color: groupPresentation.color || category.color || "#F4F2EE",
       categories: [],
     };
     current.categories.push(category);
-    groups.set(label, current);
+    groups.set(canonicalGroup, current);
   });
 
   return Array.from(groups.values());

@@ -14,18 +14,18 @@ import { RatingStars } from "@/components/pros/rating-stars";
 import { StrikeBadge } from "@/components/pros/strike-badge";
 import {
   getEffectiveCatalogServices,
-  getSeedCatalogServices,
   slugifyCatalogText,
 } from "@/lib/catalog";
-import { currentPro, reviews, defaultAdminConfig } from "@/lib/data";
+import { currentPro, reviews, defaultAdminConfig, professionals } from "@/lib/data";
 import {
+  getCurrentProfessionalId,
   getEffectiveApprovedCatalogServices,
   getEffectiveCatalogRequests,
+  getProfessionalCatalogProfile,
+  type ProfessionalCatalogProfile,
   useSession,
 } from "@/lib/store";
 import type { CatalogRequest, CatalogService, Professional } from "@/lib/types";
-
-const seedCatalogServices = getSeedCatalogServices();
 const SPECIALTY_RADIUS_OPTIONS = [5, 10, 25, 50, 100] as const;
 const POSTAL_CODE_LOOKUP = {
   "15824": { municipality: "O Pino", locality: "Boavista" },
@@ -71,27 +71,8 @@ type WorkBaseDraft = {
 export default function PerfilProPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<ProfilePanelId | null>(null);
-  const [savedSpecialties, setSavedSpecialties] = useState<EditableSpecialty[]>(() =>
-    getInitialEditableSpecialties(currentPro),
-  );
-  const [specialtiesDraft, setSpecialtiesDraft] = useState<EditableSpecialty[]>(() =>
-    getInitialEditableSpecialties(currentPro),
-  );
   const [specialtySearch, setSpecialtySearch] = useState("");
-  const [savedWorkBase, setSavedWorkBase] = useState<WorkBaseDraft>(() =>
-    getInitialWorkBase(currentPro),
-  );
-  const [workBaseDraft, setWorkBaseDraft] = useState<WorkBaseDraft>(() =>
-    getInitialWorkBase(currentPro),
-  );
-  const [savedRadiusKm, setSavedRadiusKm] = useState(currentPro.radiusKm ?? 25);
-  const [radiusDraft, setRadiusDraft] = useState(currentPro.radiusKm ?? 25);
   const [catalogRequestFeedback, setCatalogRequestFeedback] = useState<string | null>(null);
-  const [profileDraft, setProfileDraft] = useState({
-    name: currentPro.name,
-    bio: currentPro.bio ?? "",
-    location: currentPro.zone ?? currentPro.location,
-  });
   const [editSaved, setEditSaved] = useState(false);
   const [specialtiesSaved, setSpecialtiesSaved] = useState(false);
   const [bankingSaved, setBankingSaved] = useState(false);
@@ -104,14 +85,41 @@ export default function PerfilProPage() {
   });
   const router = useRouter();
   const reset = useSession((s) => s.reset);
+  const currentProfessionalId = useSession(getCurrentProfessionalId);
   const storeCatalogRequests = useSession(getEffectiveCatalogRequests);
   const approvedCatalogServices = useSession(getEffectiveApprovedCatalogServices);
+  const professionalCatalogProfile = useSession((state) =>
+    getProfessionalCatalogProfile(state, currentProfessionalId),
+  );
   const createCatalogRequest = useSession((s) => s.createCatalogRequest);
+  const updateProfessionalCatalogProfile = useSession(
+    (s) => s.updateProfessionalCatalogProfile,
+  );
+  const professional =
+    professionals.find((entry) => entry.id === currentProfessionalId) ?? currentPro;
   const catalogServices = getEffectiveCatalogServices(approvedCatalogServices);
+  const savedProfileState = getSavedProfessionalProfileState(
+    professional,
+    catalogServices,
+    professionalCatalogProfile,
+  );
+  const [specialtiesDraft, setSpecialtiesDraft] = useState<EditableSpecialty[]>(() =>
+    savedProfileState.specialties,
+  );
+  const [workBaseDraft, setWorkBaseDraft] = useState<WorkBaseDraft>(() =>
+    savedProfileState.workBase,
+  );
+  const [radiusDraft, setRadiusDraft] = useState(savedProfileState.radiusKm);
+  const [profileDraft, setProfileDraft] = useState({
+    name: professional.name,
+    bio: professional.bio ?? "",
+    location: professional.zone ?? professional.location,
+  });
   const myReviews = reviews
-    .filter((r) => r.targetId === "p1")
+    .filter((r) => r.targetId === professional.id)
     .slice(0, 3);
-  const displayedPrimarySpecialty = savedSpecialties[0]?.label ?? currentPro.specialty;
+  const displayedPrimarySpecialty =
+    savedProfileState.specialties[0]?.label ?? professional.specialty;
   const workBaseLookup = getWorkBaseLookup(workBaseDraft.postalCode);
   const normalizedSpecialtySearch = normalizeSpecialtySearch(specialtySearch.trim());
   const matchingCatalogServices = catalogServices
@@ -151,13 +159,13 @@ export default function PerfilProPage() {
     matchingCatalogServices.length === 0 &&
     !duplicateCatalogRequest;
   const professionalCatalogRequests = storeCatalogRequests.filter(
-    (request) => request.requestedByUserId === currentPro.id,
+    (request) => request.requestedByUserId === professional.id,
   );
 
   const syncSpecialtiesDraftFromSaved = () => {
-    setSpecialtiesDraft(savedSpecialties);
-    setWorkBaseDraft(savedWorkBase);
-    setRadiusDraft(savedRadiusKm);
+    setSpecialtiesDraft(savedProfileState.specialties);
+    setWorkBaseDraft(savedProfileState.workBase);
+    setRadiusDraft(savedProfileState.radiusKm);
     setSpecialtySearch("");
     setSpecialtiesSaved(false);
     setCatalogRequestFeedback(null);
@@ -204,8 +212,8 @@ export default function PerfilProPage() {
       requestedName,
       suggestedCategoryId: suggestedCategory?.id,
       suggestedCategoryName: suggestedCategory?.name,
-      requestedByUserId: currentPro.id || "p1",
-      requestedByName: currentPro.name,
+      requestedByUserId: currentProfessionalId || professional.id,
+      requestedByName: professional.name,
       requestedByRole: "professional",
     });
 
@@ -222,15 +230,25 @@ export default function PerfilProPage() {
   };
 
   const saveSpecialties = () => {
-    setSavedSpecialties(specialtiesDraft);
-    setSavedWorkBase({
+    const nextWorkBase = {
       postalCode: workBaseDraft.postalCode.trim(),
       municipality:
-        workBaseDraft.municipality.trim() || currentPro.location || "Zona pendiente",
+        workBaseDraft.municipality.trim() || professional.location || "Zona pendiente",
       locality: workBaseDraft.locality.trim(),
       privateAddress: workBaseDraft.privateAddress.trim(),
+    };
+    const selectedServiceIds = specialtiesDraft
+      .map((specialty) => specialty.serviceId)
+      .filter((serviceId): serviceId is string => Boolean(serviceId));
+
+    updateProfessionalCatalogProfile(currentProfessionalId || professional.id, {
+      selectedServiceIds,
+      primaryServiceId: specialtiesDraft[0]?.serviceId,
+      specialtyNames: specialtiesDraft.map((specialty) => specialty.label),
+      workBase: nextWorkBase,
+      radiusKm: radiusDraft,
     });
-    setSavedRadiusKm(radiusDraft);
+    setWorkBaseDraft(nextWorkBase);
     setSpecialtiesSaved(true);
   };
 
@@ -723,7 +741,7 @@ export default function PerfilProPage() {
                 Estado actual
               </div>
               <div className="text-[12px] text-teal-700/90 leading-snug">
-                {currentPro.verified
+                {professional.verified
                   ? "Tu perfil aparece como verificado en esta demo."
                   : "Tu perfil todavía no está marcado como verificado."}
               </div>
@@ -894,8 +912,8 @@ export default function PerfilProPage() {
         <Card className="mb-3">
           <div className="flex items-start gap-3 mb-4">
             <div className="relative">
-              <Avatar initials={currentPro.avatar} size={68} />
-              {currentPro.verified && (
+              <Avatar initials={professional.avatar} size={68} />
+              {professional.verified && (
                 <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-teal-500 text-white border-2 border-white flex items-center justify-center text-[10px] font-bold">
                   ✓
                 </span>
@@ -909,11 +927,11 @@ export default function PerfilProPage() {
                 {displayedPrimarySpecialty} · {profileDraft.location}
               </div>
               <div className="mt-1 text-[11.5px] font-semibold text-ink-500">
-                Base: {formatWorkBaseSummary(savedWorkBase, savedRadiusKm)}
+                Base: {formatWorkBaseSummary(savedProfileState.workBase, savedProfileState.radiusKm)}
               </div>
-              {savedSpecialties.length > 0 && (
+              {savedProfileState.specialties.length > 0 && (
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {savedSpecialties.slice(0, 3).map((specialty) => (
+                  {savedProfileState.specialties.slice(0, 3).map((specialty) => (
                     <span
                       key={specialty.id}
                       className="rounded-full bg-sand-100 px-2 py-0.5 text-[10.5px] font-semibold text-ink-500"
@@ -924,26 +942,26 @@ export default function PerfilProPage() {
                 </div>
               )}
               <div className="flex items-center gap-2 mt-1">
-                <RatingStars value={currentPro.rating} />
+                <RatingStars value={professional.rating} />
                 <span className="text-[12px] font-bold text-ink-800">
-                  {currentPro.rating.toFixed(1)}
+                  {professional.rating.toFixed(1)}
                 </span>
                 <span className="text-[11px] text-ink-400">
-                  ({currentPro.reviews})
+                  ({professional.reviews})
                 </span>
               </div>
-              {currentPro.badge && (
+              {professional.badge && (
                 <span className="inline-block mt-1.5 bg-amber-50 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                  {currentPro.badge}
+                  {professional.badge}
                 </span>
               )}
             </div>
           </div>
           <div className="grid grid-cols-3 gap-2 text-center">
             {[
-              ["Trabajos", currentPro.jobs],
-              ["Fiabilidad", `${currentPro.reliability}%`],
-              ["Respuesta", currentPro.responseTime],
+              ["Trabajos", professional.jobs],
+              ["Fiabilidad", `${professional.reliability}%`],
+              ["Respuesta", professional.responseTime],
             ].map(([l, v]) => (
               <div
                 key={String(l)}
@@ -963,12 +981,12 @@ export default function PerfilProPage() {
             <div className="font-bold text-[13px] text-ink-800">
               Reputación interna
             </div>
-            <StrikeBadge strikes={currentPro.strikes ?? 0} />
+            <StrikeBadge strikes={professional.strikes ?? 0} />
           </div>
           <div className="text-[12px] text-ink-500 leading-snug">
-            {currentPro.strikes === 0
+            {professional.strikes === 0
               ? "Sin incidencias. Sigue así."
-              : `Tienes ${currentPro.strikes} strike${currentPro.strikes === 1 ? "" : "s"} acumulados. Al alcanzar ${defaultAdminConfig.strikeAutoBlockThreshold}, la cuenta puede ser revisada por admin.`}
+              : `Tienes ${professional.strikes} strike${professional.strikes === 1 ? "" : "s"} acumulados. Al alcanzar ${defaultAdminConfig.strikeAutoBlockThreshold}, la cuenta puede ser revisada por admin.`}
           </div>
         </Card>
 
@@ -1150,41 +1168,55 @@ function getCatalogRequestStatusClassName(status: CatalogRequest["status"]) {
   )[status];
 }
 
-function getInitialWorkBase(professional: Professional): WorkBaseDraft {
+function getSavedProfessionalProfileState(
+  professional: Professional,
+  services: CatalogService[],
+  profileOverride?: ProfessionalCatalogProfile,
+) {
+  return {
+    specialties: getInitialEditableSpecialties(professional, services, profileOverride),
+    workBase: getInitialWorkBase(professional, profileOverride?.workBase),
+    radiusKm: profileOverride?.radiusKm ?? professional.radiusKm ?? 25,
+  };
+}
+
+function getInitialWorkBase(
+  professional: Professional,
+  savedWorkBase?: Partial<WorkBaseDraft>,
+): WorkBaseDraft {
   const normalizedLocation = normalizeSpecialtySearch(professional.location || "");
-
-  if (normalizedLocation.includes("vigo")) {
-    return {
-      postalCode: "36201",
-      municipality: "Vigo",
-      locality: "",
-      privateAddress: "",
-    };
-  }
-
-  if (normalizedLocation.includes("coruna")) {
-    return {
-      postalCode: "15001",
-      municipality: "A Coruña",
-      locality: "",
-      privateAddress: "",
-    };
-  }
-
-  if (normalizedLocation.includes("santiago")) {
-    return {
-      postalCode: "15705",
-      municipality: "Santiago de Compostela",
-      locality: "",
-      privateAddress: "",
-    };
-  }
+  const fallbackBase =
+    normalizedLocation.includes("vigo")
+      ? {
+          postalCode: "36201",
+          municipality: "Vigo",
+          locality: "",
+          privateAddress: "",
+        }
+      : normalizedLocation.includes("coruna")
+        ? {
+            postalCode: "15001",
+            municipality: "A Coruña",
+            locality: "",
+            privateAddress: "",
+          }
+        : normalizedLocation.includes("santiago")
+          ? {
+              postalCode: "15705",
+              municipality: "Santiago de Compostela",
+              locality: "",
+              privateAddress: "",
+            }
+          : {
+              postalCode: "",
+              municipality: professional.location || "",
+              locality: "",
+              privateAddress: "",
+            };
 
   return {
-    postalCode: "",
-    municipality: professional.location || "",
-    locality: "",
-    privateAddress: "",
+    ...fallbackBase,
+    ...savedWorkBase,
   };
 }
 
@@ -1199,30 +1231,56 @@ function formatWorkBaseSummary(base: WorkBaseDraft, radiusKm: number) {
   return `${area || "Zona pendiente"} · ${radiusKm} km`;
 }
 
-function getInitialEditableSpecialties(professional: Professional): EditableSpecialty[] {
-  const seen = new Set<string>();
+function toEditableCatalogSpecialty(service: CatalogService): EditableSpecialty {
+  return {
+    id: `service-${service.id}`,
+    label: service.name,
+    source: "catalog",
+    categoryName: service.categoryName,
+    serviceId: service.id,
+  };
+}
 
-  return [professional.specialty, ...(professional.specialties ?? [])]
+function getInitialEditableSpecialties(
+  professional: Professional,
+  services: CatalogService[],
+  profileOverride?: ProfessionalCatalogProfile,
+): EditableSpecialty[] {
+  const selectedServices = (profileOverride?.selectedServiceIds ?? [])
+    .map((serviceId) => services.find((service) => service.id === serviceId))
+    .filter((service): service is CatalogService => Boolean(service));
+  const specialtyNames =
+    profileOverride?.specialtyNames && profileOverride.specialtyNames.length > 0
+      ? profileOverride.specialtyNames
+      : [professional.specialty, ...(professional.specialties ?? [])];
+  
+  const seenLabels = new Set<string>();
+  const usedSelectedServiceIds = new Set<string>();
+  const specialtiesFromNames = specialtyNames
     .filter((value): value is string => Boolean(value))
     .filter((value) => {
       const normalized = normalizeSpecialtySearch(value);
-      if (!normalized || seen.has(normalized)) return false;
-      seen.add(normalized);
+      if (!normalized || seenLabels.has(normalized)) return false;
+      seenLabels.add(normalized);
       return true;
     })
     .map((value) => {
-      const matchedService = seedCatalogServices.find(
+      const matchedSelectedService = selectedServices.find(
+        (service) =>
+          !usedSelectedServiceIds.has(service.id) &&
+          normalizeSpecialtySearch(service.name) === normalizeSpecialtySearch(value),
+      );
+      if (matchedSelectedService) {
+        usedSelectedServiceIds.add(matchedSelectedService.id);
+        return toEditableCatalogSpecialty(matchedSelectedService);
+      }
+
+      const matchedService = services.find(
         (service) => normalizeSpecialtySearch(service.name) === normalizeSpecialtySearch(value),
       );
 
       if (matchedService) {
-        return {
-          id: `service-${matchedService.id}`,
-          label: matchedService.name,
-          source: "catalog" as const,
-          categoryName: matchedService.categoryName,
-          serviceId: matchedService.id,
-        };
+        return toEditableCatalogSpecialty(matchedService);
       }
 
       return {
@@ -1231,6 +1289,12 @@ function getInitialEditableSpecialties(professional: Professional): EditableSpec
         source: "legacy" as const,
       };
     });
+
+  const remainingSelectedServices = selectedServices
+    .filter((service) => !usedSelectedServiceIds.has(service.id))
+    .map(toEditableCatalogSpecialty);
+
+  return [...specialtiesFromNames, ...remainingSelectedServices];
 }
 
 function getPanelTitle(panelId: ProfilePanelId | null) {
