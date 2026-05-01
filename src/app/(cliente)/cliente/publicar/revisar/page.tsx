@@ -7,16 +7,45 @@ import { ScreenBody } from "@/components/layout/screen-body";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
-import { categoryGroups } from "@/lib/data";
+import {
+  getEffectiveCatalogCategories,
+  getEffectiveCatalogServices,
+  normalizeCatalogText,
+} from "@/lib/catalog";
+import {
+  getEffectiveApprovedCatalogCategories,
+  getEffectiveApprovedCatalogServices,
+  useSession,
+} from "@/lib/store";
 
 function RevisarInner() {
   const router = useRouter();
   const params = useSearchParams();
-  const catId = params.get("cat") ?? "";
-  const cat =
-    categoryGroups.flatMap((g) => g.categories).find((c) => c.id === catId) ??
-    categoryGroups[0].categories[0];
-  const service = params.get("service") ?? "";
+  const approvedCatalogCategories = useSession(getEffectiveApprovedCatalogCategories);
+  const approvedCatalogServices = useSession(getEffectiveApprovedCatalogServices);
+  const effectiveCategories = getEffectiveCatalogCategories(approvedCatalogCategories);
+  const effectiveServices = getEffectiveCatalogServices(approvedCatalogServices);
+  const categoryId = params.get("categoryId") ?? params.get("cat") ?? "";
+  const categoryNameParam = params.get("categoryName") ?? "";
+  const serviceId = params.get("serviceId") ?? "";
+  const serviceNameParam = params.get("serviceName") ?? params.get("service") ?? "";
+  const category =
+    effectiveCategories.find((entry) => entry.id === categoryId) ??
+    effectiveCategories.find(
+      (entry) =>
+        categoryNameParam &&
+        normalizeCatalogText(entry.name) === normalizeCatalogText(categoryNameParam),
+    ) ??
+    (!categoryId && !categoryNameParam ? effectiveCategories[0] : undefined);
+  const selectedService =
+    effectiveServices.find((entry) => entry.id === serviceId) ??
+    effectiveServices.find(
+      (entry) =>
+        serviceNameParam &&
+        normalizeCatalogText(entry.name) === normalizeCatalogText(serviceNameParam),
+    );
+  const categoryName = categoryNameParam || category?.name || "Sin categoría";
+  const service = serviceNameParam || selectedService?.name || "";
   const title = params.get("title") ?? "";
   const description = params.get("description") ?? "";
   const location = params.get("location") ?? "";
@@ -42,11 +71,11 @@ function RevisarInner() {
       <StatusBar />
       <TopBar title="Publicar trabajo" subtitle="Paso 4 de 4 · Revisar" />
       <ScreenBody className="px-4 pt-3 pb-6">
-        <Card className="mb-3">
+        <Card className="mb-3" testId="client-publish-review-summary">
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-[18px]">{cat.icon}</span>
+            <span className="text-[18px]">{category?.icon ?? "•"}</span>
             <span className="text-[11px] font-bold text-ink-400 uppercase tracking-wide">
-              {cat.name} · {service || "Sin servicio"}
+              {categoryName} · {service || "Sin servicio"}
             </span>
             {urgent && (
               <span className="ml-auto bg-coral-50 text-coral-700 text-[10px] font-bold px-2 py-0.5 rounded-full">

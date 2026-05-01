@@ -127,4 +127,24 @@ test("solicitud de catálogo: pro solicita, admin aprueba y pro la encuentra", a
   await expectVisibleByTestId(page, "profile-specialties-search");
   await byTestId(page, "profile-specialties-search").fill(finalCatalogName);
   await expectVisibleByTestId(page, `profile-specialty-suggestion-${finalCatalogSlug}`);
+
+  await loginWithDemoAccess(page, "demo-client");
+  await page.goto("/cliente/publicar");
+  await byTestId(page, "client-publish-category-search").fill("Carpintería");
+  await expectVisibleByTestId(page, "client-category-carpinteria-y-madera");
+  await clickByTestId(page, "client-category-carpinteria-y-madera");
+  await expectVisibleByTestId(page, `client-service-${finalCatalogSlug}`);
+  await clickByTestId(page, `client-service-${finalCatalogSlug}`);
+  await page.getByRole("button", { name: "Continuar" }).first().click();
+  await expect(page).toHaveURL(/\/cliente\/publicar\/detalle/);
+  await page.getByPlaceholder("Ej. Reparar cuadro eléctrico en piso").first().fill("Mueble a medida en madera");
+  await page
+    .getByPlaceholder("Describe qué necesitas. Cuanto más detalle, mejor.")
+    .first()
+    .fill("Necesito valorar un trabajo de ebanistería para un armario empotrado.");
+  await page.locator("select").nth(1).selectOption("100–300€");
+  await page.getByRole("button", { name: "Revisar y publicar" }).first().click();
+  await expectVisibleByTestId(page, "client-publish-review-summary");
+  await expect(byTestId(page, "client-publish-review-summary")).toContainText(categoryName);
+  await expect(byTestId(page, "client-publish-review-summary")).toContainText(finalCatalogName);
 });
