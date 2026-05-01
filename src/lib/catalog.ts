@@ -12,6 +12,12 @@ type ProfessionalWithSelectedServiceIds = Professional & {
   selectedServiceIds?: string[];
 };
 
+type ProfessionalCatalogProfileLike = {
+  selectedServiceIds?: string[];
+  specialtyNames?: string[];
+  primaryServiceId?: string;
+};
+
 export type JobSpecialtyMatchType = "service" | "category" | "legacy" | "none";
 
 export interface JobSpecialtyClassification {
@@ -229,6 +235,42 @@ function getUniqueLegacySpecialties(professional: Professional) {
       return true;
     },
   );
+}
+
+function normalizeProfessionalSpecialtyNames(specialtyNames: string[] = []) {
+  const seen = new Set<string>();
+
+  return specialtyNames
+    .map((value) => value.replace(/\s+/g, " ").trim())
+    .filter((value) => {
+      const normalized = normalizeCatalogText(value);
+      if (!normalized || seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    });
+}
+
+export function buildEffectiveProfessionalForCatalog(
+  professional: Professional,
+  profileOverride?: ProfessionalCatalogProfileLike,
+): ProfessionalWithSelectedServiceIds {
+  const specialtyNames = normalizeProfessionalSpecialtyNames(
+    profileOverride?.specialtyNames,
+  );
+  const [primarySpecialty, ...additionalSpecialties] = specialtyNames;
+
+  return {
+    ...professional,
+    specialty: primarySpecialty ?? professional.specialty,
+    specialties:
+      specialtyNames.length > 0
+        ? additionalSpecialties
+        : professional.specialties,
+    selectedServiceIds:
+      profileOverride?.selectedServiceIds && profileOverride.selectedServiceIds.length > 0
+        ? [...profileOverride.selectedServiceIds]
+        : undefined,
+  };
 }
 
 function getJobCatalogContext(

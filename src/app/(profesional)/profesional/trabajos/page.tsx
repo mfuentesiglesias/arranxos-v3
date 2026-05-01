@@ -10,15 +10,20 @@ import { Icon } from "@/components/ui/icon";
 import { MapView } from "@/components/map/map-view";
 import { jobs, professionals } from "@/lib/data";
 import {
+  buildEffectiveProfessionalForCatalog,
   classifyJobForProfessionalSpecialties,
+  getEffectiveCatalogServices,
   getProfessionalSpecialtyFilterSuggestions,
-  getSeedCatalogServices,
   jobMatchesProfessionalSpecialtyFilter,
   type ProfessionalSpecialtyFilterOption,
 } from "@/lib/catalog";
-import { getCurrentProfessionalId, useSession } from "@/lib/store";
+import {
+  getCurrentProfessionalId,
+  getEffectiveApprovedCatalogServices,
+  getProfessionalCatalogProfile,
+  useSession,
+} from "@/lib/store";
 
-const catalogServices = getSeedCatalogServices();
 const KM_OPTIONS = [5, 10, 25, 50, 100] as const;
 const OPPORTUNITY_FILTERS = [
   { id: "all", label: "Todos" },
@@ -33,9 +38,18 @@ function Inner() {
   const params = useSearchParams();
   const myOnly = params.get("mine") === "1";
   const currentProfessionalId = useSession(getCurrentProfessionalId);
-  const currentProfessional =
+  const approvedCatalogServices = useSession(getEffectiveApprovedCatalogServices);
+  const professionalCatalogProfile = useSession((state) =>
+    getProfessionalCatalogProfile(state, currentProfessionalId),
+  );
+  const currentProfessionalSeed =
     professionals.find((professional) => professional.id === currentProfessionalId) ??
     professionals[0];
+  const currentProfessional = buildEffectiveProfessionalForCatalog(
+    currentProfessionalSeed,
+    professionalCatalogProfile,
+  );
+  const catalogServices = getEffectiveCatalogServices(approvedCatalogServices);
   const suggestedFilters = getProfessionalSpecialtyFilterSuggestions(
     currentProfessional,
     catalogServices,
