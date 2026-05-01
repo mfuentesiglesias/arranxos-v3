@@ -2,6 +2,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
+  DEFAULT_APPROVED_CATALOG_GROUP,
   buildApprovedCatalogCategoryFromName,
   buildApprovedCatalogServiceFromRequest,
   formatCatalogServiceName,
@@ -125,12 +126,34 @@ export interface MergeCatalogRequestOptions {
 
 export interface CreateApprovedCatalogCategoryInput {
   name: string;
+  group?: string;
   createdFromRequestId?: string;
 }
 
 export type CreateApprovedCatalogCategoryResult =
   | { ok: true; category: CatalogCategory; created: boolean }
   | { ok: false; reason: "empty" };
+
+export interface ProfessionalCatalogWorkBase {
+  postalCode: string;
+  municipality: string;
+  locality: string;
+  privateAddress: string;
+}
+
+export interface ProfessionalCatalogProfile {
+  selectedServiceIds: string[];
+  primaryServiceId?: string;
+  specialtyNames?: string[];
+  workBase: ProfessionalCatalogWorkBase;
+  radiusKm: number;
+  updatedAt: string;
+}
+
+export interface UpdateProfessionalCatalogProfileInput
+  extends Partial<Omit<ProfessionalCatalogProfile, "workBase">> {
+  workBase?: Partial<ProfessionalCatalogWorkBase>;
+}
 
 export interface SessionState {
   role: UserRole;
@@ -192,6 +215,11 @@ export interface SessionState {
     ticketId: string,
     status: SearchTicket["status"],
   ) => void;
+  professionalProfileOverrides: Record<string, ProfessionalCatalogProfile>;
+  updateProfessionalCatalogProfile: (
+    professionalId: string,
+    patch: UpdateProfessionalCatalogProfileInput,
+  ) => ProfessionalCatalogProfile;
   catalogRequests: CatalogRequest[];
   approvedCatalogServices: CatalogService[];
   approvedCatalogCategories: CatalogCategory[];
@@ -245,6 +273,57 @@ function cloneDisputes(disputes: Dispute[] = seedDisputes) {
 
 function cloneSearchTickets(searchTickets: SearchTicket[] = seedSearchTickets) {
   return searchTickets.map((ticket) => ({ ...ticket }));
+}
+
+function cloneProfessionalWorkBase(
+  workBase?: Partial<ProfessionalCatalogWorkBase>,
+): ProfessionalCatalogWorkBase {
+  return {
+    postalCode: workBase?.postalCode ?? "",
+    municipality: workBase?.municipality ?? "",
+    locality: workBase?.locality ?? "",
+    privateAddress: workBase?.privateAddress ?? "",
+  };
+}
+
+function normalizeProfessionalCatalogProfile(
+  profile?: Partial<ProfessionalCatalogProfile>,
+): ProfessionalCatalogProfile | undefined {
+  if (!profile) return undefined;
+
+  return {
+    selectedServiceIds: [...(profile.selectedServiceIds ?? [])],
+    primaryServiceId: profile.primaryServiceId || undefined,
+    specialtyNames: profile.specialtyNames ? [...profile.specialtyNames] : undefined,
+    workBase: cloneProfessionalWorkBase(profile.workBase),
+    radiusKm: typeof profile.radiusKm === "number" ? profile.radiusKm : 25,
+    updatedAt: profile.updatedAt ?? "",
+  };
+}
+
+function mergeProfessionalCatalogProfile(
+  currentProfile: Partial<ProfessionalCatalogProfile> | undefined,
+  patch: UpdateProfessionalCatalogProfileInput,
+): ProfessionalCatalogProfile {
+  const current = normalizeProfessionalCatalogProfile(currentProfile);
+
+  return {
+    selectedServiceIds: [...(patch.selectedServiceIds ?? current?.selectedServiceIds ?? [])],
+    primaryServiceId:
+      patch.primaryServiceId !== undefined
+        ? patch.primaryServiceId || undefined
+        : current?.primaryServiceId,
+    specialtyNames:
+      patch.specialtyNames !== undefined
+        ? [...patch.specialtyNames]
+        : current?.specialtyNames,
+    workBase: cloneProfessionalWorkBase({
+      ...current?.workBase,
+      ...patch.workBase,
+    }),
+    radiusKm: patch.radiusKm ?? current?.radiusKm ?? 25,
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 function hasCatalogServiceNamed(services: CatalogService[] = [], requestedName: string) {
@@ -352,6 +431,15 @@ export function getEffectiveSearchTickets(state: SessionState) {
   return state.searchTickets;
 }
 
+export function getProfessionalCatalogProfile(
+  state: SessionState,
+  professionalId: string,
+) {
+  return normalizeProfessionalCatalogProfile(
+    state.professionalProfileOverrides?.[professionalId],
+  );
+}
+
 export function getEffectiveCatalogRequests(state: SessionState) {
   return state.catalogRequests ?? [];
 }
@@ -447,6 +535,7 @@ export const useSession = create<SessionState>()(
           disputes: cloneDisputes(),
           searchTickets: cloneSearchTickets(),
           jobOutreachMeta: {},
+          professionalProfileOverrides: {},
           catalogRequests: [],
           approvedCatalogServices: [],
           approvedCatalogCategories: [],
@@ -472,6 +561,7 @@ export const useSession = create<SessionState>()(
       disputes: cloneDisputes(),
       searchTickets: cloneSearchTickets(),
       jobOutreachMeta: {},
+      professionalProfileOverrides: {},
       catalogRequests: [],
       approvedCatalogServices: [],
       approvedCatalogCategories: [],
@@ -868,6 +958,25 @@ export const useSession = create<SessionState>()(
             ticket.id === ticketId ? { ...ticket, status } : ticket,
           ),
         })),
+      updateProfessionalCatalogProfile: (professionalId, patch) => {
+        let nextProfile = mergeProfessionalCatalogProfile(undefined, patch);
+
+        set((s) => {
+          nextProfile = mergeProfessionalCatalogProfile(
+            s.professionalProfileOverrides?.[professionalId],
+            patch,
+          );
+
+          return {
+            professionalProfileOverrides: {
+              ...(s.professionalProfileOverrides ?? {}),
+              [professionalId]: nextProfile,
+            },
+          };
+        });
+
+        return nextProfile;
+      },
       createCatalogRequest: (input) => {
         let result: CreateCatalogRequestResult = { ok: false, reason: "empty" };
 
@@ -918,6 +1027,7 @@ export const useSession = create<SessionState>()(
 
         set((s) => {
           const categoryName = formatCatalogServiceName(input.name);
+          const categoryGroup = input.group?.trim() || DEFAULT_APPROVED_CATALOG_GROUP;
           if (!categoryName) {
             result = { ok: false, reason: "empty" };
             return {};
@@ -937,6 +1047,7 @@ export const useSession = create<SessionState>()(
           const category = buildApprovedCatalogCategoryFromName(
             categoryName,
             input.createdFromRequestId,
+            categoryGroup,
           );
           result = { ok: true, category, created: true };
           return {

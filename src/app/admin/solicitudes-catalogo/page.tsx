@@ -8,6 +8,9 @@ import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import {
+  ADMIN_APPROVED_CATEGORY_GROUP_OPTIONS,
+  DEFAULT_APPROVED_CATALOG_GROUP,
+  FALLBACK_APPROVED_CATALOG_GROUP,
   formatCatalogServiceName,
   getEffectiveCatalogCategories,
   getEffectiveCatalogServices,
@@ -38,6 +41,7 @@ export default function AdminCatalogRequestsPage() {
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<Record<string, string>>({});
   const [categorySearchByRequestId, setCategorySearchByRequestId] = useState<Record<string, string>>({});
   const [newCategoryNameByRequestId, setNewCategoryNameByRequestId] = useState<Record<string, string>>({});
+  const [categoryGroupByRequestId, setCategoryGroupByRequestId] = useState<Record<string, string>>({});
   const [existingServiceSearchByRequestId, setExistingServiceSearchByRequestId] = useState<Record<string, string>>({});
   const [existingServiceIdsByRequestId, setExistingServiceIdsByRequestId] = useState<Record<string, string>>({});
   const [rejectionReasonByRequestId, setRejectionReasonByRequestId] = useState<Record<string, string>>({});
@@ -120,6 +124,10 @@ export default function AdminCatalogRequestsPage() {
     setSelectedCategoryIds((current) => ({ ...current, [requestId]: category.id }));
     setCategorySearchByRequestId((current) => ({ ...current, [requestId]: category.name }));
     setNewCategoryNameByRequestId((current) => ({ ...current, [requestId]: category.name }));
+    setCategoryGroupByRequestId((current) => ({
+      ...current,
+      [requestId]: category.group ?? FALLBACK_APPROVED_CATALOG_GROUP,
+    }));
     setFeedback(null);
   };
 
@@ -127,8 +135,10 @@ export default function AdminCatalogRequestsPage() {
     const categoryName = formatCatalogServiceName(
       newCategoryNameByRequestId[request.id] ?? categorySearchByRequestId[request.id] ?? "",
     );
+    const categoryGroup = getDraftCategoryGroup(request.id, categoryGroupByRequestId);
     const result = createApprovedCatalogCategory({
       name: categoryName,
+      group: categoryGroup,
       createdFromRequestId: request.id,
     });
 
@@ -140,7 +150,7 @@ export default function AdminCatalogRequestsPage() {
     selectCategory(request.id, result.category);
     setFeedback(
       result.created
-        ? `${result.category.name} creada como categoría de catálogo.`
+        ? `${result.category.name} creada dentro de ${result.category.group ?? FALLBACK_APPROVED_CATALOG_GROUP}.`
         : `Ya existía la categoría ${result.category.name}; la dejamos seleccionada.`,
     );
   };
@@ -245,6 +255,10 @@ export default function AdminCatalogRequestsPage() {
               const categorySearch = categorySearchByRequestId[request.id] ?? "";
               const newCategoryName = formatCatalogServiceName(
                 newCategoryNameByRequestId[request.id] ?? categorySearch,
+              );
+              const categoryGroup = getDraftCategoryGroup(
+                request.id,
+                categoryGroupByRequestId,
               );
               const filteredCategories = getFilteredCategories(
                 request,
@@ -394,6 +408,23 @@ export default function AdminCatalogRequestsPage() {
                             </div>
                             {newCategoryName && !exactCategoryMatch && (
                               <div className="rounded-2xl border border-sand-200/70 bg-sand-50/70 p-3.5 flex flex-col gap-2">
+                                <Select
+                                  label="Grupo visible"
+                                  value={categoryGroup}
+                                  onChange={(event) =>
+                                    setCategoryGroupByRequestId((current) => ({
+                                      ...current,
+                                      [request.id]: event.target.value,
+                                    }))
+                                  }
+                                  data-testid={`catalog-request-category-group-${slug}`}
+                                >
+                                  {ADMIN_APPROVED_CATEGORY_GROUP_OPTIONS.map((groupOption) => (
+                                    <option key={groupOption} value={groupOption}>
+                                      {groupOption}
+                                    </option>
+                                  ))}
+                                </Select>
                                 <Input
                                   label="Nueva categoría"
                                   value={newCategoryNameByRequestId[request.id] ?? categorySearch}
@@ -571,6 +602,13 @@ function getDraftCategoryId(
   effectiveCatalogCategories: CatalogCategory[],
 ) {
   return selectedCategoryIds[request.id] ?? getSuggestedCategoryId(request, effectiveCatalogCategories);
+}
+
+function getDraftCategoryGroup(
+  requestId: string,
+  categoryGroupByRequestId: Record<string, string>,
+) {
+  return categoryGroupByRequestId[requestId] ?? DEFAULT_APPROVED_CATALOG_GROUP;
 }
 
 function getDraftExistingServiceId(

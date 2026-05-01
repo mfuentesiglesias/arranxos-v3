@@ -30,6 +30,55 @@ export interface ProfessionalSpecialtyFilterOption {
   serviceId?: string;
 }
 
+export interface CatalogGroupPresentation {
+  label: string;
+  icon: string;
+  color: string;
+}
+
+export const DEFAULT_APPROVED_CATALOG_GROUP = "Hogar / Oficios";
+export const FALLBACK_APPROVED_CATALOG_GROUP = "Catálogo aprobado";
+export const ADMIN_APPROVED_CATEGORY_GROUP_OPTIONS = [
+  DEFAULT_APPROVED_CATALOG_GROUP,
+  "Rural / Agrario",
+  "Ganadería",
+  "Digital / Tecnológica",
+  "Motor / Movilidad",
+  "Eventos / Ocio",
+  "Turismo",
+  FALLBACK_APPROVED_CATALOG_GROUP,
+] as const;
+
+const seedCatalogGroupPresentations = new Map<string, CatalogGroupPresentation>(
+  categoryGroups.map((group) => [
+    group.group,
+    {
+      label: group.group,
+      icon: group.icon,
+      color: group.color,
+    },
+  ]),
+);
+
+const customCatalogGroupPresentations = new Map<string, CatalogGroupPresentation>([
+  [
+    DEFAULT_APPROVED_CATALOG_GROUP,
+    {
+      label: DEFAULT_APPROVED_CATALOG_GROUP,
+      icon: "🏠",
+      color: "#EEF4FB",
+    },
+  ],
+  [
+    FALLBACK_APPROVED_CATALOG_GROUP,
+    {
+      label: FALLBACK_APPROVED_CATALOG_GROUP,
+      icon: "✨",
+      color: "#EEF4FB",
+    },
+  ],
+]);
+
 export function slugifyCatalogText(text: string) {
   return text
     .toLowerCase()
@@ -48,6 +97,23 @@ export function formatCatalogServiceName(text: string) {
   const collapsed = text.replace(/\s+/g, " ").trim();
   if (!collapsed) return "";
   return collapsed.charAt(0).toUpperCase() + collapsed.slice(1);
+}
+
+export function getCatalogGroupPresentation(group?: string): CatalogGroupPresentation {
+  const trimmedGroup = group?.trim();
+
+  if (trimmedGroup) {
+    return (
+      customCatalogGroupPresentations.get(trimmedGroup) ??
+      seedCatalogGroupPresentations.get(trimmedGroup) ?? {
+        label: trimmedGroup,
+        icon: "•",
+        color: "#F4F2EE",
+      }
+    );
+  }
+
+  return customCatalogGroupPresentations.get(FALLBACK_APPROVED_CATALOG_GROUP)!;
 }
 
 function catalogTextsAreRelated(a: string, b: string) {
@@ -155,14 +221,17 @@ export function getEffectiveCatalogCategories(
 export function buildApprovedCatalogCategoryFromName(
   name: string,
   requestId?: string,
+  group = DEFAULT_APPROVED_CATALOG_GROUP,
 ): CatalogCategory {
   const categoryName = formatCatalogServiceName(name);
+  const groupPresentation = getCatalogGroupPresentation(group);
 
   return {
     id: `admin-cat-${slugifyCatalogText(categoryName)}`,
     name: categoryName,
-    group: "Admin",
-    color: "#EEF4FB",
+    icon: groupPresentation.icon,
+    group: groupPresentation.label,
+    color: groupPresentation.color,
     active: true,
     source: "admin_approved",
     createdFromRequestId: requestId,
@@ -171,18 +240,23 @@ export function buildApprovedCatalogCategoryFromName(
 
 function dedupeCatalogServices(services: CatalogService[]) {
   const seenIds = new Set<string>();
-  const seenNames = new Set<string>();
+  const seenCategoryNames = new Set<string>();
 
   return services.filter((service) => {
     if (!service.active) return false;
 
     const normalizedName = normalizeCatalogText(service.name);
-    if (!normalizedName || seenIds.has(service.id) || seenNames.has(normalizedName)) {
+    const categoryNameKey = `${service.categoryId}::${normalizedName}`;
+    if (
+      !normalizedName ||
+      seenIds.has(service.id) ||
+      seenCategoryNames.has(categoryNameKey)
+    ) {
       return false;
     }
 
     seenIds.add(service.id);
-    seenNames.add(normalizedName);
+    seenCategoryNames.add(categoryNameKey);
     return true;
   });
 }

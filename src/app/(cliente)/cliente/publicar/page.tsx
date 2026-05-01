@@ -6,7 +6,9 @@ import { TopBar } from "@/components/layout/top-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
 import { Icon } from "@/components/ui/icon";
 import {
+  FALLBACK_APPROVED_CATALOG_GROUP,
   getEffectiveCatalogCategories,
+  getCatalogGroupPresentation,
   slugifyCatalogText,
 } from "@/lib/catalog";
 import { getEffectiveApprovedCatalogCategories, useSession } from "@/lib/store";
@@ -119,13 +121,15 @@ function groupCatalogCategories(categories: CatalogCategory[]) {
 
   categories.forEach((category) => {
     const label =
-      category.source === "admin_approved"
-        ? "Catálogo aprobado"
-        : category.group ?? "Catálogo";
+      category.group?.trim() ||
+      (category.source === "admin_approved"
+        ? FALLBACK_APPROVED_CATALOG_GROUP
+        : "Catálogo");
+    const groupPresentation = getCatalogGroupPresentation(label);
     const current = groups.get(label) ?? {
       label,
-      icon: category.source === "admin_approved" ? "✨" : category.icon ?? "•",
-      color: category.color ?? "#F4F2EE",
+      icon: groupPresentation.icon || category.icon || "•",
+      color: groupPresentation.color || category.color || "#F4F2EE",
       categories: [],
     };
     current.categories.push(category);

@@ -113,6 +113,9 @@ test("solicitud de catálogo: pro solicita, admin aprueba y pro la encuentra", a
   await expectVisibleByTestId(page, `admin-catalog-request-${specialtySlug}`);
   await byTestId(page, `catalog-request-final-name-${specialtySlug}`).fill(finalCatalogName);
   await byTestId(page, `catalog-request-category-search-${specialtySlug}`).fill("Carpintería");
+  await byTestId(page, `catalog-request-category-group-${specialtySlug}`).selectOption(
+    "Hogar / Oficios",
+  );
   await byTestId(page, `catalog-request-new-category-name-${specialtySlug}`).fill(categoryName);
   await clickByTestId(page, `create-catalog-category-${specialtySlug}`);
   await expectVisibleByTestId(page, `catalog-request-selected-category-${specialtySlug}`);
