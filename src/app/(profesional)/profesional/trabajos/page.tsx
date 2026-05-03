@@ -8,7 +8,7 @@ import { JobCard } from "@/components/jobs/job-card";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { MapView } from "@/components/map/map-view";
-import { jobs, professionals } from "@/lib/data";
+import { professionals } from "@/lib/data";
 import {
   buildEffectiveProfessionalForCatalog,
   classifyJobForProfessionalSpecialties,
@@ -20,6 +20,7 @@ import {
 import {
   getCurrentProfessionalId,
   getEffectiveApprovedCatalogServices,
+  getEffectiveJobs,
   getProfessionalCatalogProfile,
   useSession,
 } from "@/lib/store";
@@ -37,11 +38,14 @@ type OpportunityFilterMode = (typeof OPPORTUNITY_FILTERS)[number]["id"];
 function Inner() {
   const params = useSearchParams();
   const myOnly = params.get("mine") === "1";
-  const currentProfessionalId = useSession(getCurrentProfessionalId);
-  const approvedCatalogServices = useSession(getEffectiveApprovedCatalogServices);
-  const professionalCatalogProfile = useSession((state) =>
-    getProfessionalCatalogProfile(state, currentProfessionalId),
+  const session = useSession();
+  const currentProfessionalId = getCurrentProfessionalId(session);
+  const approvedCatalogServices = getEffectiveApprovedCatalogServices(session);
+  const professionalCatalogProfile = getProfessionalCatalogProfile(
+    session,
+    currentProfessionalId,
   );
+  const effectiveJobs = getEffectiveJobs(session);
   const currentProfessionalSeed =
     professionals.find((professional) => professional.id === currentProfessionalId) ??
     professionals[0];
@@ -123,9 +127,9 @@ function Inner() {
     .map((filterId) => suggestedFilterMap.get(filterId))
     .filter((filter): filter is ProfessionalSpecialtyFilterOption => Boolean(filter));
 
-  const all = jobs.filter((j) =>
+  const all = effectiveJobs.filter((j) =>
     myOnly
-      ? j.assignedProId === "p1"
+      ? j.assignedProId === currentProfessionalId
       : j.status === "published" || j.status === "agreement_pending",
   );
 

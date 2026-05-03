@@ -103,6 +103,10 @@ test("cliente publica trabajo y lo ve en detalle y listado", async ({ page }) =>
 
   await page.goto("/cliente/trabajos");
   await expect(page.getByText(jobTitle).first()).toBeVisible();
+
+  await loginWithDemoAccess(page, "demo-pro-approved");
+  await page.goto("/profesional/trabajos");
+  await expect(page.getByText(jobTitle).first()).toBeVisible();
 });
 
 test("admin tickets búsqueda carga listado", async ({ page }) => {
