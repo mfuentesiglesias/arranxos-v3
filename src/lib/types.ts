@@ -95,6 +95,16 @@ export interface Job {
   commissionPct?: number; // snapshot at agreement time
 }
 
+export interface JobRequest {
+  id: string;
+  jobId: string;
+  proId: string;
+  proName: string;
+  message?: string;
+  status: "pending" | "accepted" | "rejected" | "closed";
+  createdAt: string;
+}
+
 export interface ChatMessage {
   id: string;
   jobId: string;

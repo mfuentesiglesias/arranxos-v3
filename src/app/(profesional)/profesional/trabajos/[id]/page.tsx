@@ -1,5 +1,5 @@
 "use client";
-import { use, useEffect, useState } from "react";
+import { use, useEffect } from "react";
 import Link from "next/link";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
@@ -26,6 +26,7 @@ import {
   getCurrentProfessionalId,
   getEffectiveAdminConfig,
   getEffectiveJobById,
+  getJobRequestForProfessional,
   useSession,
 } from "@/lib/store";
 import type { JobStatus } from "@/lib/types";
@@ -36,14 +37,15 @@ interface Props {
 }
 
 function Inner({ id }: { id: string }) {
-  const currentProfessionalId = useSession(getCurrentProfessionalId);
+  const session = useSession();
+  const currentProfessionalId = getCurrentProfessionalId(session);
   const adminConfig = useSession(getEffectiveAdminConfig);
-  const effectiveJob = useSession((s) => getEffectiveJobById(s, id));
+  const effectiveJob = getEffectiveJobById(session, id);
+  const existingRequest = getJobRequestForProfessional(session, id, currentProfessionalId);
   const agreement = useSession((s) => getAgreementByJobId(s, id));
   const autoReleaseCompletedJob = useSession((s) => s.autoReleaseCompletedJob);
   const job = effectiveJob ?? jobs[0];
   const resolvedAgreement = getAgreement(agreement);
-  const [requested, setRequested] = useState(false);
 
   const isMine = job.assignedProId === currentProfessionalId;
   const canSeeLocation = canSeeExactLocation({
@@ -170,13 +172,12 @@ function Inner({ id }: { id: string }) {
       </ScreenBody>
 
       {/* Sticky CTA */}
-      <ProJobActions
-        jobId={job.id}
-        actions={proActions}
-        requested={requested}
-        onRequest={() => setRequested(true)}
-      />
-    </div>
+        <ProJobActions
+          jobId={job.id}
+          actions={proActions}
+          requested={Boolean(existingRequest)}
+        />
+      </div>
   );
 }
 
@@ -195,12 +196,10 @@ function ProJobActions({
   jobId,
   actions,
   requested,
-  onRequest,
 }: {
   jobId: string;
   actions: ReturnType<typeof getJobActionsForPro>;
   requested: boolean;
-  onRequest: () => void;
 }) {
   if (actions.includes("request_job")) {
     return (
@@ -208,7 +207,6 @@ function ProJobActions({
         <Button
           full
           href={requested ? undefined : `/profesional/trabajos/${jobId}/solicitar`}
-          onClick={requested ? undefined : onRequest}
           disabled={requested}
         >
           {requested ? "Solicitud enviada ✓" : "Solicitar este trabajo"}

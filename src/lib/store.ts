@@ -21,6 +21,7 @@ import {
   disputes as seedDisputes,
   jobs,
   notifications as seedNotifications,
+  professionals,
   searchTickets as seedSearchTickets,
 } from "./data";
 import {
@@ -33,6 +34,7 @@ import type {
   CatalogRequest,
   CatalogService,
   Dispute,
+  JobRequest,
   Job,
   Notification,
   ProStatus,
@@ -234,6 +236,8 @@ export interface SessionState {
   ) => void;
   createdJobs: Job[];
   createClientJob: (input: CreateClientJobInput) => Job;
+  jobRequests: JobRequest[];
+  createJobRequest: (jobId: string, proId: string, message?: string) => JobRequest;
   professionalProfileOverrides: Record<string, ProfessionalCatalogProfile>;
   updateProfessionalCatalogProfile: (
     professionalId: string,
@@ -304,6 +308,14 @@ function cloneJob(job: Job): Job {
 
 function cloneCreatedJobs(createdJobs: Job[] = []) {
   return createdJobs.map((job) => cloneJob(job));
+}
+
+function cloneJobRequest(jobRequest: JobRequest): JobRequest {
+  return { ...jobRequest };
+}
+
+function cloneJobRequests(jobRequests: JobRequest[] = []) {
+  return jobRequests.map((jobRequest) => cloneJobRequest(jobRequest));
 }
 
 function resolveClientSnapshot(currentClientId: string) {
@@ -438,6 +450,21 @@ function buildClientCreatedJob(
   } satisfies Job;
 }
 
+function buildJobRequest(jobId: string, proId: string, message?: string) {
+  const createdAt = new Date().toISOString();
+  const professional = professionals.find((entry) => entry.id === proId);
+
+  return {
+    id: `job-request-${jobId}-${proId}`,
+    jobId,
+    proId,
+    proName: professional?.name ?? "Profesional demo",
+    message: message?.trim() || undefined,
+    status: "pending" as const,
+    createdAt,
+  } satisfies JobRequest;
+}
+
 function cloneProfessionalWorkBase(
   workBase?: Partial<ProfessionalCatalogWorkBase>,
 ): ProfessionalCatalogWorkBase {
@@ -558,19 +585,24 @@ export function getCurrentClientId(state: SessionState) {
 
 export function getEffectiveJobs(state: SessionState) {
   const effectiveJobs = [...(state.createdJobs ?? []).map(cloneJob), ...jobs];
+  const effectiveJobRequests = state.jobRequests ?? [];
 
   return effectiveJobs.map((job) => {
     const withOverrides = applyJobOverride(job, state.jobOverrides[job.id]);
-    return applyAgreementSnapshot(withOverrides, state.agreements[job.id]);
+    const withAgreement = applyAgreementSnapshot(withOverrides, state.agreements[job.id]);
+    const jobRequestCount = effectiveJobRequests.filter(
+      (jobRequest) => jobRequest.jobId === job.id,
+    ).length;
+
+    return {
+      ...withAgreement,
+      requests: withAgreement.requests + jobRequestCount,
+    };
   });
 }
 
 export function getEffectiveJobById(state: SessionState, jobId: string) {
-  const job = [...(state.createdJobs ?? []), ...jobs].find((entry) => entry.id === jobId);
-  if (!job) return undefined;
-
-  const withOverrides = applyJobOverride(job, state.jobOverrides[job.id]);
-  return applyAgreementSnapshot(withOverrides, state.agreements[job.id]);
+  return getEffectiveJobs(state).find((job) => job.id === jobId);
 }
 
 export function getNegotiationByJobId(state: SessionState, jobId: string) {
@@ -632,6 +664,24 @@ export function getSearchTicketByJobId(state: SessionState, jobId: string) {
 export function hasOpenSearchTicket(state: SessionState, jobId: string) {
   return state.searchTickets.some(
     (ticket) => ticket.jobId === jobId && ticket.status === "open",
+  );
+}
+
+export function getEffectiveJobRequests(state: SessionState) {
+  return state.jobRequests ?? [];
+}
+
+export function getJobRequestsForJob(state: SessionState, jobId: string) {
+  return getEffectiveJobRequests(state).filter((jobRequest) => jobRequest.jobId === jobId);
+}
+
+export function getJobRequestForProfessional(
+  state: SessionState,
+  jobId: string,
+  proId: string,
+) {
+  return getEffectiveJobRequests(state).find(
+    (jobRequest) => jobRequest.jobId === jobId && jobRequest.proId === proId,
   );
 }
 
@@ -704,6 +754,7 @@ export const useSession = create<SessionState>()(
           disputes: cloneDisputes(),
           searchTickets: cloneSearchTickets(),
           createdJobs: [],
+          jobRequests: [],
           jobOutreachMeta: {},
           professionalProfileOverrides: {},
           catalogRequests: [],
@@ -731,6 +782,7 @@ export const useSession = create<SessionState>()(
       disputes: cloneDisputes(),
       searchTickets: cloneSearchTickets(),
       createdJobs: [],
+      jobRequests: [],
       jobOutreachMeta: {},
       professionalProfileOverrides: {},
       catalogRequests: [],
@@ -1145,6 +1197,29 @@ export const useSession = create<SessionState>()(
         });
 
         return createdJob;
+      },
+      createJobRequest: (jobId, proId, message) => {
+        let createdRequest: JobRequest = buildJobRequest(jobId, proId, message);
+
+        set((s) => {
+          const currentJobRequests = s.jobRequests ?? [];
+          const existingRequest = currentJobRequests.find(
+            (jobRequest) => jobRequest.jobId === jobId && jobRequest.proId === proId,
+          );
+
+          if (existingRequest) {
+            createdRequest = existingRequest;
+            return {};
+          }
+
+          createdRequest = buildJobRequest(jobId, proId, message);
+
+          return {
+            jobRequests: [createdRequest, ...cloneJobRequests(currentJobRequests)],
+          };
+        });
+
+        return createdRequest;
       },
       updateProfessionalCatalogProfile: (professionalId, patch) => {
         let nextProfile = mergeProfessionalCatalogProfile(undefined, patch);

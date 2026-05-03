@@ -30,7 +30,7 @@ import {
   getSearchTicketByJobId,
   useSession,
 } from "@/lib/store";
-import type { JobStatus } from "@/lib/types";
+import type { JobRequest, JobStatus } from "@/lib/types";
 import { formatEuro } from "@/lib/utils";
 
 interface Props {
@@ -38,17 +38,31 @@ interface Props {
 }
 
 function Inner({ id }: { id: string }) {
+  type RequestingProEntry = {
+    professional: (typeof professionals)[number];
+    jobRequest?: JobRequest;
+  };
+  type ActualRequestingProEntry = {
+    professional: (typeof professionals)[number];
+    jobRequest: JobRequest;
+  };
+
   const [moreOpen, setMoreOpen] = useState(false);
   const search = useSearchParams();
   const justPublished = search.get("justPublished") === "1";
+  const session = useSession();
   const adminConfig = useSession(getEffectiveAdminConfig);
-  const effectiveJob = useSession((s) => getEffectiveJobById(s, id));
+  const effectiveJob = getEffectiveJobById(session, id);
+  const jobRequests = useSession((s) => s.jobRequests);
   const agreement = useSession((s) => getAgreementByJobId(s, id));
   const outreachMeta = useSession((s) => getJobOutreachMeta(s, id));
   const searchTicket = useSession((s) => getSearchTicketByJobId(s, id));
   const createSearchTicket = useSession((s) => s.createSearchTicket);
   const autoReleaseCompletedJob = useSession((s) => s.autoReleaseCompletedJob);
   const job = effectiveJob ?? jobs[0];
+  const effectiveJobRequests = (jobRequests ?? []).filter(
+    (jobRequest) => jobRequest.jobId === id,
+  );
   const existingSearchTicket = searchTicket ?? null;
   const resolvedAgreement = getAgreement(agreement);
   const finalPrice = getEffectiveFinalPrice(job, resolvedAgreement);
@@ -57,7 +71,6 @@ function Inner({ id }: { id: string }) {
     agreement: resolvedAgreement,
     completionDeadline: job.completionDeadline,
   });
-  const requestingPros = professionals.slice(0, Math.max(0, job.requests));
   const assignedPro = job.assignedProId
     ? professionals.find((p) => p.id === job.assignedProId)
     : null;
@@ -78,6 +91,22 @@ function Inner({ id }: { id: string }) {
     existingTicket: searchTicket,
     daysThreshold: adminConfig.searchTicketNoResponseDays,
   });
+  const jobExistsInSeed = jobs.some((seedJob) => seedJob.id === job.id);
+  const requestingPros =
+    effectiveJobRequests.length > 0
+      ? effectiveJobRequests
+          .map((jobRequest) => {
+            const professional = professionals.find((entry) => entry.id === jobRequest.proId);
+            return professional
+              ? { professional, jobRequest }
+              : undefined;
+          })
+          .filter((request): request is ActualRequestingProEntry => Boolean(request))
+      : jobExistsInSeed
+        ? professionals
+            .slice(0, Math.max(0, job.requests))
+            .map((professional) => ({ professional, jobRequest: undefined }))
+        : [];
 
   useEffect(() => {
     if (postPaymentActions.canAutoRelease) {
@@ -193,22 +222,27 @@ function Inner({ id }: { id: string }) {
               </Link>
             </div>
             <div className="flex flex-col gap-2.5">
-              {requestingPros.slice(0, 3).map((p) => (
+              {requestingPros.slice(0, 3).map(({ professional, jobRequest }) => (
                 <div
-                  key={p.id}
+                  key={jobRequest?.id ?? professional.id}
                   className="flex items-center gap-3 p-2.5 rounded-xl border border-sand-200"
                 >
-                  <Avatar initials={p.avatar} size={40} />
+                  <Avatar initials={professional.avatar} size={40} />
                   <div className="flex-1 min-w-0">
                     <div className="font-bold text-[13px] text-ink-800 truncate">
-                      {p.name}
+                      {professional.name}
                     </div>
                     <div className="text-[11px] text-ink-400">
-                      {p.specialty} · ★ {p.rating.toFixed(1)} · {p.responseTime}
+                      {professional.specialty} · ★ {professional.rating.toFixed(1)} · {professional.responseTime}
                     </div>
+                    {jobRequest?.message && (
+                      <div className="mt-2 text-[12px] text-ink-600 bg-sand-50 rounded-lg p-2.5 border border-sand-200/70 leading-relaxed">
+                        “{jobRequest.message}”
+                      </div>
+                    )}
                   </div>
                   <Link
-                    href={`/profesional/perfil?id=${p.id}&jobId=${job.id}`}
+                    href={`/profesional/perfil?id=${professional.id}&jobId=${job.id}`}
                     className="text-[11.5px] font-bold text-coral-600 bg-coral-50 px-2.5 py-1.5 rounded-lg"
                   >
                     Ver

@@ -72,15 +72,15 @@ test("cliente j36: crear ticket de búsqueda", async ({ page }) => {
   await expect(page).toHaveURL(/\/cliente\/inicio/);
 
   await page.goto("/cliente/trabajos/j36");
-  const cta = byTestId(page, "create-search-ticket");
-  await expect(cta).toBeVisible();
-  await cta.click();
+  await expectVisibleByTestId(page, "create-search-ticket");
+  await page.locator('[data-testid="create-search-ticket"]:visible').first().click();
 
   await expect(page.getByText("Ticket de búsqueda creado").first()).toBeVisible();
 });
 
 test("cliente publica trabajo y lo ve en detalle y listado", async ({ page }) => {
   const jobTitle = "Armario a medida demo entrada";
+  const requestMessage = "Puedo fabricar este armario a medida y montarlo esta misma semana.";
 
   await loginWithDemoAccess(page, "demo-client");
   await page.goto("/cliente/publicar");
@@ -99,7 +99,9 @@ test("cliente publica trabajo y lo ve en detalle y listado", async ({ page }) =>
   await expectVisibleByTestId(page, "client-publish-review-summary");
   await page.getByRole("button", { name: "Publicar trabajo" }).first().click();
   await expect(page).toHaveURL(/\/cliente\/trabajos\/demo-job-/);
-  await expect(page.getByText(jobTitle).first()).toBeVisible();
+  const createdJobUrl = page.url();
+  const createdJobId = createdJobUrl.match(/demo-job-[^/?]+/)?.[0];
+  expect(createdJobId).toBeTruthy();
 
   await page.goto("/cliente/trabajos");
   await expect(page.getByText(jobTitle).first()).toBeVisible();
@@ -107,6 +109,21 @@ test("cliente publica trabajo y lo ve en detalle y listado", async ({ page }) =>
   await loginWithDemoAccess(page, "demo-pro-approved");
   await page.goto("/profesional/trabajos");
   await expect(page.getByText(jobTitle).first()).toBeVisible();
+  await page.goto(`/profesional/trabajos/${createdJobId}`);
+  await expect(page.getByText(jobTitle).first()).toBeVisible();
+  await page.getByRole("link", { name: "Solicitar este trabajo" }).first().click();
+  await page
+    .getByPlaceholder(
+      "Preséntate brevemente y explica qué harás, qué incluye el precio y si necesitas más información.",
+    )
+    .first()
+    .fill(requestMessage);
+  await page.getByRole("button", { name: "Enviar solicitud" }).first().click();
+  await expect(page.getByText("Solicitud enviada ✓").first()).toBeVisible();
+
+  await loginWithDemoAccess(page, "demo-client");
+  await page.goto(`/cliente/trabajos/${createdJobId}`);
+  await expect(page.getByText(requestMessage).first()).toBeVisible();
 });
 
 test("admin tickets búsqueda carga listado", async ({ page }) => {

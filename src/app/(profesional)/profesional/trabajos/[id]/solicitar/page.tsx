@@ -10,6 +10,12 @@ import { Input, Textarea } from "@/components/ui/input";
 import { AntiLeakAlert } from "@/components/chat/anti-leak-alert";
 import { Icon } from "@/components/ui/icon";
 import { jobs, defaultAdminConfig } from "@/lib/data";
+import {
+  getCurrentProfessionalId,
+  getEffectiveJobById,
+  getJobRequestForProfessional,
+  useSession,
+} from "@/lib/store";
 import { formatEuro } from "@/lib/utils";
 import { hasLeak, scanLeaks } from "@/lib/anti-leak";
 
@@ -19,7 +25,12 @@ interface Props {
 
 function Inner({ id }: { id: string }) {
   const router = useRouter();
-  const job = jobs.find((j) => j.id === id) ?? jobs[0];
+  const session = useSession();
+  const currentProfessionalId = getCurrentProfessionalId(session);
+  const effectiveJob = getEffectiveJobById(session, id);
+  const existingRequest = getJobRequestForProfessional(session, id, currentProfessionalId);
+  const createJobRequest = useSession((s) => s.createJobRequest);
+  const job = effectiveJob ?? jobs.find((j) => j.id === id) ?? jobs[0];
   const suggested = Math.round((job.priceMin + job.priceMax) / 2);
   const [price, setPrice] = useState(String(suggested));
   const [eta, setEta] = useState("Esta semana");
@@ -32,12 +43,12 @@ function Inner({ id }: { id: string }) {
   );
   const youGet = Number(price || 0) - commission;
 
-  const canSend =
-    price && message.length > 20 && !hasLeak(message);
+  const canSend = price && message.length > 20 && !hasLeak(message) && !existingRequest;
 
   const send = () => {
     setSending(true);
-    setTimeout(() => router.push(`/profesional/trabajos/${id}?requested=1`), 800);
+    createJobRequest(id, currentProfessionalId, message);
+    setTimeout(() => router.push(`/profesional/trabajos/${id}`), 800);
   };
 
   return (
@@ -54,6 +65,17 @@ function Inner({ id }: { id: string }) {
             cuánto tardarán y qué incluye el precio.
           </div>
         </Card>
+
+        {existingRequest && (
+          <Card className="mb-3 bg-teal-50 border-teal-100">
+            <div className="font-bold text-[13px] text-teal-700 mb-1">
+              Solicitud ya enviada
+            </div>
+            <div className="text-[12px] text-teal-700/80 leading-snug">
+              Ya has solicitado este trabajo en la demo. El cliente podrá verlo en su detalle.
+            </div>
+          </Card>
+        )}
 
         <Card className="mb-3">
           <div className="flex flex-col gap-4">
@@ -131,7 +153,7 @@ function Inner({ id }: { id: string }) {
 
       <div className="app-bottom-bar px-5 pb-5 pt-3 bg-white border-t border-sand-200/70">
         <Button full onClick={send} disabled={!canSend || sending}>
-          {sending ? "Enviando…" : "Enviar solicitud"}
+          {existingRequest ? "Solicitud enviada ✓" : sending ? "Enviando…" : "Enviar solicitud"}
         </Button>
       </div>
     </div>
