@@ -16,9 +16,11 @@ import {
   hasAgreement,
 } from "@/lib/domain/policies";
 import {
+  getAcceptedJobRequestForJob,
   getAgreementByJobId,
   getEffectiveAdminConfig,
   getEffectiveJobById,
+  getJobRequestForProfessional,
   useSession,
 } from "@/lib/store";
 import { formatEuro } from "@/lib/utils";
@@ -30,15 +32,20 @@ interface Props {
 function Inner({ id }: { id: string }) {
   const search = useSearchParams();
   const router = useRouter();
+  const session = useSession();
   const acceptProfessional = useSession((s) => s.acceptProfessional);
+  const acceptJobRequest = useSession((s) => s.acceptJobRequest);
   const adminConfig = useSession(getEffectiveAdminConfig);
-  const effectiveJob = useSession((s) => getEffectiveJobById(s, id));
+  const effectiveJob = getEffectiveJobById(session, id);
   const agreement = useSession((s) => getAgreementByJobId(s, id));
   const proId = search.get("proId") ?? "p1";
+  const requestId = search.get("requestId") ?? "";
   const job = effectiveJob ?? jobs.find((j) => j.id === id) ?? jobs[0];
   const resolvedAgreement = getAgreement(agreement);
   const pro = professionals.find((p) => p.id === proId) ?? professionals[0];
   const [accepting, setAccepting] = useState(false);
+  const existingJobRequest = getJobRequestForProfessional(session, id, proId);
+  const acceptedJobRequest = getAcceptedJobRequestForJob(session, id);
   const agreedPrice =
     getEffectiveFinalPrice(job, resolvedAgreement) ??
     Math.round((job.priceMin + job.priceMax) / 2);
@@ -48,9 +55,16 @@ function Inner({ id }: { id: string }) {
 
   const accept = () => {
     setAccepting(true);
-    acceptProfessional(id, proId);
+    const targetRequestId = requestId || existingJobRequest?.id;
+
+    if (targetRequestId) {
+      acceptJobRequest(id, targetRequestId);
+    } else {
+      acceptProfessional(id, proId);
+    }
+
     setTimeout(() => {
-      router.push(agreed ? `/cliente/trabajos/${id}/pagar?proId=${proId}` : `/chat/${id}`);
+      router.push(`/cliente/trabajos/${id}`);
     }, 700);
   };
 
@@ -135,12 +149,16 @@ function Inner({ id }: { id: string }) {
       </ScreenBody>
 
       <div className="app-bottom-bar px-5 pb-5 pt-3 bg-white border-t border-sand-200/70">
-        <Button full onClick={accept} disabled={accepting}>
+        <Button
+          full
+          onClick={accept}
+          disabled={accepting || Boolean(acceptedJobRequest && acceptedJobRequest.proId !== proId)}
+        >
           {accepting
             ? "Aceptando…"
-            : agreed
-              ? "Aceptar y proceder al pago"
-              : "Aceptar y abrir chat"}
+            : acceptedJobRequest?.proId === proId
+              ? "Solicitud ya aceptada"
+              : "Aceptar solicitud"}
         </Button>
       </div>
     </div>

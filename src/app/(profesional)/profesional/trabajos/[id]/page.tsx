@@ -169,6 +169,28 @@ function Inner({ id }: { id: string }) {
               : "(si se acuerda en el rango medio)."}
           </div>
         </Card>
+
+        {existingRequest?.status === "accepted" && !accepted && (
+          <Card className="mb-3 bg-teal-50/50 border-teal-100">
+            <div className="font-bold text-[13px] text-teal-700 mb-1">
+              Trabajo asignado
+            </div>
+            <div className="text-[11.5px] text-teal-700/80 leading-snug">
+              El cliente ya aceptó tu solicitud para este trabajo.
+            </div>
+          </Card>
+        )}
+
+        {existingRequest?.status === "rejected" && (
+          <Card className="mb-3 bg-sand-100 border-sand-200">
+            <div className="font-bold text-[13px] text-ink-700 mb-1">
+              Solicitud cerrada
+            </div>
+            <div className="text-[11.5px] text-ink-500 leading-snug">
+              El cliente ya eligió otra solicitud para este trabajo.
+            </div>
+          </Card>
+        )}
       </ScreenBody>
 
       {/* Sticky CTA */}

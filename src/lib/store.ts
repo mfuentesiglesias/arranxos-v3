@@ -238,6 +238,7 @@ export interface SessionState {
   createClientJob: (input: CreateClientJobInput) => Job;
   jobRequests: JobRequest[];
   createJobRequest: (jobId: string, proId: string, message?: string) => JobRequest;
+  acceptJobRequest: (jobId: string, requestId: string) => JobRequest | undefined;
   professionalProfileOverrides: Record<string, ProfessionalCatalogProfile>;
   updateProfessionalCatalogProfile: (
     professionalId: string,
@@ -682,6 +683,12 @@ export function getJobRequestForProfessional(
 ) {
   return getEffectiveJobRequests(state).find(
     (jobRequest) => jobRequest.jobId === jobId && jobRequest.proId === proId,
+  );
+}
+
+export function getAcceptedJobRequestForJob(state: SessionState, jobId: string) {
+  return getEffectiveJobRequests(state).find(
+    (jobRequest) => jobRequest.jobId === jobId && jobRequest.status === "accepted",
   );
 }
 
@@ -1220,6 +1227,48 @@ export const useSession = create<SessionState>()(
         });
 
         return createdRequest;
+      },
+      acceptJobRequest: (jobId, requestId) => {
+        let acceptedRequest: JobRequest | undefined;
+
+        set((s) => {
+          const currentJobRequests = s.jobRequests ?? [];
+          const request = currentJobRequests.find(
+            (jobRequest) => jobRequest.jobId === jobId && jobRequest.id === requestId,
+          );
+          if (!request) return {};
+          if (currentJobRequests.some(
+            (jobRequest) =>
+              jobRequest.jobId === jobId &&
+              jobRequest.status === "accepted" &&
+              jobRequest.id !== requestId,
+          )) {
+            return {};
+          }
+
+          acceptedRequest = { ...request, status: "accepted" };
+
+          return {
+            jobRequests: currentJobRequests.map((jobRequest) => {
+              if (jobRequest.jobId !== jobId) return jobRequest;
+              if (jobRequest.id === requestId) return acceptedRequest!;
+              if (jobRequest.status === "pending") {
+                return { ...jobRequest, status: "rejected" as const };
+              }
+              return jobRequest;
+            }),
+            jobOverrides: {
+              ...s.jobOverrides,
+              [jobId]: {
+                ...s.jobOverrides[jobId],
+                assignedProId: request.proId,
+                status: "in_progress",
+              },
+            },
+          };
+        });
+
+        return acceptedRequest;
       },
       updateProfessionalCatalogProfile: (professionalId, patch) => {
         let nextProfile = mergeProfessionalCatalogProfile(undefined, patch);

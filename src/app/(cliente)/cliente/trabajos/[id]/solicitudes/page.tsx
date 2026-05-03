@@ -10,7 +10,7 @@ import { RatingStars } from "@/components/pros/rating-stars";
 import { VerifiedDot } from "@/components/pros/verified-dot";
 import { Icon } from "@/components/ui/icon";
 import { jobs, professionals } from "@/lib/data";
-import { getEffectiveJobById, useSession } from "@/lib/store";
+import { getAcceptedJobRequestForJob, getEffectiveJobById, useSession } from "@/lib/store";
 import type { JobRequest } from "@/lib/types";
 
 interface Props {
@@ -29,6 +29,7 @@ export default function Page({ params }: Props) {
   };
   const session = useSession();
   const effectiveResolvedJob = getEffectiveJobById(session, id);
+  const acceptedJobRequest = getAcceptedJobRequestForJob(session, id);
   const jobRequests = useSession((s) => s.jobRequests);
   const job = effectiveResolvedJob ?? jobs.find((j) => j.id === id) ?? jobs[0];
   const [sort, setSort] = useState<"relevant" | "rating" | "price">("relevant");
@@ -121,10 +122,26 @@ export default function Page({ params }: Props) {
                       Ver perfil
                     </Link>
                     <Link
-                      href={`/cliente/trabajos/${job.id}/aceptar?proId=${professional.id}`}
-                      className="text-center text-[12px] font-bold py-2.5 rounded-xl bg-coral-500 text-white shadow-coral"
+                      href={
+                        jobRequest?.status === "pending" && !acceptedJobRequest
+                          ? `/cliente/trabajos/${job.id}/aceptar?proId=${professional.id}&requestId=${jobRequest.id}`
+                          : `/cliente/trabajos/${job.id}`
+                      }
+                      className={`text-center text-[12px] font-bold py-2.5 rounded-xl ${
+                        jobRequest?.status === "accepted"
+                          ? "bg-teal-50 text-teal-700"
+                          : jobRequest?.status === "pending" && !acceptedJobRequest
+                            ? "bg-coral-500 text-white shadow-coral"
+                            : "bg-sand-100 text-ink-500"
+                      }`}
                     >
-                      Aceptar
+                      {jobRequest?.status === "accepted"
+                        ? "Aceptada"
+                        : jobRequest?.status === "rejected"
+                          ? "Rechazada"
+                          : jobRequest?.status === "closed"
+                            ? "Cerrada"
+                            : "Aceptar"}
                     </Link>
                   </div>
                 </div>

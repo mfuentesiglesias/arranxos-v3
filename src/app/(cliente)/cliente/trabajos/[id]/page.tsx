@@ -24,6 +24,7 @@ import {
 } from "@/lib/domain/policies";
 import {
   getAgreementByJobId,
+  getAcceptedJobRequestForJob,
   getEffectiveAdminConfig,
   getEffectiveJobById,
   getJobOutreachMeta,
@@ -63,6 +64,7 @@ function Inner({ id }: { id: string }) {
   const effectiveJobRequests = (jobRequests ?? []).filter(
     (jobRequest) => jobRequest.jobId === id,
   );
+  const acceptedJobRequest = getAcceptedJobRequestForJob(session, id);
   const existingSearchTicket = searchTicket ?? null;
   const resolvedAgreement = getAgreement(agreement);
   const finalPrice = getEffectiveFinalPrice(job, resolvedAgreement);
@@ -235,6 +237,16 @@ function Inner({ id }: { id: string }) {
                     <div className="text-[11px] text-ink-400">
                       {professional.specialty} · ★ {professional.rating.toFixed(1)} · {professional.responseTime}
                     </div>
+                    {jobRequest?.status === "accepted" && (
+                      <div className="mt-2 inline-flex rounded-full bg-teal-50 px-2.5 py-1 text-[10.5px] font-bold text-teal-700">
+                        Solicitud aceptada
+                      </div>
+                    )}
+                    {jobRequest?.status === "rejected" && (
+                      <div className="mt-2 inline-flex rounded-full bg-sand-100 px-2.5 py-1 text-[10.5px] font-bold text-ink-500">
+                        Solicitud rechazada
+                      </div>
+                    )}
                     {jobRequest?.message && (
                       <div className="mt-2 text-[12px] text-ink-600 bg-sand-50 rounded-lg p-2.5 border border-sand-200/70 leading-relaxed">
                         “{jobRequest.message}”
@@ -258,6 +270,17 @@ function Inner({ id }: { id: string }) {
                 + Invitar a otros profesionales
               </Link>
             )}
+          </Card>
+        )}
+
+        {!clientActions.includes("view_requests") && acceptedJobRequest && (
+          <Card className="mb-3 bg-teal-50/50 border-teal-100">
+            <div className="font-bold text-[13px] text-teal-700 mb-1">
+              Solicitud aceptada
+            </div>
+            <div className="text-[11.5px] text-teal-700/80 leading-snug">
+              Has aceptado a {acceptedJobRequest.proName} para este trabajo.
+            </div>
           </Card>
         )}
 
