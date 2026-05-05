@@ -81,6 +81,7 @@ test("cliente j36: crear ticket de búsqueda", async ({ page }) => {
 test("cliente publica trabajo y lo ve en detalle y listado", async ({ page }) => {
   const jobTitle = "Armario a medida demo entrada";
   const requestMessage = "Puedo fabricar este armario a medida y montarlo esta misma semana.";
+  const chatMessage = "Hola, seguimos por el chat de Arranxos para concretar el trabajo.";
 
   await loginWithDemoAccess(page, "demo-client");
   await page.goto("/cliente/publicar");
@@ -124,6 +125,19 @@ test("cliente publica trabajo y lo ve en detalle y listado", async ({ page }) =>
   await loginWithDemoAccess(page, "demo-client");
   await page.goto(`/cliente/trabajos/${createdJobId}`);
   await expect(page.getByText(requestMessage).first()).toBeVisible();
+
+  await page.goto(`/cliente/trabajos/${createdJobId}/solicitudes`);
+  await page.getByRole("link", { name: "Aceptar" }).first().click();
+  await page.getByRole("button", { name: "Aceptar solicitud" }).first().click();
+  await expect(page.getByText("Profesional asignado").first()).toBeVisible();
+  await page.getByRole("link", { name: "Abrir chat" }).first().click();
+  await page.getByPlaceholder("Escribe un mensaje…").first().fill(chatMessage);
+  await page.getByRole("button").filter({ has: page.locator('svg') }).last().click();
+  await expect(page.getByText(chatMessage).first()).toBeVisible();
+
+  await loginWithDemoAccess(page, "demo-pro-approved");
+  await page.goto(`/chat/${createdJobId}`);
+  await expect(page.getByPlaceholder("Escribe un mensaje…").first()).toBeVisible();
 });
 
 test("admin tickets búsqueda carga listado", async ({ page }) => {

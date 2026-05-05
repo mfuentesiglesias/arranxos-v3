@@ -105,10 +105,21 @@ export interface JobRequest {
   createdAt: string;
 }
 
-export interface ChatMessage {
+export interface JobChat {
   id: string;
   jobId: string;
+  clientId: string;
+  proId: string;
+  createdAt: string;
+  lastMessageAt?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  chatId?: string;
+  jobId: string;
   from: "pro" | "client" | "system";
+  senderId?: string;
   text: string;
   time: string;
   timestamp: string;
@@ -116,6 +127,7 @@ export interface ChatMessage {
   proposalAmount?: number;
   flagged?: boolean;
   flagReason?: string;
+  blockedReason?: string;
   redacted?: string;
 }
 

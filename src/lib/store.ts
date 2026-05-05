@@ -16,6 +16,7 @@ import {
   slugifyCatalogText,
 } from "./catalog";
 import {
+  chatMessages as seedChatMessages,
   currentClient,
   defaultAdminConfig,
   disputes as seedDisputes,
@@ -28,14 +29,17 @@ import {
   canAutoReleaseCompletedJob,
   canOpenDispute,
 } from "./domain/policies";
+import { scanLeaks } from "./anti-leak";
 import type {
   AdminConfig,
   CatalogCategory,
   CatalogRequest,
   CatalogService,
   Dispute,
+  JobChat,
   JobRequest,
   Job,
+  ChatMessage,
   Notification,
   ProStatus,
   SearchTicket,
@@ -239,6 +243,14 @@ export interface SessionState {
   jobRequests: JobRequest[];
   createJobRequest: (jobId: string, proId: string, message?: string) => JobRequest;
   acceptJobRequest: (jobId: string, requestId: string) => JobRequest | undefined;
+  chats: JobChat[];
+  chatMessages: ChatMessage[];
+  ensureChatForAcceptedJob: (jobId: string) => JobChat | undefined;
+  sendChatMessage: (
+    chatId: string,
+    body: string,
+    senderRole: "client" | "professional",
+  ) => ChatMessage | undefined;
   professionalProfileOverrides: Record<string, ProfessionalCatalogProfile>;
   updateProfessionalCatalogProfile: (
     professionalId: string,
@@ -317,6 +329,22 @@ function cloneJobRequest(jobRequest: JobRequest): JobRequest {
 
 function cloneJobRequests(jobRequests: JobRequest[] = []) {
   return jobRequests.map((jobRequest) => cloneJobRequest(jobRequest));
+}
+
+function cloneJobChat(chat: JobChat): JobChat {
+  return { ...chat };
+}
+
+function cloneChats(chats: JobChat[] = []) {
+  return chats.map((chat) => cloneJobChat(chat));
+}
+
+function cloneChatMessage(chatMessage: ChatMessage): ChatMessage {
+  return { ...chatMessage };
+}
+
+function cloneChatMessages(chatMessages: ChatMessage[] = []) {
+  return chatMessages.map((chatMessage) => cloneChatMessage(chatMessage));
 }
 
 function resolveClientSnapshot(currentClientId: string) {
@@ -466,6 +494,47 @@ function buildJobRequest(jobId: string, proId: string, message?: string) {
   } satisfies JobRequest;
 }
 
+function buildJobChat(job: Job, proId: string): JobChat {
+  const createdAt = new Date().toISOString();
+
+  return {
+    id: `chat-${job.id}`,
+    jobId: job.id,
+    clientId: job.clientId,
+    proId,
+    createdAt,
+  };
+}
+
+function formatChatMessageTime(timestamp: string) {
+  return new Date(timestamp).toLocaleTimeString("es-ES", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function buildPersistedChatMessage(
+  chatId: string,
+  jobId: string,
+  senderRole: "client" | "professional",
+  senderId: string,
+  body: string,
+): ChatMessage {
+  const timestamp = new Date().toISOString();
+
+  return {
+    id: `chat-message-${Date.now()}`,
+    chatId,
+    jobId,
+    from: senderRole === "professional" ? "pro" : "client",
+    senderId,
+    text: body.trim(),
+    time: formatChatMessageTime(timestamp),
+    timestamp,
+    type: "text",
+  };
+}
+
 function cloneProfessionalWorkBase(
   workBase?: Partial<ProfessionalCatalogWorkBase>,
 ): ProfessionalCatalogWorkBase {
@@ -604,6 +673,14 @@ export function getEffectiveJobs(state: SessionState) {
 
 export function getEffectiveJobById(state: SessionState, jobId: string) {
   return getEffectiveJobs(state).find((job) => job.id === jobId);
+}
+
+export function getChatForJob(state: SessionState, jobId: string) {
+  return (state.chats ?? []).find((chat) => chat.jobId === jobId);
+}
+
+export function getMessagesForChat(state: SessionState, chatId: string) {
+  return (state.chatMessages ?? []).filter((message) => message.chatId === chatId);
 }
 
 export function getNegotiationByJobId(state: SessionState, jobId: string) {
@@ -762,6 +839,8 @@ export const useSession = create<SessionState>()(
           searchTickets: cloneSearchTickets(),
           createdJobs: [],
           jobRequests: [],
+          chats: [],
+          chatMessages: [],
           jobOutreachMeta: {},
           professionalProfileOverrides: {},
           catalogRequests: [],
@@ -790,6 +869,8 @@ export const useSession = create<SessionState>()(
       searchTickets: cloneSearchTickets(),
       createdJobs: [],
       jobRequests: [],
+      chats: [],
+      chatMessages: [],
       jobOutreachMeta: {},
       professionalProfileOverrides: {},
       catalogRequests: [],
@@ -1228,6 +1309,61 @@ export const useSession = create<SessionState>()(
 
         return createdRequest;
       },
+      ensureChatForAcceptedJob: (jobId) => {
+        let ensuredChat: JobChat | undefined;
+
+        set((s) => {
+          const existingChat = getChatForJob(s, jobId);
+          if (existingChat) {
+            ensuredChat = existingChat;
+            return {};
+          }
+
+          const job = getEffectiveJobById(s, jobId);
+          if (!job?.assignedProId) {
+            return {};
+          }
+
+          ensuredChat = buildJobChat(job, job.assignedProId);
+
+          return {
+            chats: [ensuredChat, ...cloneChats(s.chats ?? [])],
+          };
+        });
+
+        return ensuredChat;
+      },
+      sendChatMessage: (chatId, body, senderRole) => {
+        let createdMessage: ChatMessage | undefined;
+
+        set((s) => {
+          const chat = (s.chats ?? []).find((entry) => entry.id === chatId);
+          const text = body.trim();
+          if (!chat || !text) return {};
+          if (scanLeaks(text).length > 0) return {};
+
+          const senderId =
+            senderRole === "professional" ? s.currentProfessionalId : s.currentClientId;
+          createdMessage = buildPersistedChatMessage(
+            chat.id,
+            chat.jobId,
+            senderRole,
+            senderId,
+            text,
+          );
+
+          return {
+            chatMessages: [...cloneChatMessages(s.chatMessages ?? []), createdMessage],
+            chats: (s.chats ?? []).map((entry) =>
+              entry.id === chat.id
+                ? { ...entry, lastMessageAt: createdMessage!.timestamp }
+                : entry,
+            ),
+          };
+        });
+
+        return createdMessage;
+      },
       acceptJobRequest: (jobId, requestId) => {
         let acceptedRequest: JobRequest | undefined;
 
@@ -1247,6 +1383,18 @@ export const useSession = create<SessionState>()(
           }
 
           acceptedRequest = { ...request, status: "accepted" };
+          const acceptedJob = getEffectiveJobById(s, jobId);
+          const existingChat = getChatForJob(s, jobId);
+          const nextChat =
+            !existingChat && acceptedJob
+              ? buildJobChat(
+                  {
+                    ...acceptedJob,
+                    assignedProId: request.proId,
+                  },
+                  request.proId,
+                )
+              : undefined;
 
           return {
             jobRequests: currentJobRequests.map((jobRequest) => {
@@ -1265,6 +1413,7 @@ export const useSession = create<SessionState>()(
                 status: "in_progress",
               },
             },
+            chats: nextChat ? [nextChat, ...cloneChats(s.chats ?? [])] : s.chats,
           };
         });
 

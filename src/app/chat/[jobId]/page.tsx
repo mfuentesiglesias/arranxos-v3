@@ -1,5 +1,5 @@
 "use client";
-import { use, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { StatusBar } from "@/components/layout/status-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
@@ -20,9 +20,11 @@ import {
 import { scanLeaks } from "@/lib/anti-leak";
 import {
   getAgreementByJobId,
+  getChatForJob,
   getCurrentProfessionalId,
   getEffectiveAdminConfig,
   getEffectiveJobById,
+  getMessagesForChat,
   getNegotiationByJobId,
   useSession,
 } from "@/lib/store";
@@ -43,7 +45,8 @@ function isLeakAllowed(type: ChatMessage["flagReason"] | "phone" | "email" | "ur
 }
 
 function Inner({ jobId }: { jobId: string }) {
-  const currentProfessionalId = useSession(getCurrentProfessionalId);
+  const session = useSession();
+  const currentProfessionalId = getCurrentProfessionalId(session);
   const adminConfig = useSession(getEffectiveAdminConfig);
   const agreement = useSession((s) => getAgreementByJobId(s, jobId));
   const negotiation = useSession((s) => getNegotiationByJobId(s, jobId));
@@ -51,9 +54,13 @@ function Inner({ jobId }: { jobId: string }) {
   const acceptNegotiation = useSession((s) => s.acceptNegotiation);
   const sessionRole = useSession((s) => s.role);
   const proStatus = useSession((s) => s.proStatus);
-  const effectiveJob = useSession((s) => getEffectiveJobById(s, jobId));
+  const ensureChatForAcceptedJob = useSession((s) => s.ensureChatForAcceptedJob);
+  const sendChatMessage = useSession((s) => s.sendChatMessage);
+  const effectiveJob = getEffectiveJobById(session, jobId);
   const role = sessionRole === "professional" ? "pro" : "client";
   const job = effectiveJob ?? jobs[0];
+  const jobChat = getChatForJob(session, jobId);
+  const persistedMessages = jobChat ? getMessagesForChat(session, jobChat.id) : [];
   const resolvedAgreement = getAgreement(agreement);
   const activeNegotiation = getActiveNegotiation(negotiation);
   const agreementExists = hasAgreement(resolvedAgreement);
@@ -78,37 +85,19 @@ function Inner({ jobId }: { jobId: string }) {
     chatEnabled,
   });
 
-  if (!chatEnabled) {
-    return (
-      <div className="flex-1 min-h-0 flex flex-col bg-sand-50">
-        <StatusBar />
-        <div className="bg-white border-b border-sand-200/70 px-4 pt-2 pb-3 flex items-center gap-3">
-          <Link
-            href={sessionRole === "professional" ? `/profesional/trabajos/${jobId}` : `/cliente/trabajos/${jobId}`}
-            className="w-9 h-9 rounded-full bg-sand-100 inline-flex items-center justify-center text-ink-700"
-          >
-            <Icon name="back" size={18} stroke={2.2} />
-          </Link>
-          <div className="font-bold text-[14px] text-ink-800">Chat no disponible</div>
-        </div>
-        <ScreenBody className="px-4 pt-4 pb-6">
-          <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-[13px] text-amber-700 leading-relaxed">
-            {sessionRole === "professional" && !isProfessionalOperative(sessionRole, proStatus)
-              ? "Tu cuenta profesional todavía no puede operar. Necesitas aprobación para acceder al chat."
-              : "El chat solo se abre cuando el cliente acepta al profesional."}
-          </div>
-        </ScreenBody>
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (chatEnabled) {
+      ensureChatForAcceptedJob(jobId);
+    }
+  }, [chatEnabled, ensureChatForAcceptedJob, jobId]);
 
   const seed = useMemo(
     () => chatMessages.filter((m) => m.jobId === jobId),
     [jobId],
   );
-  const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [showProposal, setShowProposal] = useState(false);
+  const [blockedNotice, setBlockedNotice] = useState<string | null>(null);
   const [proposal, setProposal] = useState(
     String(Math.round((job.priceMin + job.priceMax) / 2)),
   );
@@ -176,46 +165,33 @@ function Inner({ jobId }: { jobId: string }) {
           } satisfies ChatMessage,
         ]),
     ...derivedMessages,
-    ...localMessages,
+    ...persistedMessages,
   ];
 
   const send = () => {
     const text = input.trim();
     if (!text) return;
-    const flagged = liveLeaks.length > 0;
-    const next: ChatMessage = {
-      id: `local-${Date.now()}`,
-      jobId,
-      from: role,
-      text,
-      time: new Date().toLocaleTimeString("es-ES", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      timestamp: new Date().toISOString(),
-      type: "text",
-      flagged,
-      flagReason: flagged ? "anti-leak" : undefined,
-    };
-    setLocalMessages((messages) => [...messages, next]);
-    setInput("");
-    if (flagged) {
-      // DEMO: in prod, send strike to moderation queue via server action
-      setTimeout(() => {
-        setLocalMessages((messages) => [
-          ...messages,
-          {
-            id: `sys-${Date.now()}`,
-            jobId,
-            from: "system",
-            text: "Mensaje revisado: detectamos datos de contacto. Este intento quedó registrado.",
-            time: "ahora",
-            timestamp: new Date().toISOString(),
-            type: "warning",
-          },
-        ]);
-      }, 350);
+    if (liveLeaks.length > 0 || !jobChat) {
+      setBlockedNotice(
+        liveLeaks.length > 0
+          ? "Bloqueamos este mensaje porque contiene datos de contacto o enlaces externos."
+          : "El chat todavía no está listo para este trabajo en la demo.",
+      );
+      return;
     }
+
+    const sent = sendChatMessage(
+      jobChat.id,
+      text,
+      sessionRole === "professional" ? "professional" : "client",
+    );
+    if (!sent) {
+      setBlockedNotice("No se pudo enviar el mensaje en esta demo.");
+      return;
+    }
+
+    setBlockedNotice(null);
+    setInput("");
   };
 
   const sendProposal = () => {
@@ -229,6 +205,30 @@ function Inner({ jobId }: { jobId: string }) {
     if (!canAcceptCurrentOffer) return;
     acceptNegotiation(jobId, role);
   };
+
+  if (!chatEnabled) {
+    return (
+      <div className="flex-1 min-h-0 flex flex-col bg-sand-50">
+        <StatusBar />
+        <div className="bg-white border-b border-sand-200/70 px-4 pt-2 pb-3 flex items-center gap-3">
+          <Link
+            href={sessionRole === "professional" ? `/profesional/trabajos/${jobId}` : `/cliente/trabajos/${jobId}`}
+            className="w-9 h-9 rounded-full bg-sand-100 inline-flex items-center justify-center text-ink-700"
+          >
+            <Icon name="back" size={18} stroke={2.2} />
+          </Link>
+          <div className="font-bold text-[14px] text-ink-800">Chat no disponible</div>
+        </div>
+        <ScreenBody className="px-4 pt-4 pb-6">
+          <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-[13px] text-amber-700 leading-relaxed">
+            {sessionRole === "professional" && !isProfessionalOperative(sessionRole, proStatus)
+              ? "Tu cuenta profesional todavía no puede operar. Necesitas aprobación para acceder al chat."
+              : "El chat solo se abre cuando el cliente acepta al profesional."}
+          </div>
+        </ScreenBody>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-sand-50">
@@ -323,7 +323,16 @@ function Inner({ jobId }: { jobId: string }) {
           </div>
         </ScreenBody>
 
-      {liveLeaks.length > 0 && <AntiLeakAlert leaks={liveLeaks} />}
+      {(liveLeaks.length > 0 || blockedNotice) && (
+        <div>
+          {liveLeaks.length > 0 && <AntiLeakAlert leaks={liveLeaks} />}
+          {blockedNotice && (
+            <div className="border-t border-sand-200/70 bg-amber-50 px-4 py-3 text-[12px] font-semibold text-amber-700">
+              {blockedNotice}
+            </div>
+          )}
+        </div>
+      )}
 
       {showProposal && canPropose && (
         <div className="app-bottom-bar-compact px-4 pt-2 pb-2 bg-white border-t border-sand-200/70">
@@ -376,7 +385,7 @@ function Inner({ jobId }: { jobId: string }) {
           </div>
           <button
             onClick={send}
-            disabled={!input.trim()}
+            disabled={!input.trim() || liveLeaks.length > 0}
             className="w-10 h-10 rounded-full bg-coral-500 text-white flex items-center justify-center flex-shrink-0 disabled:opacity-40"
           >
             <Icon name="send" size={16} />
