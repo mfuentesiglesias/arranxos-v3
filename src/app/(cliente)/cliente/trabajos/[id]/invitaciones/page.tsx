@@ -1,5 +1,5 @@
 "use client";
-import { use, useState } from "react";
+import { use, useMemo, useState } from "react";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
@@ -16,8 +16,6 @@ import {
 import {
   getEffectiveAdminConfig,
   getEffectiveJobById,
-  getJobOutreachMeta,
-  getSearchTicketByJobId,
   useSession,
 } from "@/lib/store";
 
@@ -27,10 +25,14 @@ interface Props {
 
 export default function Page({ params }: Props) {
   const { id } = use(params);
+  const session = useSession();
   const adminConfig = useSession(getEffectiveAdminConfig);
-  const effectiveJob = useSession((s) => getEffectiveJobById(s, id));
-  const outreachMeta = useSession((s) => getJobOutreachMeta(s, id));
-  const searchTicket = useSession((s) => getSearchTicketByJobId(s, id));
+  const effectiveJob = useMemo(() => getEffectiveJobById(session, id), [session, id]);
+  const outreachMeta = session.jobOutreachMeta[id];
+  const searchTicket = useMemo(
+    () => session.searchTickets.find((ticket) => ticket.jobId === id),
+    [session.searchTickets, id],
+  );
   const recordInvitationsSent = useSession((s) => s.recordInvitationsSent);
   const createSearchTicket = useSession((s) => s.createSearchTicket);
   const job = effectiveJob ?? jobs.find((j) => j.id === id) ?? jobs[0];

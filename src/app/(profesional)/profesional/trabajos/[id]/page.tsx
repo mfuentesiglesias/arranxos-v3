@@ -247,6 +247,29 @@ function Inner({ id }: { id: string }) {
           </Card>
         )}
 
+        {resolvedAgreement && job.status === "agreed" && (
+          <Card className="mb-3 bg-amber-50/60 border-amber-100" testId="pro-payment-pending-state">
+            <div className="font-bold text-[13px] text-amber-800 mb-1">
+              Pendiente de pago protegido
+            </div>
+            <div className="text-[11.5px] text-amber-700 leading-snug">
+              El cliente ya aceptó el acuerdo. Falta financiarlo en la demo para que el dinero quede retenido.
+            </div>
+          </Card>
+        )}
+
+        {resolvedAgreement && job.status === "escrow_funded" && (
+          <Card className="mb-3 bg-teal-50/40 border-teal-100" testId="pro-payment-protected-state">
+            <div className="flex items-center gap-2 text-[12.5px] font-bold text-teal-700 mb-1">
+              <Icon name="shield" size={14} />
+              Pago protegido confirmado
+            </div>
+            <div className="text-[11.5px] text-teal-700/80 leading-snug">
+              Los fondos ya están retenidos en la demo. El siguiente paso operativo vendrá después, sin liberar pago todavía en este build.
+            </div>
+          </Card>
+        )}
+
         {existingRequest?.status === "accepted" && !accepted && (
           <Card className="mb-3 bg-teal-50/50 border-teal-100">
             <div className="font-bold text-[13px] text-teal-700 mb-1">

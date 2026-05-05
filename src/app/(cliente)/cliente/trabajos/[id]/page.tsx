@@ -53,7 +53,7 @@ function Inner({ id }: { id: string }) {
 
   const [moreOpen, setMoreOpen] = useState(false);
   const search = useSearchParams();
-  const justPublished = search.get("justPublished") === "1";
+  const justPublished = search?.get("justPublished") === "1";
   const session = useSession();
   const adminConfig = useSession(getEffectiveAdminConfig);
   const effectiveJob = getEffectiveJobById(session, id);
@@ -503,16 +503,15 @@ function ActionsForStatus({
 }) {
   if (actions.includes("pay")) {
     return (
-      <Card className="mb-3 bg-amber-50/60 border-amber-100">
+      <Card className="mb-3 bg-amber-50/60 border-amber-100" testId="client-pay-cta-card">
         <div className="font-bold text-[13.5px] text-amber-800 mb-1">
           Acuerdo alcanzado · Falta pago
         </div>
         <div className="text-[12px] text-amber-700 mb-3">
-          Para que el trabajo comience, transfiere el pago al sistema de
-          custodia. Liberamos el dinero al confirmar.
+          Completa el pago protegido mock para retener los fondos dentro de la demo.
         </div>
-        <Button full href={`/cliente/trabajos/${jobId}/pagar`}>
-          Pagar {formatEuro(finalPrice ?? Math.round((priceMin + priceMax) / 2))} con custodia
+        <Button full href={`/cliente/trabajos/${jobId}/pagar`} testId="client-pay-protected">
+          Pagar y proteger {formatEuro(finalPrice ?? Math.round((priceMin + priceMax) / 2))}
         </Button>
       </Card>
     );
@@ -555,14 +554,13 @@ function ActionsForStatus({
   }
   if (postPaymentActions.showsProtectedPayment && (status === "escrow_funded" || status === "in_progress")) {
     return (
-      <Card className="mb-3 bg-teal-50/40 border-teal-100">
+      <Card className="mb-3 bg-teal-50/40 border-teal-100" testId="client-protected-payment-state">
         <div className="flex items-center gap-2 text-[12.5px] font-bold text-teal-700 mb-1">
           <Icon name="shield" size={14} />
           Pago protegido en custodia
         </div>
         <div className="text-[11.5px] text-teal-700/80 leading-snug">
-          {formatEuro(finalPrice ?? Math.round((priceMin + priceMax) / 2))} retenidos hasta que confirmes
-          el trabajo.
+          {formatEuro(finalPrice ?? Math.round((priceMin + priceMax) / 2))} retenidos en la demo como fondos protegidos.
         </div>
       </Card>
     );

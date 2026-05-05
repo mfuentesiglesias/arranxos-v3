@@ -6,11 +6,20 @@ import { TopBar } from "@/components/layout/top-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import { jobs } from "@/lib/data";
-import { getAgreement, getEffectiveFinalPrice, hasAgreement } from "@/lib/domain/policies";
-import { getAgreementByJobId, getEffectiveJobById, useSession } from "@/lib/store";
+import {
+  getAgreement,
+  getCommissionAmount,
+  getEffectiveFinalPrice,
+  hasAgreement,
+} from "@/lib/domain/policies";
+import {
+  getAgreementByJobId,
+  getEffectiveAdminConfig,
+  getEffectiveJobById,
+  useSession,
+} from "@/lib/store";
 import { formatEuro } from "@/lib/utils";
 
 interface Props {
@@ -19,18 +28,23 @@ interface Props {
 
 function Inner({ id }: { id: string }) {
   const router = useRouter();
-  const effectiveJob = useSession((s) => getEffectiveJobById(s, id));
-  const agreement = useSession((s) => getAgreementByJobId(s, id));
+  const session = useSession();
+  const adminConfig = getEffectiveAdminConfig(session);
+  const effectiveJob = getEffectiveJobById(session, id);
+  const agreement = getAgreementByJobId(session, id);
   const markAgreementProtected = useSession((s) => s.markAgreementProtected);
   const job = effectiveJob ?? jobs.find((j) => j.id === id) ?? jobs[0];
   const resolvedAgreement = getAgreement(agreement);
   const total =
     getEffectiveFinalPrice(job, resolvedAgreement) ??
     Math.round((job.priceMin + job.priceMax) / 2);
-  const canPay = hasAgreement(resolvedAgreement) && resolvedAgreement?.paymentStatus !== "protected";
-  const [method, setMethod] = useState<"card" | "bizum" | "transfer">("card");
+  const commissionPct = resolvedAgreement?.commissionPct ?? job.commissionPct ?? adminConfig.commissionPct;
+  const commission = getCommissionAmount({ amount: total, commissionPct });
+  const canPay =
+    job.status === "agreed" &&
+    hasAgreement(resolvedAgreement) &&
+    resolvedAgreement?.paymentStatus !== "protected";
   const [paying, setPaying] = useState(false);
-  const [card, setCard] = useState({ number: "", name: "", mmyy: "", cvc: "" });
 
   const pay = () => {
     if (!canPay) return;
@@ -48,10 +62,10 @@ function Inner({ id }: { id: string }) {
       <ScreenBody className="px-4 pt-3 pb-6">
         {!canPay && (
           <Card className="bg-amber-50 border-amber-100 mb-3 text-[12px] text-amber-700 leading-snug">
-            Necesitas cerrar un acuerdo en el chat antes de realizar el pago protegido.
+            Este pago demo solo está disponible cuando el trabajo ya tiene un acuerdo y sigue pendiente de financiación mock.
           </Card>
         )}
-        <Card className="bg-teal-50/50 border-teal-100 mb-3">
+        <Card className="bg-teal-50/50 border-teal-100 mb-3" testId="mock-payment-summary">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-teal-500 text-white flex items-center justify-center">
               <Icon name="shield" size={18} />
@@ -61,119 +75,43 @@ function Inner({ id }: { id: string }) {
                 {formatEuro(total)} en custodia
               </div>
               <div className="text-[11.5px] text-teal-700/80 leading-snug">
-                Retenemos el pago. Se libera cuando confirmes el trabajo.
+                Pago protegido mock. Los fondos quedan retenidos en la demo hasta un paso posterior.
               </div>
             </div>
           </div>
         </Card>
 
-        <div className="mb-3">
-          <div className="font-bold text-[13px] text-ink-700 mb-2 px-1">
-            Método de pago
-          </div>
-          <div className="flex flex-col gap-2">
-            {(
-              [
-                { id: "card", label: "Tarjeta", icon: "card" },
-                { id: "bizum", label: "Bizum", icon: "phone" },
-                { id: "transfer", label: "Transferencia bancaria", icon: "euro" },
-              ] as const
-            ).map((m) => {
-              const sel = method === m.id;
-              return (
-                <button
-                  key={m.id}
-                  onClick={() => setMethod(m.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border-[1.5px] transition text-left ${
-                    sel
-                      ? "border-coral-500 bg-coral-50"
-                      : "border-sand-200 bg-white"
-                  }`}
-                >
-                  <div
-                    className={`w-9 h-9 rounded-full flex items-center justify-center ${
-                      sel ? "bg-coral-500 text-white" : "bg-sand-100 text-ink-600"
-                    }`}
-                  >
-                    <Icon name={m.icon} size={16} />
-                  </div>
-                  <span className="font-bold text-[13.5px] text-ink-800 flex-1">
-                    {m.label}
-                  </span>
-                  <div
-                    className={`w-5 h-5 rounded-full border-[1.5px] flex items-center justify-center ${
-                      sel
-                        ? "border-coral-500 bg-coral-500"
-                        : "border-sand-300"
-                    }`}
-                  >
-                    {sel && <div className="w-2 h-2 rounded-full bg-white" />}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {method === "card" && (
-          <Card className="mb-3">
-            <div className="flex flex-col gap-3">
-              <Input
-                label="Número de tarjeta"
-                value={card.number}
-                onChange={(e) =>
-                  setCard({ ...card, number: e.target.value })
-                }
-                placeholder="1234 5678 9012 3456"
-              />
-              <Input
-                label="Titular"
-                value={card.name}
-                onChange={(e) => setCard({ ...card, name: e.target.value })}
-                placeholder="Antía Bouzas"
-              />
-              <div className="grid grid-cols-2 gap-3">
-                <Input
-                  label="MM/AA"
-                  value={card.mmyy}
-                  onChange={(e) => setCard({ ...card, mmyy: e.target.value })}
-                  placeholder="12/28"
-                />
-                <Input
-                  label="CVC"
-                  value={card.cvc}
-                  onChange={(e) => setCard({ ...card, cvc: e.target.value })}
-                  placeholder="123"
-                />
-              </div>
+        <Card className="mb-3">
+          <div className="font-bold text-[13.5px] text-ink-800 mb-3">Resumen del acuerdo</div>
+          <div className="space-y-2 text-[12.5px]">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-ink-500">Trabajo</span>
+              <span className="font-bold text-ink-800 text-right">{job.title}</span>
             </div>
-          </Card>
-        )}
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-ink-500">Importe acordado</span>
+              <span className="font-bold text-ink-800">{formatEuro(total)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-ink-500">Comisión Arranxos ({commissionPct}%)</span>
+              <span className="font-bold text-ink-800">{formatEuro(commission)}</span>
+            </div>
+            <div className="border-t border-sand-200 pt-2 text-[11.5px] text-ink-500 leading-snug">
+              Demo PWA: al confirmar este paso solo marcamos el acuerdo como financiado y el estado del trabajo pasa a pago protegido.
+            </div>
+          </div>
+        </Card>
 
-        {method === "bizum" && (
-          <Card className="mb-3 text-[12.5px] text-ink-600 leading-relaxed">
-            Recibirás una notificación Bizum de Arranxos para autorizar el pago.
-            El dinero pasará a tu custodia y se liberará al profesional al
-            confirmar el trabajo.
-          </Card>
-        )}
-        {method === "transfer" && (
-          <Card className="mb-3 text-[12.5px] text-ink-600 leading-relaxed">
-            Te enviaremos los datos bancarios de la cuenta de custodia. El
-            trabajo iniciará cuando se reciba el importe (habitualmente 1
-            laborable).
-          </Card>
-        )}
-
-        <div className="text-[11px] text-ink-400 leading-relaxed text-center">
-          DEMO: ningún cargo real se realiza. Para producción, integrar Stripe/
-          Redsys + webhook de confirmación.
-        </div>
+        <Card className="mb-3 bg-sand-50">
+          <div className="text-[12px] text-ink-600 leading-relaxed">
+            No se solicitan datos reales de tarjeta ni se realiza ningún cargo. Este build solo cubre la financiación mock del acuerdo.
+          </div>
+        </Card>
       </ScreenBody>
 
       <div className="app-bottom-bar px-5 pb-5 pt-3 bg-white border-t border-sand-200/70">
-        <Button full onClick={pay} disabled={paying || !canPay}>
-          {paying ? "Procesando…" : `Pagar ${formatEuro(total)} en custodia`}
+        <Button full onClick={pay} disabled={paying || !canPay} testId="confirm-mock-payment">
+          {paying ? "Reteniendo fondos…" : `Pagar y retener ${formatEuro(total)}`}
         </Button>
       </div>
     </div>

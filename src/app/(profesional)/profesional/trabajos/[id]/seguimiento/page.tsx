@@ -1,5 +1,5 @@
 "use client";
-import { use, useEffect } from "react";
+import { use, useEffect, useMemo } from "react";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
@@ -17,7 +17,6 @@ import {
   getPostPaymentJobActionsForPro,
 } from "@/lib/domain/policies";
 import {
-  getAgreementByJobId,
   getCurrentProfessionalId,
   getEffectiveAdminConfig,
   getEffectiveJobById,
@@ -30,10 +29,11 @@ interface Props {
 }
 
 function Inner({ id }: { id: string }) {
+  const session = useSession();
   const currentProfessionalId = useSession(getCurrentProfessionalId);
   const adminConfig = useSession(getEffectiveAdminConfig);
-  const effectiveJob = useSession((s) => getEffectiveJobById(s, id));
-  const agreement = useSession((s) => getAgreementByJobId(s, id));
+  const effectiveJob = useMemo(() => getEffectiveJobById(session, id), [session, id]);
+  const agreement = session.agreements[id];
   const markJobInProgress = useSession((s) => s.markJobInProgress);
   const autoReleaseCompletedJob = useSession((s) => s.autoReleaseCompletedJob);
   const job = effectiveJob ?? jobs.find((j) => j.id === id) ?? jobs[0];

@@ -8,7 +8,7 @@ import { useSession } from "@/lib/store";
 
 export default function ProLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const role = useSession((s) => s.role);
   const proStatus = useSession((s) => s.proStatus);
   const operative = isProfessionalOperative(role, proStatus);

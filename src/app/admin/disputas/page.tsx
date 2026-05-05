@@ -1,4 +1,5 @@
 "use client";
+import { useMemo } from "react";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
@@ -12,8 +13,9 @@ import {
 } from "@/lib/store";
 
 export default function AdminDisputasPage() {
+  const session = useSession();
   const list = useSession(getEffectiveDisputes);
-  const jobs = useSession(getEffectiveJobs);
+  const jobs = useMemo(() => getEffectiveJobs(session), [session]);
   const resolveDispute = useSession((s) => s.resolveDispute);
 
   return (

@@ -1,5 +1,5 @@
 "use client";
-import { use, Suspense, useEffect, useState } from "react";
+import { use, Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
@@ -16,7 +16,6 @@ import {
   getAgreement,
 } from "@/lib/domain/policies";
 import {
-  getAgreementByJobId,
   getEffectiveJobById,
   useSession,
 } from "@/lib/store";
@@ -37,8 +36,9 @@ const REASONS = [
 
 function Inner({ id }: { id: string }) {
   const router = useRouter();
-  const effectiveJob = useSession((s) => getEffectiveJobById(s, id));
-  const agreement = useSession((s) => getAgreementByJobId(s, id));
+  const session = useSession();
+  const effectiveJob = useMemo(() => getEffectiveJobById(session, id), [session, id]);
+  const agreement = session.agreements[id];
   const openJobDispute = useSession((s) => s.openJobDispute);
   const autoReleaseCompletedJob = useSession((s) => s.autoReleaseCompletedJob);
   const [reason, setReason] = useState("");

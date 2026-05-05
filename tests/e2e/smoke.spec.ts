@@ -142,10 +142,18 @@ test("cliente publica trabajo y lo ve en detalle y listado", async ({ page }) =>
   await clickByTestId(page, "client-accept-offer");
   await expectVisibleByTestId(page, "agreement-summary-client");
   await expect(byTestId(page, "agreement-summary-client")).toContainText("980");
+  await expectVisibleByTestId(page, "client-pay-cta-card");
+  await clickByTestId(page, "client-pay-protected");
+  await expect(page).toHaveURL(new RegExp(`/cliente/trabajos/${createdJobId}/pagar`));
+  await expectVisibleByTestId(page, "mock-payment-summary");
+  await clickByTestId(page, "confirm-mock-payment");
+  await expect(page).toHaveURL(new RegExp(`/cliente/trabajos/${createdJobId}`));
+  await expectVisibleByTestId(page, "client-protected-payment-state");
 
   await loginWithDemoAccess(page, "demo-pro-approved");
   await page.goto(`/profesional/trabajos/${createdJobId}`);
   await expectVisibleByTestId(page, "agreement-summary-pro");
+  await expectVisibleByTestId(page, "pro-payment-protected-state");
 });
 
 test("admin tickets búsqueda carga listado", async ({ page }) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 
 import { StatusBar } from "@/components/layout/status-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
@@ -20,9 +20,10 @@ function calcPayout(total: number, commissionPct: number) {
 }
 
 export default function PagosPage() {
+  const session = useSession();
   const adminConfig = useSession(getEffectiveAdminConfig);
   const currentProfessionalId = useSession(getCurrentProfessionalId);
-  const jobs = useSession(getEffectiveJobs);
+  const jobs = useMemo(() => getEffectiveJobs(session), [session]);
   const agreements = useSession((s) => s.agreements);
   const autoReleaseCompletedJob = useSession((s) => s.autoReleaseCompletedJob);
 

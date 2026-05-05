@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { HeaderActionSheet } from "@/components/layout/header-action-sheet";
 import { HeaderIconButton } from "@/components/layout/header-icon-button";
@@ -88,8 +88,10 @@ export default function PerfilProPage() {
   const currentProfessionalId = useSession(getCurrentProfessionalId);
   const storeCatalogRequests = useSession(getEffectiveCatalogRequests);
   const approvedCatalogServices = useSession(getEffectiveApprovedCatalogServices);
-  const professionalCatalogProfile = useSession((state) =>
-    getProfessionalCatalogProfile(state, currentProfessionalId),
+  const session = useSession();
+  const professionalCatalogProfile = useMemo(
+    () => getProfessionalCatalogProfile(session, currentProfessionalId),
+    [session, currentProfessionalId],
   );
   const createCatalogRequest = useSession((s) => s.createCatalogRequest);
   const updateProfessionalCatalogProfile = useSession(

@@ -25,8 +25,8 @@ function ServicioInner() {
   const approvedCatalogServices = useSession(getEffectiveApprovedCatalogServices);
   const effectiveCategories = getEffectiveCatalogCategories(approvedCatalogCategories);
   const effectiveServices = getEffectiveCatalogServices(approvedCatalogServices);
-  const requestedCategoryId = params.get("categoryId") ?? params.get("cat") ?? "";
-  const requestedCategoryName = params.get("categoryName") ?? "";
+  const requestedCategoryId = params?.get("categoryId") ?? params?.get("cat") ?? "";
+  const requestedCategoryName = params?.get("categoryName") ?? "";
   const hasRequestedCategory = Boolean(requestedCategoryId || requestedCategoryName);
   const category =
     effectiveCategories.find((entry) => entry.id === requestedCategoryId) ??

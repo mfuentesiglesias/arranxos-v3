@@ -76,7 +76,7 @@ const NAV_GROUPS: Array<{ group: string; screens: { href: string; label: string 
 ];
 
 export function PhoneFrame({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
 
   return (
     <>

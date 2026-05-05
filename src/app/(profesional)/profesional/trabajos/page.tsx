@@ -37,7 +37,7 @@ type OpportunityFilterMode = (typeof OPPORTUNITY_FILTERS)[number]["id"];
 
 function Inner() {
   const params = useSearchParams();
-  const myOnly = params.get("mine") === "1";
+  const myOnly = params?.get("mine") === "1";
   const session = useSession();
   const currentProfessionalId = getCurrentProfessionalId(session);
   const approvedCatalogServices = getEffectiveApprovedCatalogServices(session);

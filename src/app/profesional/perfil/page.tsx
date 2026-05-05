@@ -19,8 +19,8 @@ import { formatEuro } from "@/lib/utils";
 function Inner() {
   const [shareOpen, setShareOpen] = useState(false);
   const params = useSearchParams();
-  const id = params.get("id") ?? "p1";
-  const jobId = params.get("jobId");
+  const id = params?.get("id") ?? "p1";
+  const jobId = params?.get("jobId");
   const pro = professionals.find((p) => p.id === id) ?? professionals[0];
   const proReviews = reviews.filter((r) => r.targetId === pro.id);
 

@@ -1021,7 +1021,10 @@ export const useSession = create<SessionState>()(
       markAgreementProtected: (jobId) =>
         set((s) => {
           const current = s.agreements[jobId];
-          if (!current || current.paymentStatus === "protected") return {};
+          const job = getEffectiveJobById(s, jobId);
+          if (!current || current.paymentStatus === "protected" || job?.status !== "agreed") {
+            return {};
+          }
 
           const paidAt = new Date().toISOString();
 

@@ -25,7 +25,7 @@ function RegisterInner() {
   const params = useSearchParams();
   const setRole = useSession((s) => s.setRole);
   const setProStatus = useSession((s) => s.setProStatus);
-  const [isPro, setIsPro] = useState(params.get("role") === "professional");
+  const [isPro, setIsPro] = useState(params?.get("role") === "professional");
   const [form, setForm] = useState({
     name: "",
     email: "",

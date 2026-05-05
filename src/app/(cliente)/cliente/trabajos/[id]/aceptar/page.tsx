@@ -38,8 +38,8 @@ function Inner({ id }: { id: string }) {
   const adminConfig = useSession(getEffectiveAdminConfig);
   const effectiveJob = getEffectiveJobById(session, id);
   const agreement = useSession((s) => getAgreementByJobId(s, id));
-  const proId = search.get("proId") ?? "p1";
-  const requestId = search.get("requestId") ?? "";
+  const proId = search?.get("proId") ?? "p1";
+  const requestId = search?.get("requestId") ?? "";
   const job = effectiveJob ?? jobs.find((j) => j.id === id) ?? jobs[0];
   const resolvedAgreement = getAgreement(agreement);
   const pro = professionals.find((p) => p.id === proId) ?? professionals[0];

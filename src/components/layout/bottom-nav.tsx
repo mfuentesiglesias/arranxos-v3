@@ -51,7 +51,7 @@ interface Props {
 }
 
 export function BottomNav({ variant }: Props) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const items = variant === "client" ? NAV_CLIENT : variant === "pro" ? NAV_PRO : NAV_ADMIN;
   return (
     <div className="app-bottom-nav border-t border-sand-200 bg-white flex items-stretch flex-shrink-0 pt-1">

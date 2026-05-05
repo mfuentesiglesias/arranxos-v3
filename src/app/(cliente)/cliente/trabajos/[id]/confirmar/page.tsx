@@ -1,5 +1,5 @@
 "use client";
-import { use, Suspense, useEffect, useState } from "react";
+import { use, Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
@@ -16,7 +16,6 @@ import {
   getEffectiveFinalPrice,
 } from "@/lib/domain/policies";
 import {
-  getAgreementByJobId,
   getEffectiveAdminConfig,
   getEffectiveJobById,
   useSession,
@@ -29,9 +28,10 @@ interface Props {
 
 function Inner({ id }: { id: string }) {
   const router = useRouter();
+  const session = useSession();
   const adminConfig = useSession(getEffectiveAdminConfig);
-  const effectiveJob = useSession((s) => getEffectiveJobById(s, id));
-  const agreement = useSession((s) => getAgreementByJobId(s, id));
+  const effectiveJob = useMemo(() => getEffectiveJobById(session, id), [session, id]);
+  const agreement = session.agreements[id];
   const confirmCompletedJob = useSession((s) => s.confirmCompletedJob);
   const autoReleaseCompletedJob = useSession((s) => s.autoReleaseCompletedJob);
   const job = effectiveJob ?? jobs.find((j) => j.id === id) ?? jobs[0];
