@@ -16,12 +16,13 @@ import {
   getEffectiveCatalogServices,
   slugifyCatalogText,
 } from "@/lib/catalog";
-import { currentPro, reviews, defaultAdminConfig, professionals } from "@/lib/data";
+import { currentPro, defaultAdminConfig, professionals } from "@/lib/data";
 import {
   getCurrentProfessionalId,
   getEffectiveApprovedCatalogServices,
   getEffectiveCatalogRequests,
   getProfessionalCatalogProfile,
+  getReviewsForProfessional,
   type ProfessionalCatalogProfile,
   useSession,
 } from "@/lib/store";
@@ -117,9 +118,14 @@ export default function PerfilProPage() {
     bio: professional.bio ?? "",
     location: professional.zone ?? professional.location,
   });
-  const myReviews = reviews
-    .filter((r) => r.targetId === professional.id)
-    .slice(0, 3);
+  const allProfessionalReviews = useMemo(
+    () => getReviewsForProfessional(session, professional.id),
+    [session, professional.id],
+  );
+  const myReviews = useMemo(
+    () => allProfessionalReviews.slice(0, 3),
+    [allProfessionalReviews],
+  );
   const displayedPrimarySpecialty =
     savedProfileState.specialties[0]?.label ?? professional.specialty;
   const workBaseLookup = getWorkBaseLookup(workBaseDraft.postalCode);
@@ -890,7 +896,7 @@ export default function PerfilProPage() {
 
         {activePanel === "reviews" && (
           <div className="flex flex-col gap-3 pb-1">
-            {reviews.filter((review) => review.targetId === "p1").map((review) => (
+            {allProfessionalReviews.map((review) => (
               <div
                 key={review.id}
                 className="rounded-2xl border border-sand-200/70 bg-white px-4 py-3"

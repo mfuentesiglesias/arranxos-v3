@@ -168,10 +168,22 @@ test("cliente publica trabajo y lo ve en detalle y listado", async ({ page }) =>
   await page.getByRole("button", { name: "Confirmar y cerrar trabajo" }).first().click();
   await expect(page).toHaveURL(new RegExp(`/cliente/trabajos/${createdJobId}`));
   await expectVisibleByTestId(page, "client-job-completed-state");
+  await expectVisibleByTestId(page, "client-review-cta-card");
+  await clickByTestId(page, "client-review-cta");
+  await expect(page).toHaveURL(new RegExp(`/cliente/trabajos/${createdJobId}/valorar`));
+  await page.getByLabel("5 estrellas").first().click();
+  await page.getByPlaceholder("Cuenta a otros clientes cómo fue tu experiencia con este profesional.").first().fill("Trabajo rematado con mucho cuidado y buena comunicación.");
+  await clickByTestId(page, "submit-job-review");
+  await expect(page).toHaveURL(new RegExp(`/cliente/trabajos/${createdJobId}`));
+  await expectVisibleByTestId(page, "client-review-summary");
 
   await loginWithDemoAccess(page, "demo-pro-approved");
   await page.goto(`/profesional/trabajos/${createdJobId}`);
   await expectVisibleByTestId(page, "pro-job-completed-state");
+
+  await loginWithDemoAccess(page, "demo-admin");
+  await page.goto("/admin/valoraciones");
+  await expect(page.getByText("Trabajo rematado con mucho cuidado y buena comunicación.").first()).toBeVisible();
 });
 
 test("admin tickets búsqueda carga listado", async ({ page }) => {

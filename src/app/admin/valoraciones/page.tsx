@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
@@ -8,11 +8,13 @@ import { Avatar } from "@/components/ui/avatar";
 import { RatingStars } from "@/components/pros/rating-stars";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { reviews } from "@/lib/data";
+import { getEffectiveReviews, useSession } from "@/lib/store";
 
 export default function AdminValoracionesPage() {
+  const session = useSession();
   const [filter, setFilter] = useState<"all" | "low" | "reported">("all");
   const [q, setQ] = useState("");
+  const reviews = useMemo(() => getEffectiveReviews(session), [session]);
 
   const filtered = reviews.filter((r) => {
     const ms =
@@ -23,7 +25,7 @@ export default function AdminValoracionesPage() {
     return ms && mq;
   });
 
-  const avg = reviews.reduce((a, r) => a + r.rating, 0) / reviews.length;
+  const avg = reviews.length > 0 ? reviews.reduce((a, r) => a + r.rating, 0) / reviews.length : 0;
 
   return (
     <div className="flex-1 flex flex-col bg-sand-50">

@@ -31,10 +31,11 @@ import {
   getEffectiveJobById,
   getJobOutreachMeta,
   getNegotiationByJobId,
+  getReviewForJobByReviewer,
   getSearchTicketByJobId,
   useSession,
 } from "@/lib/store";
-import type { JobRequest, JobStatus } from "@/lib/types";
+import type { JobRequest, JobStatus, Review } from "@/lib/types";
 import { formatEuro } from "@/lib/utils";
 
 interface Props {
@@ -71,6 +72,7 @@ function Inner({ id }: { id: string }) {
     (jobRequest) => jobRequest.jobId === id,
   );
   const acceptedJobRequest = getAcceptedJobRequestForJob(session, id);
+  const existingClientReview = getReviewForJobByReviewer(session, id, session.currentClientId);
   const existingSearchTicket = searchTicket ?? null;
   const resolvedAgreement = getAgreement(agreement);
   const activeNegotiation = getActiveNegotiation(negotiation);
@@ -478,6 +480,7 @@ function Inner({ id }: { id: string }) {
           finalPrice={finalPrice}
           actions={clientActions}
           postPaymentActions={postPaymentActions}
+          existingReview={existingClientReview}
         />
       </ScreenBody>
     </div>
@@ -492,6 +495,7 @@ function ActionsForStatus({
   finalPrice,
   actions,
   postPaymentActions,
+  existingReview,
 }: {
   jobId: string;
   status: JobStatus;
@@ -500,6 +504,7 @@ function ActionsForStatus({
   finalPrice?: number;
   actions: ReturnType<typeof getJobActionsForClient>;
   postPaymentActions: ReturnType<typeof getPostPaymentJobActionsForClient>;
+  existingReview?: Review;
 }) {
   if (actions.includes("pay")) {
     return (
@@ -536,14 +541,38 @@ function ActionsForStatus({
   }
   if (status === "completed") {
     return (
-      <Card className="mb-3 bg-teal-50/40 border-teal-100" testId="client-job-completed-state">
-        <div className="font-bold text-[13.5px] text-teal-700 mb-1">
-          Trabajo completado
-        </div>
-        <div className="text-[11.5px] text-teal-700/80 leading-snug">
-          El cliente ya confirmó este trabajo en la demo y el acuerdo queda cerrado. El pago protegido mock sigue visible como referencia del flujo.
-        </div>
-      </Card>
+      <>
+        <Card className="mb-3 bg-teal-50/40 border-teal-100" testId="client-job-completed-state">
+          <div className="font-bold text-[13.5px] text-teal-700 mb-1">
+            Trabajo completado
+          </div>
+          <div className="text-[11.5px] text-teal-700/80 leading-snug">
+            El cliente ya confirmó este trabajo en la demo y el acuerdo queda cerrado. El pago protegido mock sigue visible como referencia del flujo.
+          </div>
+        </Card>
+        {existingReview ? (
+          <Card className="mb-3" testId="client-review-summary">
+            <div className="font-bold text-[13.5px] text-ink-800 mb-1">
+              Valoración enviada
+            </div>
+            <div className="text-[12px] text-ink-600 leading-snug mb-1">
+              {existingReview.rating} de 5 estrellas
+            </div>
+            <div className="text-[11.5px] text-ink-500 leading-snug">
+              {existingReview.text}
+            </div>
+          </Card>
+        ) : (
+          <Card className="mb-3" testId="client-review-cta-card">
+            <div className="font-bold text-[13.5px] text-ink-800 mb-2">
+              ¿Cómo fue el trabajo?
+            </div>
+            <Button full href={`/cliente/trabajos/${jobId}/valorar`} testId="client-review-cta">
+              Valorar profesional
+            </Button>
+          </Card>
+        )}
+      </>
     );
   }
   if (

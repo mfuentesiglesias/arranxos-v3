@@ -23,6 +23,7 @@ import {
   jobs,
   notifications as seedNotifications,
   professionals,
+  reviews as seedReviews,
   searchTickets as seedSearchTickets,
 } from "./data";
 import {
@@ -42,9 +43,16 @@ import type {
   ChatMessage,
   Notification,
   ProStatus,
+  Review,
   SearchTicket,
   UserRole,
 } from "./types";
+
+export interface CreateJobReviewInput {
+  jobId: string;
+  rating: number;
+  comment?: string;
+}
 
 // DEMO ONLY: persisted to localStorage. This is UI/demo state, not a source
 // of truth. Real state must live in Supabase (or chosen backend).
@@ -225,6 +233,8 @@ export interface SessionState {
     evidence: string[],
   ) => void;
   notifications: Notification[];
+  reviews: Review[];
+  createJobReview: (input: CreateJobReviewInput) => Review | undefined;
   disputes: Dispute[];
   resolveDispute: (disputeId: string, status: Dispute["status"]) => void;
   searchTickets: SearchTicket[];
@@ -305,6 +315,17 @@ function cloneDisputes(disputes: Dispute[] = seedDisputes) {
     ...dispute,
     evidence: dispute.evidence ? [...dispute.evidence] : undefined,
   }));
+}
+
+function cloneReviews(reviews: Review[] = []) {
+  return reviews.map((review) => ({ ...review }));
+}
+
+function formatReviewDate(date: string) {
+  return new Intl.DateTimeFormat("es-ES", {
+    month: "short",
+    year: "numeric",
+  }).format(new Date(date));
 }
 
 function cloneSearchTickets(searchTickets: SearchTicket[] = seedSearchTickets) {
@@ -706,6 +727,33 @@ export function getEffectiveDisputes(state: SessionState) {
   return state.disputes;
 }
 
+export function getEffectiveReviews(state: SessionState) {
+  return [...cloneReviews(state.reviews ?? []), ...cloneReviews(seedReviews)];
+}
+
+export function getReviewForJobByReviewer(
+  state: SessionState,
+  jobId: string,
+  reviewerId: string,
+) {
+  return getEffectiveReviews(state).find(
+    (review) =>
+      review.jobId === jobId &&
+      review.targetType === "professional" &&
+      (review.reviewerId === reviewerId || review.reviewerId === undefined),
+  );
+}
+
+export function getReviewsForProfessional(state: SessionState, proId: string) {
+  return getEffectiveReviews(state).filter(
+    (review) => review.targetId === proId && review.targetType === "professional",
+  );
+}
+
+export function getReviewsForJob(state: SessionState, jobId: string) {
+  return getEffectiveReviews(state).filter((review) => review.jobId === jobId);
+}
+
 export function getEffectiveSearchTickets(state: SessionState) {
   return state.searchTickets;
 }
@@ -835,6 +883,7 @@ export const useSession = create<SessionState>()(
           negotiations: {},
           agreements: {},
           notifications: cloneNotifications(),
+          reviews: [],
           disputes: cloneDisputes(),
           searchTickets: cloneSearchTickets(),
           createdJobs: [],
@@ -865,6 +914,7 @@ export const useSession = create<SessionState>()(
         })),
       resetAdminConfig: () => set({ adminConfig: cloneAdminConfig() }),
       notifications: cloneNotifications(),
+      reviews: [],
       disputes: cloneDisputes(),
       searchTickets: cloneSearchTickets(),
       createdJobs: [],
@@ -1215,6 +1265,65 @@ export const useSession = create<SessionState>()(
             notifications: [notification, ...s.notifications],
           };
         }),
+      createJobReview: (input) => {
+        let createdReview: Review | undefined;
+
+        set((s) => {
+          const job = getEffectiveJobById(s, input.jobId);
+          if (
+            !job ||
+            job.status !== "completed" ||
+            !job.assignedProId ||
+            s.currentClientId !== job.clientId ||
+            input.rating < 1 ||
+            input.rating > 5
+          ) {
+            return {};
+          }
+
+          const existingReview = getReviewForJobByReviewer(s, input.jobId, s.currentClientId);
+          if (existingReview) {
+            createdReview = existingReview;
+            return {};
+          }
+
+          const createdAt = new Date().toISOString();
+          const trimmedComment = (input.comment ?? "").trim();
+          const review: Review = {
+            id: `r-${input.jobId}-${Date.now()}`,
+            author: job.clientName || currentClient.name,
+            avatar: job.clientAvatar || currentClient.avatar,
+            rating: Math.round(input.rating),
+            text: trimmedComment || "Valoración enviada en la demo.",
+            date: formatReviewDate(createdAt),
+            targetId: job.assignedProId,
+            targetType: "professional",
+            jobId: input.jobId,
+            reviewerId: s.currentClientId,
+            reviewerRole: "client",
+            createdAt,
+          };
+          createdReview = review;
+
+          return {
+            reviews: [review, ...s.reviews],
+            notifications: [
+              {
+                id: `n-review-${input.jobId}-${Date.now()}`,
+                text: "Has enviado una valoración del trabajo",
+                sub: job.title,
+                time: "ahora",
+                unread: true,
+                type: "review",
+                jobId: input.jobId,
+              },
+              ...s.notifications,
+            ],
+          };
+        });
+
+        return createdReview;
+      },
       resolveDispute: (disputeId, status) =>
         set((s) => ({
           disputes: s.disputes.map((dispute) =>

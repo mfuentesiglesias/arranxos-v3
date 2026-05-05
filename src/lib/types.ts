@@ -141,6 +141,9 @@ export interface Review {
   targetId: string; // pro or client id
   targetType: "professional" | "client";
   jobId?: string;
+  reviewerId?: string;
+  reviewerRole?: "client" | "professional";
+  createdAt?: string;
 }
 
 export interface Notification {

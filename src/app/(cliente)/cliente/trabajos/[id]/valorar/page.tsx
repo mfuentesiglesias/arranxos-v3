@@ -1,5 +1,5 @@
 "use client";
-import { use, Suspense, useState } from "react";
+import { use, Suspense, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
@@ -10,6 +10,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import { jobs, professionals } from "@/lib/data";
+import { getEffectiveJobById, getReviewForJobByReviewer, useSession } from "@/lib/store";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -28,20 +29,41 @@ const TAGS = [
 
 function Inner({ id }: { id: string }) {
   const router = useRouter();
-  const job = jobs.find((j) => j.id === id) ?? jobs[0];
+  const session = useSession();
+  const createJobReview = useSession((s) => s.createJobReview);
+  const job = useMemo(() => getEffectiveJobById(session, id), [session, id]) ?? jobs.find((j) => j.id === id) ?? jobs[0];
   const pro = job.assignedProId
     ? professionals.find((p) => p.id === job.assignedProId) ?? professionals[0]
     : professionals[0];
+  const existingReview = getReviewForJobByReviewer(session, id, session.currentClientId);
   const [rating, setRating] = useState(0);
   const [text, setText] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [sent, setSent] = useState(false);
+  const canReview = job.status === "completed" && Boolean(job.assignedProId) && !existingReview;
 
   const toggleTag = (t: string) => {
     setTags((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
   };
 
   const submit = () => {
+    if (!canReview || rating === 0) return;
+
+    const reviewText = [
+      tags.length > 0 ? `Destacó: ${tags.join(", ")}.` : "",
+      text.trim(),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+    const created = createJobReview({
+      jobId: id,
+      rating,
+      comment: reviewText,
+    });
+    if (!created) return;
+
     setSent(true);
     setTimeout(() => router.push(`/cliente/trabajos/${id}`), 800);
   };
@@ -51,6 +73,23 @@ function Inner({ id }: { id: string }) {
       <StatusBar />
       <TopBar title="Valorar profesional" />
       <ScreenBody className="px-4 pt-3 pb-6">
+        {!canReview && existingReview && (
+          <Card className="mb-3 bg-teal-50/40 border-teal-100" testId="review-existing-summary">
+            <div className="font-bold text-[13px] text-teal-700 mb-1">
+              Ya has enviado tu valoración
+            </div>
+            <div className="text-[11.5px] text-teal-700/80 leading-snug">
+              {existingReview.rating} de 5 estrellas. {existingReview.text}
+            </div>
+          </Card>
+        )}
+
+        {!canReview && !existingReview && (
+          <Card className="mb-3 bg-amber-50 border-amber-100 text-[12px] text-amber-700 leading-snug">
+            Solo puedes valorar al profesional cuando el trabajo ya esté completado.
+          </Card>
+        )}
+
         <Card className="mb-3 text-center">
           <Avatar initials={pro.avatar} size={64} className="mx-auto mb-2" />
           <div className="font-extrabold text-[16px] text-ink-800">{pro.name}</div>
@@ -121,7 +160,7 @@ function Inner({ id }: { id: string }) {
       </ScreenBody>
 
       <div className="app-bottom-bar px-5 pb-5 pt-3 bg-white border-t border-sand-200/70">
-        <Button full onClick={submit} disabled={rating === 0 || sent}>
+        <Button full onClick={submit} disabled={!canReview || rating === 0 || sent} testId="submit-job-review">
           {sent ? "Gracias por tu valoración ✓" : "Publicar valoración"}
         </Button>
       </div>

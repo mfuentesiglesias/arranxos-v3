@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { HeaderActionSheet } from "@/components/layout/header-action-sheet";
@@ -13,16 +13,25 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { RatingStars } from "@/components/pros/rating-stars";
 import { StrikeBadge } from "@/components/pros/strike-badge";
-import { professionals, reviews } from "@/lib/data";
-import { formatEuro } from "@/lib/utils";
+import { professionals } from "@/lib/data";
+import { getReviewsForProfessional, useSession } from "@/lib/store";
 
 function Inner() {
+  const session = useSession();
   const [shareOpen, setShareOpen] = useState(false);
   const params = useSearchParams();
   const id = params?.get("id") ?? "p1";
   const jobId = params?.get("jobId");
   const pro = professionals.find((p) => p.id === id) ?? professionals[0];
-  const proReviews = reviews.filter((r) => r.targetId === pro.id);
+  const mockProReviews = session.reviews.filter(
+    (review) => review.targetId === pro.id && review.targetType === "professional",
+  );
+  const proReviews = useMemo(() => getReviewsForProfessional(session, pro.id), [session, pro.id]);
+  const displayedRating =
+    mockProReviews.length > 0 && proReviews.length > 0
+      ? proReviews.reduce((total, review) => total + review.rating, 0) / proReviews.length
+      : pro.rating;
+  const displayedReviewCount = mockProReviews.length > 0 ? proReviews.length : pro.reviews;
 
   return (
     <div className="flex-1 flex flex-col bg-sand-50">
@@ -78,10 +87,10 @@ function Inner() {
               <div className="flex items-center gap-1.5">
                 <RatingStars value={pro.rating} />
                 <span className="text-[12px] font-bold text-ink-800">
-                  {pro.rating.toFixed(1)}
+                  {displayedRating.toFixed(1)}
                 </span>
                 <span className="text-[11px] text-ink-400">
-                  ({pro.reviews} reseñas)
+                  ({displayedReviewCount} reseñas)
                 </span>
               </div>
               {pro.badge && (
@@ -159,7 +168,7 @@ function Inner() {
               </button>
             </div>
             <div className="flex flex-col gap-3">
-              {proReviews.map((r) => (
+              {proReviews.slice(0, 3).map((r) => (
                 <div
                   key={r.id}
                   className="border-t border-sand-200/70 pt-3 first:border-t-0 first:pt-0"
