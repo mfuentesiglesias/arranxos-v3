@@ -9,13 +9,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
 import { JobStatusTimeline } from "@/components/jobs/job-status-timeline";
 import { jobs } from "@/lib/data";
-import {
-  canAutoReleaseCompletedJob,
-  getAgreement,
-  getCommissionAmount,
-  getEffectiveFinalPrice,
-  getPostPaymentJobActionsForPro,
-} from "@/lib/domain/policies";
+import { canAutoReleaseCompletedJob, getAgreement, getCommissionAmount, getEffectiveFinalPrice } from "@/lib/domain/policies";
 import {
   getCurrentProfessionalId,
   getEffectiveAdminConfig,
@@ -34,7 +28,6 @@ function Inner({ id }: { id: string }) {
   const adminConfig = useSession(getEffectiveAdminConfig);
   const effectiveJob = useMemo(() => getEffectiveJobById(session, id), [session, id]);
   const agreement = session.agreements[id];
-  const markJobInProgress = useSession((s) => s.markJobInProgress);
   const autoReleaseCompletedJob = useSession((s) => s.autoReleaseCompletedJob);
   const job = effectiveJob ?? jobs.find((j) => j.id === id) ?? jobs[0];
   const resolvedAgreement = getAgreement(agreement);
@@ -44,11 +37,6 @@ function Inner({ id }: { id: string }) {
   const commissionPct = resolvedAgreement?.commissionPct ?? job.commissionPct ?? adminConfig.commissionPct;
   const commission = getCommissionAmount({ amount: total, commissionPct });
   const youGet = total - commission;
-  const proPostPaymentActions = getPostPaymentJobActionsForPro({
-    status: job.status,
-    agreement: resolvedAgreement,
-    isAssignedToCurrentPro: job.assignedProId === currentProfessionalId,
-  });
   const days =
     job.completionDeadline && job.status === "completed_pending_confirmation"
       ? Math.max(0, daysBetween(new Date().toISOString(), job.completionDeadline))
@@ -112,19 +100,21 @@ function Inner({ id }: { id: string }) {
             <Button full variant="outline" href={`/chat/${job.id}`}>
               Abrir chat
             </Button>
-            {proPostPaymentActions.canStartJob ? (
-              <Button full onClick={() => markJobInProgress(job.id)}>
-                Marcar en curso
-              </Button>
-            ) : proPostPaymentActions.canMarkCompleted ? (
-              <Button full href={`/profesional/trabajos/${job.id}/finalizar`}>
+            {job.status === "escrow_funded" && job.assignedProId === currentProfessionalId ? (
+              <Button full href={`/profesional/trabajos/${job.id}/finalizar`} testId="pro-finish-job">
                 Marcar terminado
+              </Button>
+            ) : job.status === "completed_pending_confirmation" ? (
+              <Button full disabled testId="pro-awaiting-client-confirmation">
+                Esperando confirmación
+              </Button>
+            ) : job.status === "completed" ? (
+              <Button full disabled testId="pro-completed-state">
+                Trabajo completado
               </Button>
             ) : (
               <Button full disabled>
-                {proPostPaymentActions.awaitingClientConfirmation
-                  ? "Esperando confirmación"
-                  : "Seguimiento activo"}
+                Seguimiento activo
               </Button>
             )}
           </div>
@@ -135,9 +125,7 @@ function Inner({ id }: { id: string }) {
             Pago en custodia
           </div>
           <div className="text-[12px] text-teal-700/80 mb-3 leading-snug">
-            {formatEuro(total)} retenidos por Arranxos. Se liberan tras
-            confirmación o tras {adminConfig.autoReleaseDays} días sin
-            respuesta del cliente.
+            {formatEuro(total)} retenidos en la demo como pago protegido hasta cerrar el trabajo mock.
           </div>
           <div className="bg-white rounded-xl p-3 border border-teal-100 text-[12.5px]">
             <div className="flex items-center justify-between mb-1">

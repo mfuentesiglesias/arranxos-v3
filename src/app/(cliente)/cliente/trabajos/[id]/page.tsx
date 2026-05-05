@@ -518,41 +518,42 @@ function ActionsForStatus({
   }
   if (
     actions.includes("confirm_completion") &&
-    actions.includes("open_dispute") &&
     postPaymentActions.canConfirmCompletion
   ) {
     return (
-      <Card className="mb-3 bg-violet-50/60 border-violet-100">
+      <Card className="mb-3 bg-violet-50/60 border-violet-100" testId="client-confirm-completion-card">
         <div className="font-bold text-[13.5px] text-violet-800 mb-1">
           El profesional marcó el trabajo como terminado
         </div>
         <div className="text-[12px] text-violet-700 mb-3">
-          Confirma para liberar el pago. Si algo no va bien, abre una disputa.
+          Revisa el resultado y confirma el cierre del trabajo en la demo. El pago protegido mock sigue asociado al acuerdo.
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <Button full href={`/cliente/trabajos/${jobId}/confirmar`}>
-            Confirmar
-          </Button>
-          <Button full variant="outline" href={`/cliente/trabajos/${jobId}/disputa`}>
-            Abrir disputa
-          </Button>
-        </div>
-      </Card>
-    );
-  }
-  if (actions.includes("rate_pro") && postPaymentActions.canRatePro) {
-    return (
-      <Card className="mb-3">
-        <div className="font-bold text-[13.5px] text-ink-800 mb-2">
-          ¿Cómo fue el trabajo?
-        </div>
-        <Button full href={`/cliente/trabajos/${jobId}/valorar`}>
-          Valorar profesional
+        <Button full href={`/cliente/trabajos/${jobId}/confirmar`} testId="client-confirm-completion">
+          Confirmar trabajo
         </Button>
       </Card>
     );
   }
-  if (postPaymentActions.showsProtectedPayment && (status === "escrow_funded" || status === "in_progress")) {
+  if (status === "completed") {
+    return (
+      <Card className="mb-3 bg-teal-50/40 border-teal-100" testId="client-job-completed-state">
+        <div className="font-bold text-[13.5px] text-teal-700 mb-1">
+          Trabajo completado
+        </div>
+        <div className="text-[11.5px] text-teal-700/80 leading-snug">
+          El cliente ya confirmó este trabajo en la demo y el acuerdo queda cerrado. El pago protegido mock sigue visible como referencia del flujo.
+        </div>
+      </Card>
+    );
+  }
+  if (
+    postPaymentActions.showsProtectedPayment &&
+    (
+      status === "escrow_funded" ||
+      status === "in_progress" ||
+      status === "completed_pending_confirmation"
+    )
+  ) {
     return (
       <Card className="mb-3 bg-teal-50/40 border-teal-100" testId="client-protected-payment-state">
         <div className="flex items-center gap-2 text-[12.5px] font-bold text-teal-700 mb-1">
@@ -560,7 +561,7 @@ function ActionsForStatus({
           Pago protegido en custodia
         </div>
         <div className="text-[11.5px] text-teal-700/80 leading-snug">
-          {formatEuro(finalPrice ?? Math.round((priceMin + priceMax) / 2))} retenidos en la demo como fondos protegidos.
+          {formatEuro(finalPrice ?? Math.round((priceMin + priceMax) / 2))} siguen asociados al acuerdo como pago protegido mock.
         </div>
       </Card>
     );

@@ -265,7 +265,29 @@ function Inner({ id }: { id: string }) {
               Pago protegido confirmado
             </div>
             <div className="text-[11.5px] text-teal-700/80 leading-snug">
-              Los fondos ya están retenidos en la demo. El siguiente paso operativo vendrá después, sin liberar pago todavía en este build.
+              Los fondos ya están retenidos en la demo. Ya puedes marcar el trabajo como terminado cuando acabes.
+            </div>
+          </Card>
+        )}
+
+        {resolvedAgreement && job.status === "completed_pending_confirmation" && (
+          <Card className="mb-3 bg-violet-50/60 border-violet-100" testId="pro-completion-pending-state">
+            <div className="font-bold text-[13px] text-violet-800 mb-1">
+              Trabajo marcado como terminado
+            </div>
+            <div className="text-[11.5px] text-violet-700 leading-snug">
+              El cliente debe revisar el resultado y confirmar el cierre del trabajo. El pago protegido mock sigue asociado al acuerdo.
+            </div>
+          </Card>
+        )}
+
+        {resolvedAgreement && job.status === "completed" && (
+          <Card className="mb-3 bg-teal-50/40 border-teal-100" testId="pro-job-completed-state">
+            <div className="font-bold text-[13px] text-teal-700 mb-1">
+              Trabajo completado
+            </div>
+            <div className="text-[11.5px] text-teal-700/80 leading-snug">
+              El cliente ya confirmó este trabajo en la demo y el acuerdo queda cerrado. El pago protegido mock queda visible como referencia del flujo.
             </div>
           </Card>
         )}
@@ -298,6 +320,8 @@ function Inner({ id }: { id: string }) {
           jobId={job.id}
           actions={proActions}
           requested={Boolean(existingRequest)}
+          status={job.status}
+          isAssignedToCurrentPro={isMine}
         />
       </div>
   );
@@ -318,10 +342,14 @@ function ProJobActions({
   jobId,
   actions,
   requested,
+  status,
+  isAssignedToCurrentPro,
 }: {
   jobId: string;
   actions: ReturnType<typeof getJobActionsForPro>;
   requested: boolean;
+  status: JobStatus;
+  isAssignedToCurrentPro: boolean;
 }) {
   if (actions.includes("request_job")) {
     return (
@@ -333,6 +361,29 @@ function ProJobActions({
         >
           {requested ? "Solicitud enviada ✓" : "Solicitar este trabajo"}
         </Button>
+      </div>
+    );
+  }
+  if (isAssignedToCurrentPro && status === "escrow_funded") {
+    return (
+      <div className="app-bottom-bar px-5 pb-5 pt-3 bg-white border-t border-sand-200/70">
+        <Button full href={`/profesional/trabajos/${jobId}/finalizar`} testId="pro-mark-completed-cta">
+          Marcar trabajo terminado
+        </Button>
+      </div>
+    );
+  }
+  if (isAssignedToCurrentPro && status === "completed_pending_confirmation") {
+    return (
+      <div className="app-bottom-bar px-5 pb-5 pt-3 bg-white border-t border-sand-200/70 text-center text-[12px] text-ink-500">
+        Esperando confirmación del cliente
+      </div>
+    );
+  }
+  if (isAssignedToCurrentPro && status === "completed") {
+    return (
+      <div className="app-bottom-bar px-5 pb-5 pt-3 bg-white border-t border-sand-200/70 text-center text-[12px] text-teal-700 font-semibold">
+        Trabajo completado
       </div>
     );
   }

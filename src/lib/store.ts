@@ -1067,12 +1067,17 @@ export const useSession = create<SessionState>()(
         }),
       markJobCompletedPendingConfirmation: (jobId) =>
         set((s) => {
+          const job = getEffectiveJobById(s, jobId);
           const agreement = s.agreements[jobId];
-          if (!agreement || agreement.paymentStatus !== "protected") return {};
-
-          const completionDeadline = new Date(
-            Date.now() + s.adminConfig.autoReleaseDays * 24 * 60 * 60 * 1000,
-          ).toISOString();
+          if (
+            !job ||
+            !job.assignedProId ||
+            job.status !== "escrow_funded" ||
+            !agreement ||
+            agreement.paymentStatus !== "protected"
+          ) {
+            return {};
+          }
 
           return {
             jobOverrides: {
@@ -1080,7 +1085,7 @@ export const useSession = create<SessionState>()(
               [jobId]: {
                 ...s.jobOverrides[jobId],
                 status: "completed_pending_confirmation",
-                completionDeadline,
+                completionDeadline: undefined,
                 finalPrice: agreement.finalPrice,
                 commissionPct: agreement.commissionPct,
               },
@@ -1089,8 +1094,16 @@ export const useSession = create<SessionState>()(
         }),
       confirmCompletedJob: (jobId) =>
         set((s) => {
+          const job = getEffectiveJobById(s, jobId);
           const agreement = s.agreements[jobId];
-          if (!agreement || agreement.paymentStatus !== "protected") return {};
+          if (
+            !job ||
+            job.status !== "completed_pending_confirmation" ||
+            !agreement ||
+            agreement.paymentStatus !== "protected"
+          ) {
+            return {};
+          }
 
           return {
             jobOverrides: {

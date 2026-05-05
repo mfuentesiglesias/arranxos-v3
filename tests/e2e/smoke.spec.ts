@@ -154,6 +154,24 @@ test("cliente publica trabajo y lo ve en detalle y listado", async ({ page }) =>
   await page.goto(`/profesional/trabajos/${createdJobId}`);
   await expectVisibleByTestId(page, "agreement-summary-pro");
   await expectVisibleByTestId(page, "pro-payment-protected-state");
+  await clickByTestId(page, "pro-mark-completed-cta");
+  await expect(page).toHaveURL(new RegExp(`/profesional/trabajos/${createdJobId}/finalizar`));
+  await page.getByRole("button", { name: "Marcar terminado y avisar al cliente" }).first().click();
+  await expect(page).toHaveURL(new RegExp(`/profesional/trabajos/${createdJobId}/seguimiento`));
+  await expectVisibleByTestId(page, "pro-awaiting-client-confirmation");
+
+  await loginWithDemoAccess(page, "demo-client");
+  await page.goto(`/cliente/trabajos/${createdJobId}`);
+  await expectVisibleByTestId(page, "client-confirm-completion-card");
+  await clickByTestId(page, "client-confirm-completion");
+  await expect(page).toHaveURL(new RegExp(`/cliente/trabajos/${createdJobId}/confirmar`));
+  await page.getByRole("button", { name: "Confirmar y cerrar trabajo" }).first().click();
+  await expect(page).toHaveURL(new RegExp(`/cliente/trabajos/${createdJobId}`));
+  await expectVisibleByTestId(page, "client-job-completed-state");
+
+  await loginWithDemoAccess(page, "demo-pro-approved");
+  await page.goto(`/profesional/trabajos/${createdJobId}`);
+  await expectVisibleByTestId(page, "pro-job-completed-state");
 });
 
 test("admin tickets búsqueda carga listado", async ({ page }) => {

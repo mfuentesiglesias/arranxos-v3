@@ -1,5 +1,5 @@
 "use client";
-import { use, Suspense, useEffect, useMemo, useState } from "react";
+import { use, Suspense, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
@@ -8,13 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { jobs } from "@/lib/data";
-import {
-  canAutoReleaseCompletedJob,
-  canConfirmCompletedJob,
-  getAgreement,
-  getCommissionAmount,
-  getEffectiveFinalPrice,
-} from "@/lib/domain/policies";
+import { canConfirmCompletedJob, getAgreement, getCommissionAmount, getEffectiveFinalPrice } from "@/lib/domain/policies";
 import {
   getEffectiveAdminConfig,
   getEffectiveJobById,
@@ -33,7 +27,6 @@ function Inner({ id }: { id: string }) {
   const effectiveJob = useMemo(() => getEffectiveJobById(session, id), [session, id]);
   const agreement = session.agreements[id];
   const confirmCompletedJob = useSession((s) => s.confirmCompletedJob);
-  const autoReleaseCompletedJob = useSession((s) => s.autoReleaseCompletedJob);
   const job = effectiveJob ?? jobs.find((j) => j.id === id) ?? jobs[0];
   const resolvedAgreement = getAgreement(agreement);
   const [confirming, setConfirming] = useState(false);
@@ -49,23 +42,11 @@ function Inner({ id }: { id: string }) {
     role: "client",
     completionDeadline: job.completionDeadline,
   });
-  const canAutoRelease = canAutoReleaseCompletedJob({
-    status: job.status,
-    agreement: resolvedAgreement,
-    completionDeadline: job.completionDeadline,
-  });
-
-  useEffect(() => {
-    if (canAutoRelease) {
-      autoReleaseCompletedJob(id);
-    }
-  }, [autoReleaseCompletedJob, canAutoRelease, id]);
-
   const confirm = () => {
     if (!canConfirm) return;
     setConfirming(true);
     confirmCompletedJob(id);
-    setTimeout(() => router.push(`/cliente/trabajos/${id}/valorar`), 800);
+    setTimeout(() => router.push(`/cliente/trabajos/${id}`), 800);
   };
 
   return (
@@ -81,8 +62,8 @@ function Inner({ id }: { id: string }) {
             ¿Confirmas que el trabajo está bien hecho?
           </div>
           <div className="text-[12.5px] text-ink-500 leading-relaxed mb-4">
-            Al confirmar, liberamos el pago al profesional. Esta acción no se
-            puede deshacer.
+            Al confirmar, cerramos el trabajo como completado dentro de la demo.
+            Esta acción no se puede deshacer.
           </div>
           <div className="bg-sand-50 rounded-xl p-3 border border-sand-200/70 text-left">
             <div className="flex items-center justify-between text-[12.5px] mb-1.5">
@@ -106,16 +87,8 @@ function Inner({ id }: { id: string }) {
           </div>
         </Card>
 
-        <Card className="bg-amber-50/60 border-amber-100">
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-full bg-amber-500 text-white flex items-center justify-center text-[14px]">
-              ⚠️
-            </div>
-            <div className="text-[12px] text-amber-700 leading-snug">
-              ¿Algo no fue bien? Mejor abre una disputa antes de confirmar. El
-              equipo de Arranxos revisará el caso.
-            </div>
-          </div>
+        <Card className="bg-amber-50/60 border-amber-100 text-[12px] text-amber-700 leading-snug">
+          El acuerdo y el pago protegido seguirán visibles tras la confirmación.
         </Card>
 
         {!canConfirm && (
@@ -127,14 +100,7 @@ function Inner({ id }: { id: string }) {
 
       <div className="app-bottom-bar px-5 pb-5 pt-3 bg-white border-t border-sand-200/70 flex flex-col gap-2">
         <Button full onClick={confirm} disabled={confirming || !canConfirm}>
-          {confirming ? "Confirmando…" : "Confirmar y liberar pago"}
-        </Button>
-        <Button
-          full
-          variant="outline"
-          href={`/cliente/trabajos/${id}/disputa`}
-        >
-          Hay un problema, abrir disputa
+          {confirming ? "Confirmando…" : "Confirmar y cerrar trabajo"}
         </Button>
       </div>
     </div>
