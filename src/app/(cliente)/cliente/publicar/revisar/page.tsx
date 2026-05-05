@@ -26,10 +26,10 @@ function RevisarInner() {
   const createClientJob = useSession((s) => s.createClientJob);
   const effectiveCategories = getEffectiveCatalogCategories(approvedCatalogCategories);
   const effectiveServices = getEffectiveCatalogServices(approvedCatalogServices);
-  const categoryId = params.get("categoryId") ?? params.get("cat") ?? "";
-  const categoryNameParam = params.get("categoryName") ?? "";
-  const serviceId = params.get("serviceId") ?? "";
-  const serviceNameParam = params.get("serviceName") ?? params.get("service") ?? "";
+  const categoryId = params?.get("categoryId") ?? params?.get("cat") ?? "";
+  const categoryNameParam = params?.get("categoryName") ?? "";
+  const serviceId = params?.get("serviceId") ?? "";
+  const serviceNameParam = params?.get("serviceName") ?? params?.get("service") ?? "";
   const category =
     effectiveCategories.find((entry) => entry.id === categoryId) ??
     effectiveCategories.find(
@@ -47,14 +47,14 @@ function RevisarInner() {
     );
   const categoryName = categoryNameParam || category?.name || "Sin categoría";
   const service = serviceNameParam || selectedService?.name || "";
-  const title = params.get("title") ?? "";
-  const description = params.get("description") ?? "";
-  const location = params.get("location") ?? "";
-  const priceRange = params.get("priceRange") ?? "";
-  const urgent = params.get("urgent") === "1";
+  const title = params?.get("title") ?? "";
+  const description = params?.get("description") ?? "";
+  const location = params?.get("location") ?? "";
+  const priceRange = params?.get("priceRange") ?? "";
+  const urgent = params?.get("urgent") === "1";
   const answers: Record<string, string> = (() => {
     try {
-      return JSON.parse(params.get("answers") ?? "{}");
+      return JSON.parse(params?.get("answers") ?? "{}");
     } catch {
       return {};
     }

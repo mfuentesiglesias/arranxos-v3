@@ -26,7 +26,7 @@ function DetalleInner() {
   const canNext = Boolean(title && description && priceRange && !hasLeak(description));
 
   const next = () => {
-    const q = new URLSearchParams(params);
+    const q = new URLSearchParams(params?.toString());
     q.set("title", title);
     q.set("description", description);
     q.set("location", location);
