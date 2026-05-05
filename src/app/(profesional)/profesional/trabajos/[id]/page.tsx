@@ -1,5 +1,5 @@
 "use client";
-import { use, useEffect } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
@@ -8,11 +8,13 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
+import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/badge";
 import { JobStatusTimeline } from "@/components/jobs/job-status-timeline";
 import { MapView } from "@/components/map/map-view";
 import { jobs } from "@/lib/data";
 import {
+  getActiveNegotiation,
   canAutoReleaseCompletedJob,
   canSeeExactLocation,
   getAgreement,
@@ -27,6 +29,7 @@ import {
   getEffectiveAdminConfig,
   getEffectiveJobById,
   getJobRequestForProfessional,
+  getNegotiationByJobId,
   useSession,
 } from "@/lib/store";
 import type { JobStatus } from "@/lib/types";
@@ -43,9 +46,16 @@ function Inner({ id }: { id: string }) {
   const effectiveJob = getEffectiveJobById(session, id);
   const existingRequest = getJobRequestForProfessional(session, id, currentProfessionalId);
   const agreement = useSession((s) => getAgreementByJobId(s, id));
+  const negotiation = useSession((s) => getNegotiationByJobId(s, id));
   const autoReleaseCompletedJob = useSession((s) => s.autoReleaseCompletedJob);
+  const submitNegotiationProposal = useSession((s) => s.submitNegotiationProposal);
+  const acceptNegotiation = useSession((s) => s.acceptNegotiation);
   const job = effectiveJob ?? jobs[0];
   const resolvedAgreement = getAgreement(agreement);
+  const activeNegotiation = getActiveNegotiation(negotiation);
+  const [proposalAmount, setProposalAmount] = useState(
+    String(activeNegotiation?.lastAmount ?? Math.round((job.priceMin + job.priceMax) / 2)),
+  );
 
   const isMine = job.assignedProId === currentProfessionalId;
   const canSeeLocation = canSeeExactLocation({
@@ -71,6 +81,24 @@ function Inner({ id }: { id: string }) {
     agreement: resolvedAgreement,
     completionDeadline: job.completionDeadline,
   });
+  const canProposeBudget = isMine && job.status === "in_progress" && !resolvedAgreement;
+  const canAcceptClientCounter = Boolean(
+    canProposeBudget &&
+      activeNegotiation?.lastAmount &&
+      activeNegotiation.proposedBy === "client" &&
+      !activeNegotiation.proAccepted,
+  );
+
+  const sendProposal = () => {
+    const amount = Number(proposalAmount || 0);
+    if (!canProposeBudget || !amount) return;
+    submitNegotiationProposal(job.id, "pro", amount);
+  };
+
+  const acceptCounteroffer = () => {
+    if (!canAcceptClientCounter) return;
+    acceptNegotiation(job.id, "pro");
+  };
 
   useEffect(() => {
     if (canAutoRelease) {
@@ -169,6 +197,55 @@ function Inner({ id }: { id: string }) {
               : "(si se acuerda en el rango medio)."}
           </div>
         </Card>
+
+        {canProposeBudget && (
+          <Card className="mb-3" testId="pro-offer-panel">
+            <div className="font-bold text-[13.5px] text-ink-800 mb-2">
+              Propuesta de presupuesto
+            </div>
+            {activeNegotiation?.lastAmount && (
+              <div className="mb-3 rounded-xl border border-sand-200/70 bg-sand-50 px-3.5 py-3 text-[12px] text-ink-600 leading-snug">
+                Oferta actual: <strong>{formatEuro(activeNegotiation.lastAmount)}</strong>
+                {activeNegotiation.proposedBy === "client"
+                  ? " · contraoferta del cliente"
+                  : " · propuesta enviada por ti"}
+              </div>
+            )}
+            <Input
+              label="Importe propuesto (€)"
+              type="number"
+              value={proposalAmount}
+              onChange={(event) => setProposalAmount(event.target.value)}
+              data-testid="pro-offer-amount"
+              note="El precio final solo se cierra cuando ambas partes aceptan la misma oferta."
+            />
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <Button full onClick={sendProposal} testId="pro-send-offer">
+                Enviar propuesta
+              </Button>
+              <Button
+                full
+                variant="outline"
+                onClick={acceptCounteroffer}
+                disabled={!canAcceptClientCounter}
+                testId="pro-accept-counteroffer"
+              >
+                Aceptar contraoferta
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        {resolvedAgreement && (
+          <Card className="mb-3 bg-teal-50/50 border-teal-100" testId="agreement-summary-pro">
+            <div className="font-bold text-[13px] text-teal-700 mb-1">
+              Acuerdo alcanzado
+            </div>
+            <div className="text-[11.5px] text-teal-700/80 leading-snug">
+              Precio final acordado: {formatEuro(resolvedAgreement.finalPrice)}.
+            </div>
+          </Card>
+        )}
 
         {existingRequest?.status === "accepted" && !accepted && (
           <Card className="mb-3 bg-teal-50/50 border-teal-100">

@@ -9,12 +9,14 @@ import { TopBar } from "@/components/layout/top-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
 import { StatusBadge } from "@/components/ui/badge";
 import { JobStatusTimeline } from "@/components/jobs/job-status-timeline";
 import { jobs, professionals } from "@/lib/data";
 import {
+  getActiveNegotiation,
   getAgreement,
   getEffectiveFinalPrice,
   getJobActionsForClient,
@@ -28,6 +30,7 @@ import {
   getEffectiveAdminConfig,
   getEffectiveJobById,
   getJobOutreachMeta,
+  getNegotiationByJobId,
   getSearchTicketByJobId,
   useSession,
 } from "@/lib/store";
@@ -56,10 +59,13 @@ function Inner({ id }: { id: string }) {
   const effectiveJob = getEffectiveJobById(session, id);
   const jobRequests = useSession((s) => s.jobRequests);
   const agreement = useSession((s) => getAgreementByJobId(s, id));
+  const negotiation = useSession((s) => getNegotiationByJobId(s, id));
   const outreachMeta = useSession((s) => getJobOutreachMeta(s, id));
   const searchTicket = useSession((s) => getSearchTicketByJobId(s, id));
   const createSearchTicket = useSession((s) => s.createSearchTicket);
   const autoReleaseCompletedJob = useSession((s) => s.autoReleaseCompletedJob);
+  const submitNegotiationProposal = useSession((s) => s.submitNegotiationProposal);
+  const acceptNegotiation = useSession((s) => s.acceptNegotiation);
   const job = effectiveJob ?? jobs[0];
   const effectiveJobRequests = (jobRequests ?? []).filter(
     (jobRequest) => jobRequest.jobId === id,
@@ -67,7 +73,11 @@ function Inner({ id }: { id: string }) {
   const acceptedJobRequest = getAcceptedJobRequestForJob(session, id);
   const existingSearchTicket = searchTicket ?? null;
   const resolvedAgreement = getAgreement(agreement);
+  const activeNegotiation = getActiveNegotiation(negotiation);
   const finalPrice = getEffectiveFinalPrice(job, resolvedAgreement);
+  const [counterofferAmount, setCounterofferAmount] = useState(
+    String(activeNegotiation?.lastAmount ?? Math.round((job.priceMin + job.priceMax) / 2)),
+  );
   const postPaymentActions = getPostPaymentJobActionsForClient({
     status: job.status,
     agreement: resolvedAgreement,
@@ -86,6 +96,14 @@ function Inner({ id }: { id: string }) {
     completionDeadline: job.completionDeadline,
   });
   const canOpenChat = clientActions.includes("open_chat");
+  const canAcceptOffer = Boolean(
+    activeNegotiation?.lastAmount &&
+      activeNegotiation.proposedBy === "pro" &&
+      !activeNegotiation.clientAccepted,
+  );
+  const canCounteroffer = Boolean(
+    assignedPro && job.status === "in_progress" && !resolvedAgreement,
+  );
   const searchTicketState = getSearchTicketClientState({
     job,
     professionals,
@@ -115,6 +133,17 @@ function Inner({ id }: { id: string }) {
       autoReleaseCompletedJob(id);
     }
   }, [autoReleaseCompletedJob, id, postPaymentActions.canAutoRelease]);
+
+  const acceptOffer = () => {
+    if (!canAcceptOffer) return;
+    acceptNegotiation(job.id, "client");
+  };
+
+  const sendCounteroffer = () => {
+    const amount = Number(counterofferAmount || 0);
+    if (!canCounteroffer || !amount) return;
+    submitNegotiationProposal(job.id, "client", amount);
+  };
 
   return (
     <div className="flex-1 flex flex-col bg-sand-50">
@@ -208,6 +237,66 @@ function Inner({ id }: { id: string }) {
           <div className="font-bold text-[13.5px] text-ink-800 mb-3">Estado</div>
           <JobStatusTimeline status={job.status} />
         </Card>
+
+        {activeNegotiation?.lastAmount && !resolvedAgreement && (
+          <Card className="mb-3" testId="client-offer-panel">
+            <div className="font-bold text-[13.5px] text-ink-800 mb-2">
+              Oferta actual
+            </div>
+            <div className="mb-3 rounded-xl border border-sand-200/70 bg-sand-50 px-3.5 py-3 text-[12px] text-ink-600 leading-snug">
+              {activeNegotiation.proposedBy === "pro"
+                ? "El profesional te ha enviado una propuesta."
+                : "Tu contraoferta está pendiente de revisión por el profesional."}
+              <div className="mt-1 font-bold text-ink-800">
+                {formatEuro(activeNegotiation.lastAmount)}
+              </div>
+            </div>
+            {canAcceptOffer && (
+              <div className="grid grid-cols-2 gap-2">
+                <Button full onClick={acceptOffer} testId="client-accept-offer">
+                  Aceptar presupuesto
+                </Button>
+                <Button full variant="outline" href={`/chat/${job.id}`}>
+                  Abrir chat
+                </Button>
+              </div>
+            )}
+          </Card>
+        )}
+
+        {canCounteroffer && !resolvedAgreement && (
+          <Card className="mb-3">
+            <div className="font-bold text-[13.5px] text-ink-800 mb-2">
+              Contraoferta
+            </div>
+            <Input
+              label="Importe propuesto (€)"
+              type="number"
+              value={counterofferAmount}
+              onChange={(event) => setCounterofferAmount(event.target.value)}
+              data-testid="client-counteroffer-amount"
+            />
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <Button full variant="outline" href={`/chat/${job.id}`}>
+                Abrir chat
+              </Button>
+              <Button full onClick={sendCounteroffer} testId="client-send-counteroffer">
+                Enviar contraoferta
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        {resolvedAgreement && (
+          <Card className="mb-3 bg-teal-50/50 border-teal-100" testId="agreement-summary-client">
+            <div className="font-bold text-[13px] text-teal-700 mb-1">
+              Acuerdo alcanzado
+            </div>
+            <div className="text-[11.5px] text-teal-700/80 leading-snug">
+              Precio final acordado: {formatEuro(resolvedAgreement.finalPrice)}.
+            </div>
+          </Card>
+        )}
 
         {/* Solicitudes / invitaciones */}
         {clientActions.includes("view_requests") && (
