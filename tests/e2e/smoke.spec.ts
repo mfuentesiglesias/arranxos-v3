@@ -232,6 +232,11 @@ test("solicitud de catálogo: pro solicita, admin aprueba y pro la encuentra", a
   await expect(byTestId(page, `catalog-request-status-${specialtySlug}`)).toContainText(
     "Aprobada",
   );
+  await page.goto("/admin/catalogo");
+  await expectVisibleByTestId(page, "admin-catalog-page");
+  await expectVisibleByTestId(page, "admin-catalog-summary");
+  await expectVisibleByTestId(page, "admin-catalog-category-carpinteria-y-madera");
+  await expectVisibleByTestId(page, `admin-catalog-service-${finalCatalogSlug}`);
 
   await loginWithDemoAccess(page, "demo-pro-approved");
   await page.goto("/profesional/mi-perfil");

@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
@@ -219,6 +220,14 @@ export default function AdminCatalogRequestsPage() {
           <SummaryPill label="Aprobadas" value={approvedCount} tone="teal" />
           <SummaryPill label="Rechazadas" value={rejectedCount} tone="rose" />
         </div>
+
+        <Link
+          href="/admin/catalogo"
+          className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-white px-3.5 py-2 text-[12px] font-bold text-coral-600 border border-sand-200"
+        >
+          <Icon name="layers" size={14} />
+          Ver catálogo efectivo
+        </Link>
 
         {feedback && (
           <div className="mb-3 rounded-2xl border border-teal-100 bg-teal-50 px-3.5 py-3 text-[12px] font-semibold text-teal-700">

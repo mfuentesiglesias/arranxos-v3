@@ -98,6 +98,12 @@ export default function AdminDashboard() {
       icon: "layers",
       sub: "Revisar nuevas especialidades propuestas por profesionales",
     },
+    {
+      href: "/admin/catalogo",
+      label: "Catálogo",
+      icon: "layers",
+      sub: "Categorías y servicios efectivos seed + admin",
+    },
     { href: "/admin/configuracion", label: "Configuración", icon: "settings", sub: `Comisión ${defaultAdminConfig.commissionPct}% · auto-release ${defaultAdminConfig.autoReleaseDays}d` },
   ];
 
