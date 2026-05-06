@@ -82,7 +82,10 @@ function Inner({ id }: { id: string }) {
     agreement: resolvedAgreement,
     completionDeadline: job.completionDeadline,
   });
-  const canProposeBudget = isMine && job.status === "in_progress" && !resolvedAgreement;
+  const canProposeBudget =
+    isMine &&
+    (job.status === "in_progress" || job.status === "agreement_pending") &&
+    !resolvedAgreement;
   const canAcceptClientCounter = Boolean(
     canProposeBudget &&
       activeNegotiation?.lastAmount &&
@@ -178,7 +181,7 @@ function Inner({ id }: { id: string }) {
 
         {/* Timeline + countdown */}
         {accepted && (
-          <Card className="mb-3">
+          <Card className="mb-3" testId={`pro-job-status-${job.status}`}>
             <div className="font-bold text-[13.5px] text-ink-800 mb-3">Estado</div>
             <JobStatusTimeline status={job.status} />
             {job.completionDeadline && job.status === "completed_pending_confirmation" && (
@@ -418,6 +421,18 @@ function ProJobActions({
     return (
       <div className="app-bottom-bar px-5 pb-5 pt-3 bg-white border-t border-sand-200/70 text-center text-[12px] text-teal-700 font-semibold">
         Trabajo completado
+      </div>
+    );
+  }
+  if (isAssignedToCurrentPro && (status === "in_progress" || status === "agreement_pending")) {
+    return (
+      <div className="app-bottom-bar px-5 pb-5 pt-3 bg-white border-t border-sand-200/70 grid grid-cols-2 gap-2">
+        <Button full variant="outline" href={`/chat/${jobId}`} testId="pro-open-chat-cta">
+          Abrir chat
+        </Button>
+        <Button full href={`/profesional/trabajos/${jobId}/seguimiento`} testId="pro-view-tracking-cta">
+          Ver seguimiento
+        </Button>
       </div>
     );
   }

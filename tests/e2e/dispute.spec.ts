@@ -67,16 +67,19 @@ test("cliente abre disputa y admin la resuelve a favor del cliente", async ({ pa
   await page.goto(`/cliente/trabajos/${createdJobId}/solicitudes`);
   await page.getByRole("link", { name: "Aceptar" }).first().click();
   await page.getByRole("button", { name: "Aceptar solicitud" }).first().click();
+  await expectVisibleByTestId(page, "client-job-status-in_progress");
 
   await loginWithDemoAccess(page, "demo-pro-approved");
   await page.goto(`/profesional/trabajos/${createdJobId}`);
   await byTestId(page, "pro-offer-amount").fill("980");
   await clickByTestId(page, "pro-send-offer");
+  await expectVisibleByTestId(page, "pro-job-status-agreement_pending");
 
   await loginWithDemoAccess(page, "demo-client");
   await page.goto(`/cliente/trabajos/${createdJobId}`);
   await expectVisibleByTestId(page, "client-offer-panel");
   await clickByTestId(page, "client-accept-offer");
+  await expectVisibleByTestId(page, "client-job-status-agreed");
   await expectVisibleByTestId(page, "client-pay-cta-card");
   await clickByTestId(page, "client-pay-protected");
   await expect(page).toHaveURL(new RegExp(`/cliente/trabajos/${createdJobId}/pagar`));
@@ -96,16 +99,12 @@ test("cliente abre disputa y admin la resuelve a favor del cliente", async ({ pa
   await loginWithDemoAccess(page, "demo-client");
   await page.goto(`/cliente/trabajos/${createdJobId}`);
   await expectVisibleByTestId(page, "client-confirm-completion-card");
-  await page.goto(`/cliente/trabajos/${createdJobId}/disputa`);
-  await page.locator("select").first().click();
-  await page.keyboard.press("ArrowDown");
-  await page.keyboard.press("Enter");
-  await page
-    .getByPlaceholder("Cuéntanos con detalle lo ocurrido. Incluye fechas, nombres y lo que esperabas.")
-    .first()
-    .fill("El mueble quedó sin rematar en dos baldas y faltan acabados en los laterales.");
-  await expect(page.getByRole("button", { name: "Enviar disputa" }).first()).toBeEnabled();
-  await page.getByRole("button", { name: "Enviar disputa" }).first().click();
+  await clickByTestId(page, "client-open-dispute");
+  await expect(page).toHaveURL(new RegExp(`/cliente/trabajos/${createdJobId}/disputa`));
+  await byTestId(page, "dispute-reason-select").selectOption("Trabajo incompleto o mal hecho");
+  await byTestId(page, "dispute-description").fill("El mueble quedó sin rematar en dos baldas y faltan acabados en los laterales.");
+  await expect(byTestId(page, "submit-dispute")).toBeEnabled();
+  await clickByTestId(page, "submit-dispute");
   await expect(page).toHaveURL(new RegExp(`/cliente/trabajos/${createdJobId}`));
   await expectVisibleByTestId(page, "client-dispute-open-state");
 

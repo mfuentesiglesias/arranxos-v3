@@ -3,10 +3,10 @@ import { cn } from "@/lib/utils";
 
 const STEPS: { key: JobStatus | "after"; label: string }[] = [
   { key: "published", label: "Publicado" },
+  { key: "in_progress", label: "En curso" },
   { key: "agreement_pending", label: "Negociando" },
   { key: "agreed", label: "Acordado" },
   { key: "escrow_funded", label: "Pago protegido" },
-  { key: "in_progress", label: "En curso" },
   { key: "completed_pending_confirmation", label: "Confirmando" },
   { key: "completed", label: "Completado" },
 ];

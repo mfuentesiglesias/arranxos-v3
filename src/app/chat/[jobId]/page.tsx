@@ -386,6 +386,7 @@ function Inner({ jobId }: { jobId: string }) {
           <button
             onClick={send}
             disabled={!input.trim() || liveLeaks.length > 0}
+            data-testid="chat-send-message"
             className="w-10 h-10 rounded-full bg-coral-500 text-white flex items-center justify-center flex-shrink-0 disabled:opacity-40"
           >
             <Icon name="send" size={16} />

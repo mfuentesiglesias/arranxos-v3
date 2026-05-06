@@ -204,7 +204,7 @@ export function canMarkJobCompleted({
   return (
     role === "professional" &&
     isAssignedToCurrentPro &&
-    status === "in_progress" &&
+    status === "escrow_funded" &&
     hasProtectedPayment(agreement)
   );
 }
@@ -365,7 +365,7 @@ export function canProposePrice({
     chatEnabled &&
     !hasAgreement &&
     (role === "client" || role === "professional") &&
-    jobStatus === "agreement_pending"
+    (jobStatus === "in_progress" || jobStatus === "agreement_pending")
   );
 }
 
@@ -599,31 +599,23 @@ export function getJobActionsForPro({
     return ["request_job"];
   }
 
-  if (status === "agreement_pending" && isAssignedToCurrentPro) {
-    return ["open_chat"];
+  if (
+    isAssignedToCurrentPro &&
+    !hasAgreement &&
+    (status === "in_progress" || status === "agreement_pending")
+  ) {
+    return ["open_chat", "view_tracking"];
   }
 
   if (
     isAssignedToCurrentPro &&
-    (status === "agreed" || status === "escrow_funded")
+    status === "agreed"
   ) {
     if (hasAgreement && paymentStatus === "pending") {
       return ["open_chat", "view_tracking"];
     }
 
     return ["open_chat", "view_tracking"];
-  }
-
-  if (
-    getPostPaymentJobActionsForPro({
-      status,
-      agreement: hasAgreement
-        ? ({ paymentStatus } as AgreementState)
-        : undefined,
-      isAssignedToCurrentPro,
-    }).canStartJob
-  ) {
-    return ["start_job", "open_chat", "view_tracking"];
   }
 
   if (

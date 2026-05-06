@@ -945,10 +945,22 @@ export const useSession = create<SessionState>()(
       agreements: {},
       acceptProfessional: (jobId, proId) =>
         set((s) => {
+          const acceptedJob = getEffectiveJobById(s, jobId);
+          const existingChat = getChatForJob(s, jobId);
           const nextNegotiations = { ...s.negotiations };
           const nextAgreements = { ...s.agreements };
           delete nextNegotiations[jobId];
           delete nextAgreements[jobId];
+          const nextChat =
+            !existingChat && acceptedJob
+              ? buildJobChat(
+                  {
+                    ...acceptedJob,
+                    assignedProId: proId,
+                  },
+                  proId,
+                )
+              : undefined;
 
           return {
             negotiations: nextNegotiations,
@@ -958,19 +970,25 @@ export const useSession = create<SessionState>()(
               [jobId]: {
                 ...s.jobOverrides[jobId],
                 assignedProId: proId,
-                status: "agreement_pending",
+                status: "in_progress",
                 finalPrice: undefined,
                 commissionPct: undefined,
               },
             },
+            chats: nextChat ? [nextChat, ...cloneChats(s.chats ?? [])] : s.chats,
           };
         }),
       submitNegotiationProposal: (jobId, by, amount) =>
         set((s) => {
           const timestamp = new Date().toISOString();
           const current = s.negotiations[jobId] ?? createEmptyNegotiation(jobId);
+          const currentJob = getEffectiveJobById(s, jobId);
           const eventType: NegotiationEventType =
             current.history.length > 0 ? "counteroffer" : "proposal";
+          const nextStatus =
+            currentJob?.status === "in_progress" || currentJob?.status === "agreement_pending"
+              ? "agreement_pending"
+              : undefined;
 
           return {
             negotiations: {
@@ -994,6 +1012,15 @@ export const useSession = create<SessionState>()(
                 updatedAt: timestamp,
               },
             },
+            jobOverrides: nextStatus
+              ? {
+                  ...s.jobOverrides,
+                  [jobId]: {
+                    ...s.jobOverrides[jobId],
+                    status: nextStatus,
+                  },
+                }
+              : s.jobOverrides,
           };
         }),
       acceptNegotiation: (jobId, by) =>
@@ -1535,6 +1562,11 @@ export const useSession = create<SessionState>()(
             return {};
           }
 
+          const nextNegotiations = { ...s.negotiations };
+          const nextAgreements = { ...s.agreements };
+          delete nextNegotiations[jobId];
+          delete nextAgreements[jobId];
+
           acceptedRequest = { ...request, status: "accepted" };
           const acceptedJob = getEffectiveJobById(s, jobId);
           const existingChat = getChatForJob(s, jobId);
@@ -1550,6 +1582,8 @@ export const useSession = create<SessionState>()(
               : undefined;
 
           return {
+            negotiations: nextNegotiations,
+            agreements: nextAgreements,
             jobRequests: currentJobRequests.map((jobRequest) => {
               if (jobRequest.jobId !== jobId) return jobRequest;
               if (jobRequest.id === requestId) return acceptedRequest!;
@@ -1564,6 +1598,8 @@ export const useSession = create<SessionState>()(
                 ...s.jobOverrides[jobId],
                 assignedProId: request.proId,
                 status: "in_progress",
+                finalPrice: undefined,
+                commissionPct: undefined,
               },
             },
             chats: nextChat ? [nextChat, ...cloneChats(s.chats ?? [])] : s.chats,

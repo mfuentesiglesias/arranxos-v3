@@ -105,7 +105,9 @@ function Inner({ id }: { id: string }) {
       !activeNegotiation.clientAccepted,
   );
   const canCounteroffer = Boolean(
-    assignedPro && job.status === "in_progress" && !resolvedAgreement,
+    assignedPro &&
+      (job.status === "in_progress" || job.status === "agreement_pending") &&
+      !resolvedAgreement,
   );
   const searchTicketState = getSearchTicketClientState({
     job,
@@ -236,7 +238,7 @@ function Inner({ id }: { id: string }) {
           </div>
         </Card>
 
-        <Card className="mb-3">
+        <Card className="mb-3" testId={`client-job-status-${job.status}`}>
           <div className="font-bold text-[13.5px] text-ink-800 mb-3">Estado</div>
           <JobStatusTimeline status={job.status} />
         </Card>
@@ -567,9 +569,16 @@ function ActionsForStatus({
         <div className="text-[12px] text-violet-700 mb-3">
           Revisa el resultado y confirma el cierre del trabajo en la demo. El pago protegido mock sigue asociado al acuerdo.
         </div>
-        <Button full href={`/cliente/trabajos/${jobId}/confirmar`} testId="client-confirm-completion">
-          Confirmar trabajo
-        </Button>
+        <div className="grid grid-cols-2 gap-2">
+          <Button full href={`/cliente/trabajos/${jobId}/confirmar`} testId="client-confirm-completion">
+            Confirmar trabajo
+          </Button>
+          {actions.includes("open_dispute") && postPaymentActions.canOpenDispute && (
+            <Button full variant="outline" href={`/cliente/trabajos/${jobId}/disputa`} testId="client-open-dispute">
+              Abrir disputa
+            </Button>
+          )}
+        </div>
       </Card>
     );
   }

@@ -130,7 +130,7 @@ function Inner() {
   const all = effectiveJobs.filter((j) =>
     myOnly
       ? j.assignedProId === currentProfessionalId
-      : j.status === "published" || j.status === "agreement_pending",
+      : j.status === "published",
   );
 
   const enrichedJobs = all.map((job) => ({

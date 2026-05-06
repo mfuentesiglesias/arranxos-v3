@@ -130,16 +130,19 @@ test("cliente publica trabajo y lo ve en detalle y listado", async ({ page }) =>
   await page.getByRole("link", { name: "Aceptar" }).first().click();
   await page.getByRole("button", { name: "Aceptar solicitud" }).first().click();
   await expect(page.getByText("Profesional asignado").first()).toBeVisible();
+  await expectVisibleByTestId(page, "client-job-status-in_progress");
 
   await loginWithDemoAccess(page, "demo-pro-approved");
   await page.goto(`/profesional/trabajos/${createdJobId}`);
   await byTestId(page, "pro-offer-amount").fill(offerAmount);
   await clickByTestId(page, "pro-send-offer");
+  await expectVisibleByTestId(page, "pro-job-status-agreement_pending");
 
   await loginWithDemoAccess(page, "demo-client");
   await page.goto(`/cliente/trabajos/${createdJobId}`);
   await expectVisibleByTestId(page, "client-offer-panel");
   await clickByTestId(page, "client-accept-offer");
+  await expectVisibleByTestId(page, "client-job-status-agreed");
   await expectVisibleByTestId(page, "agreement-summary-client");
   await expect(byTestId(page, "agreement-summary-client")).toContainText("980");
   await expectVisibleByTestId(page, "client-pay-cta-card");

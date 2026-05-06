@@ -96,6 +96,7 @@ function Inner({ id }: { id: string }) {
               label="Motivo principal"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
+              data-testid="dispute-reason-select"
             >
               <option value="">Selecciona un motivo…</option>
               {REASONS.map((r) => (
@@ -109,6 +110,7 @@ function Inner({ id }: { id: string }) {
               placeholder="Cuéntanos con detalle lo ocurrido. Incluye fechas, nombres y lo que esperabas."
               rows={5}
               note="Mínimo 20 caracteres. Sé objetivo y claro."
+              data-testid="dispute-description"
             />
             <div>
               <div className="text-[12.5px] font-bold text-ink-700 mb-2">
@@ -132,6 +134,7 @@ function Inner({ id }: { id: string }) {
           variant="danger"
           onClick={submit}
           disabled={!valid || sent || !canSubmitDispute}
+          testId="submit-dispute"
         >
           {sent ? "Disputa enviada ✓" : "Enviar disputa"}
         </Button>
