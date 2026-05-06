@@ -45,6 +45,7 @@ function Inner({ id }: { id: string }) {
   const adminConfig = useSession(getEffectiveAdminConfig);
   const effectiveJob = getEffectiveJobById(session, id);
   const existingRequest = getJobRequestForProfessional(session, id, currentProfessionalId);
+  const jobDispute = session.disputes.find((dispute) => dispute.jobId === id);
   const agreement = useSession((s) => getAgreementByJobId(s, id));
   const negotiation = useSession((s) => getNegotiationByJobId(s, id));
   const autoReleaseCompletedJob = useSession((s) => s.autoReleaseCompletedJob);
@@ -288,6 +289,39 @@ function Inner({ id }: { id: string }) {
             </div>
             <div className="text-[11.5px] text-teal-700/80 leading-snug">
               El cliente ya confirmó este trabajo en la demo y el acuerdo queda cerrado. El pago protegido mock queda visible como referencia del flujo.
+            </div>
+          </Card>
+        )}
+
+        {job.status === "dispute" && jobDispute && (
+          <Card className="mb-3 bg-rose-50/70 border-rose-100" testId="pro-dispute-open-state">
+            <div className="font-bold text-[13px] text-rose-700 mb-1">
+              Disputa abierta
+            </div>
+            <div className="text-[11.5px] text-rose-700/80 leading-snug">
+              El cliente abrió una disputa por "{jobDispute.reason}". El acuerdo y el pago protegido mock siguen asociados al trabajo mientras admin lo revisa.
+            </div>
+          </Card>
+        )}
+
+        {job.status === "cancelled" && jobDispute?.status === "resolved_client" && (
+          <Card className="mb-3 bg-sand-100 border-sand-200" testId="pro-dispute-cancelled-state">
+            <div className="font-bold text-[13px] text-ink-700 mb-1">
+              Disputa resuelta a favor del cliente
+            </div>
+            <div className="text-[11.5px] text-ink-500 leading-snug">
+              Admin cerró este caso a favor del cliente y el trabajo quedó cancelado en la demo.
+            </div>
+          </Card>
+        )}
+
+        {job.status === "completed" && jobDispute && ["resolved_pro", "split"].includes(jobDispute.status) && (
+          <Card className="mb-3 bg-violet-50/60 border-violet-100" testId="pro-dispute-resolved-completed-state">
+            <div className="font-bold text-[13px] text-violet-800 mb-1">
+              Disputa cerrada
+            </div>
+            <div className="text-[11.5px] text-violet-700 leading-snug">
+              Admin resolvió la disputa {jobDispute.status === "resolved_pro" ? "a tu favor" : "con resolución dividida"}. El trabajo queda completado en la demo.
             </div>
           </Card>
         )}

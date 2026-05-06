@@ -38,6 +38,7 @@ const POST_ACCEPTANCE_STATUSES: JobStatus[] = [
   "in_progress",
   "completed_pending_confirmation",
   "completed",
+  "dispute",
 ];
 
 interface ChatAccessParams {

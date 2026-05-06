@@ -1325,11 +1325,39 @@ export const useSession = create<SessionState>()(
         return createdReview;
       },
       resolveDispute: (disputeId, status) =>
-        set((s) => ({
-          disputes: s.disputes.map((dispute) =>
-            dispute.id === disputeId ? { ...dispute, status } : dispute,
-          ),
-        })),
+        set((s) => {
+          const dispute = s.disputes.find((entry) => entry.id === disputeId);
+          if (!dispute) return {};
+
+          const job = getEffectiveJobById(s, dispute.jobId);
+          const agreement = s.agreements[dispute.jobId];
+          const nextJobStatus =
+            status === "resolved_client"
+              ? "cancelled"
+              : status === "resolved_pro"
+                ? "completed"
+                : "completed";
+
+          return {
+            disputes: s.disputes.map((entry) =>
+              entry.id === disputeId ? { ...entry, status } : entry,
+            ),
+            jobOverrides: job
+              ? {
+                  ...s.jobOverrides,
+                  [dispute.jobId]: {
+                    ...s.jobOverrides[dispute.jobId],
+                    status: nextJobStatus,
+                    completionDeadline: undefined,
+                    disputeOpenedAt: job.disputeOpenedAt,
+                    disputeReason: job.disputeReason,
+                    finalPrice: agreement?.finalPrice ?? job.finalPrice,
+                    commissionPct: agreement?.commissionPct ?? job.commissionPct,
+                  },
+                }
+              : s.jobOverrides,
+          };
+        }),
       recordInvitationsSent: (jobId, invitedCount) =>
         set((s) => ({
           jobOutreachMeta: {

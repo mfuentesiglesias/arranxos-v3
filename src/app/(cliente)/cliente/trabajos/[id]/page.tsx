@@ -73,6 +73,7 @@ function Inner({ id }: { id: string }) {
   );
   const acceptedJobRequest = getAcceptedJobRequestForJob(session, id);
   const existingClientReview = getReviewForJobByReviewer(session, id, session.currentClientId);
+  const jobDispute = session.disputes.find((dispute) => dispute.jobId === id);
   const existingSearchTicket = searchTicket ?? null;
   const resolvedAgreement = getAgreement(agreement);
   const activeNegotiation = getActiveNegotiation(negotiation);
@@ -296,6 +297,39 @@ function Inner({ id }: { id: string }) {
             </div>
             <div className="text-[11.5px] text-teal-700/80 leading-snug">
               Precio final acordado: {formatEuro(resolvedAgreement.finalPrice)}.
+            </div>
+          </Card>
+        )}
+
+        {job.status === "dispute" && jobDispute && (
+          <Card className="mb-3 bg-rose-50/70 border-rose-100" testId="client-dispute-open-state">
+            <div className="font-bold text-[13px] text-rose-700 mb-1">
+              Disputa abierta
+            </div>
+            <div className="text-[11.5px] text-rose-700/80 leading-snug">
+              Hemos registrado tu disputa por "{jobDispute.reason}". El acuerdo y el pago protegido mock siguen asociados a este trabajo mientras admin revisa el caso.
+            </div>
+          </Card>
+        )}
+
+        {job.status === "cancelled" && jobDispute?.status === "resolved_client" && (
+          <Card className="mb-3 bg-teal-50/40 border-teal-100" testId="client-dispute-resolved-client-state">
+            <div className="font-bold text-[13px] text-teal-700 mb-1">
+              Disputa resuelta a tu favor
+            </div>
+            <div className="text-[11.5px] text-teal-700/80 leading-snug">
+              Admin cerró este caso a favor del cliente y el trabajo quedó cancelado en la demo.
+            </div>
+          </Card>
+        )}
+
+        {job.status === "completed" && jobDispute && ["resolved_pro", "split"].includes(jobDispute.status) && (
+          <Card className="mb-3 bg-violet-50/60 border-violet-100" testId="client-dispute-resolved-completed-state">
+            <div className="font-bold text-[13px] text-violet-800 mb-1">
+              Disputa cerrada
+            </div>
+            <div className="text-[11.5px] text-violet-700 leading-snug">
+              Admin resolvió la disputa {jobDispute.status === "resolved_pro" ? "a favor del profesional" : "con resolución dividida"}. El trabajo queda completado en la demo.
             </div>
           </Card>
         )}
@@ -580,7 +614,8 @@ function ActionsForStatus({
     (
       status === "escrow_funded" ||
       status === "in_progress" ||
-      status === "completed_pending_confirmation"
+      status === "completed_pending_confirmation" ||
+      status === "dispute"
     )
   ) {
     return (
