@@ -263,15 +263,23 @@ export function canOpenDispute({
   role,
   completionDeadline,
   now,
+  assignedProId,
+  currentProfessionalId,
 }: {
   status: JobStatus;
   agreement?: AgreementState | null;
   role: UserRole;
   completionDeadline?: string;
   now?: string;
+  assignedProId?: string;
+  currentProfessionalId?: string;
 }) {
+  const roleCanDispute =
+    role === "client" ||
+    (role === "professional" && Boolean(assignedProId) && assignedProId === currentProfessionalId);
+
   return (
-    role === "client" &&
+    roleCanDispute &&
     status === "completed_pending_confirmation" &&
     hasProtectedPayment(agreement) &&
     !canAutoReleaseCompletedJob({

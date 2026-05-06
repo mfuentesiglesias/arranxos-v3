@@ -291,6 +291,17 @@ function Inner({ id }: { id: string }) {
                 Auto-release demo en {Math.max(0, daysBetween(new Date().toISOString(), job.completionDeadline))} día{Math.max(0, daysBetween(new Date().toISOString(), job.completionDeadline)) === 1 ? "" : "s"}.
               </div>
             )}
+            {isMine && (
+              <Button
+                full
+                className="mt-3"
+                variant="outline"
+                href={`/profesional/trabajos/${job.id}/disputa`}
+                testId="pro-open-dispute"
+              >
+                Abrir disputa
+              </Button>
+            )}
           </Card>
         )}
 
@@ -313,7 +324,9 @@ function Inner({ id }: { id: string }) {
               Disputa abierta
             </div>
             <div className="text-[11.5px] text-rose-700/80 leading-snug">
-              El cliente abrió una disputa por "{jobDispute.reason}". El acuerdo y el pago protegido mock siguen asociados al trabajo mientras admin lo revisa.
+              {jobDispute.openedBy === "professional"
+                ? `Has abierto una disputa por "${jobDispute.reason}".`
+                : `El cliente abrió una disputa por "${jobDispute.reason}".`} El acuerdo y el pago protegido mock siguen asociados al trabajo mientras admin lo revisa.
             </div>
           </Card>
         )}

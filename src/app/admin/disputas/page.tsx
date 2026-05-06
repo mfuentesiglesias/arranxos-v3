@@ -62,7 +62,7 @@ export default function AdminDisputasPage() {
                       : "Dividida"}
                   </span>
                   <span className="text-[10.5px] text-ink-400 ml-auto">
-                    Trabajo {d.jobId} · abre por {d.openedBy}
+                    Trabajo {d.jobId} · abre por {d.openedBy === "client" ? "cliente" : "profesional"}
                   </span>
                 </div>
                 <div className="font-bold text-[14px] text-ink-800 mb-1 leading-tight">

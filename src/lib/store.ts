@@ -232,6 +232,7 @@ export interface SessionState {
     reason: string,
     description: string,
     evidence: string[],
+    openedBy?: Dispute["openedBy"],
   ) => void;
   notifications: Notification[];
   reviews: Review[];
@@ -1243,17 +1244,20 @@ export const useSession = create<SessionState>()(
             notifications: [notification, ...s.notifications],
           };
         }),
-      openJobDispute: (jobId, reason, description, evidence) =>
+      openJobDispute: (jobId, reason, description, evidence, openedBy = "client") =>
         set((s) => {
           const job = getEffectiveJobById(s, jobId);
           const agreement = s.agreements[jobId];
+          const role = openedBy === "professional" ? "professional" : "client";
           if (
             !job ||
             !canOpenDispute({
               status: job.status,
               agreement,
-              role: "client",
+              role,
               completionDeadline: job.completionDeadline,
+              assignedProId: job.assignedProId,
+              currentProfessionalId: openedBy === "professional" ? s.currentProfessionalId : undefined,
             })
           ) {
             return {};
@@ -1263,7 +1267,7 @@ export const useSession = create<SessionState>()(
           const dispute: Dispute = {
             id: `d-${jobId}-${Date.now()}`,
             jobId,
-            openedBy: "client",
+            openedBy,
             reason,
             description,
             status: "open",

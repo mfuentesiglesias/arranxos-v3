@@ -322,7 +322,9 @@ function Inner({ id }: { id: string }) {
               Disputa abierta
             </div>
             <div className="text-[11.5px] text-rose-700/80 leading-snug">
-              Hemos registrado tu disputa por "{jobDispute.reason}". El acuerdo y el pago protegido mock siguen asociados a este trabajo mientras admin revisa el caso.
+              {jobDispute.openedBy === "client"
+                ? `Hemos registrado tu disputa por "${jobDispute.reason}".`
+                : `El profesional abrió una disputa por "${jobDispute.reason}".`} El acuerdo y el pago protegido mock siguen asociados a este trabajo mientras admin revisa el caso.
             </div>
           </Card>
         )}
