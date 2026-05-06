@@ -31,6 +31,7 @@ import {
   canOpenDispute,
 } from "./domain/policies";
 import { scanLeaks } from "./anti-leak";
+import { addDays } from "./utils";
 import type {
   AdminConfig,
   CatalogCategory,
@@ -225,7 +226,7 @@ export interface SessionState {
   markJobInProgress: (jobId: string) => void;
   markJobCompletedPendingConfirmation: (jobId: string) => void;
   confirmCompletedJob: (jobId: string) => void;
-  autoReleaseCompletedJob: (jobId: string) => void;
+  autoReleaseCompletedJob: (jobId: string, now?: string) => void;
   openJobDispute: (
     jobId: string,
     reason: string,
@@ -1156,13 +1157,16 @@ export const useSession = create<SessionState>()(
             return {};
           }
 
+          const completedAt = new Date().toISOString();
+          const completionDeadline = addDays(completedAt, s.adminConfig.autoReleaseDays);
+
           return {
             jobOverrides: {
               ...s.jobOverrides,
               [jobId]: {
                 ...s.jobOverrides[jobId],
                 status: "completed_pending_confirmation",
-                completionDeadline: undefined,
+                completionDeadline,
                 finalPrice: agreement.finalPrice,
                 commissionPct: agreement.commissionPct,
               },
@@ -1197,7 +1201,7 @@ export const useSession = create<SessionState>()(
             },
           };
         }),
-      autoReleaseCompletedJob: (jobId) =>
+      autoReleaseCompletedJob: (jobId, now) =>
         set((s) => {
           const job = getEffectiveJobById(s, jobId);
           const agreement = s.agreements[jobId];
@@ -1207,6 +1211,7 @@ export const useSession = create<SessionState>()(
               status: job.status,
               agreement,
               completionDeadline: job.completionDeadline,
+              now,
             })
           ) {
             return {};
@@ -1214,11 +1219,11 @@ export const useSession = create<SessionState>()(
 
           const notification: Notification = {
             id: `n-payment-auto-${jobId}-${Date.now()}`,
-            text: "Pago liberado automáticamente al profesional",
+            text: "Auto-release demo aplicado al trabajo",
             sub: job.title,
             time: "ahora",
             unread: true,
-            type: "payment",
+            type: "system",
             jobId,
           };
 

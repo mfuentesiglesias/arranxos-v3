@@ -31,6 +31,10 @@ function Inner({ id }: { id: string }) {
   const autoReleaseCompletedJob = useSession((s) => s.autoReleaseCompletedJob);
   const job = effectiveJob ?? jobs.find((j) => j.id === id) ?? jobs[0];
   const resolvedAgreement = getAgreement(agreement);
+  const autoReleaseApplied = session.notifications.some(
+    (notification) =>
+      notification.jobId === id && notification.text.includes("Auto-release demo aplicado"),
+  );
   const total =
     getEffectiveFinalPrice(job, resolvedAgreement) ??
     Math.round((job.priceMin + job.priceMax) / 2);
@@ -53,6 +57,14 @@ function Inner({ id }: { id: string }) {
     }
   }, [autoReleaseCompletedJob, canAutoRelease, id]);
 
+  const applyAutoReleaseDemo = () => {
+    if (!job.completionDeadline) return;
+    autoReleaseCompletedJob(
+      id,
+      new Date(new Date(job.completionDeadline).getTime() + 1000).toISOString(),
+    );
+  };
+
   return (
     <div className="flex-1 flex flex-col bg-sand-50">
       <StatusBar />
@@ -66,7 +78,7 @@ function Inner({ id }: { id: string }) {
         </Card>
 
         {days !== null && (
-          <Card className="bg-amber-50 border-amber-100 mb-3">
+          <Card className="bg-amber-50 border-amber-100 mb-3" testId="pro-auto-release-deadline">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-amber-500 text-white flex items-center justify-center">
                 <Icon name="clock" size={18} />
@@ -76,9 +88,23 @@ function Inner({ id }: { id: string }) {
                   Auto-liberación en {days} día{days === 1 ? "" : "s"}
                 </div>
                 <div className="text-[11.5px] text-amber-700/80">
-                  Si el cliente no responde, el pago se libera automáticamente.
+                  Si el cliente no responde, el trabajo se cerrará automáticamente en la demo.
                 </div>
               </div>
+            </div>
+            <Button full size="sm" variant="outline" className="mt-3" onClick={applyAutoReleaseDemo} testId="pro-apply-auto-release-demo">
+              Aplicar auto-release demo
+            </Button>
+          </Card>
+        )}
+
+        {job.status === "completed" && autoReleaseApplied && (
+          <Card className="mb-3 bg-teal-50/40 border-teal-100" testId="pro-auto-release-applied-state">
+            <div className="font-bold text-[13px] text-teal-700 mb-1">
+              Auto-release demo aplicado
+            </div>
+            <div className="text-[11.5px] text-teal-700/80 leading-snug">
+              El cliente no confirmó a tiempo y el trabajo quedó completado automáticamente en la demo.
             </div>
           </Card>
         )}

@@ -17,6 +17,7 @@ import { JobStatusTimeline } from "@/components/jobs/job-status-timeline";
 import { jobs, professionals } from "@/lib/data";
 import {
   getActiveNegotiation,
+  canAutoReleaseCompletedJob,
   getAgreement,
   getEffectiveFinalPrice,
   getJobActionsForClient,
@@ -36,7 +37,7 @@ import {
   useSession,
 } from "@/lib/store";
 import type { JobRequest, JobStatus, Review } from "@/lib/types";
-import { formatEuro } from "@/lib/utils";
+import { daysBetween, formatEuro } from "@/lib/utils";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -74,6 +75,10 @@ function Inner({ id }: { id: string }) {
   const acceptedJobRequest = getAcceptedJobRequestForJob(session, id);
   const existingClientReview = getReviewForJobByReviewer(session, id, session.currentClientId);
   const jobDispute = session.disputes.find((dispute) => dispute.jobId === id);
+  const autoReleaseApplied = session.notifications.some(
+    (notification) =>
+      notification.jobId === id && notification.text.includes("Auto-release demo aplicado"),
+  );
   const existingSearchTicket = searchTicket ?? null;
   const resolvedAgreement = getAgreement(agreement);
   const activeNegotiation = getActiveNegotiation(negotiation);
@@ -148,6 +153,14 @@ function Inner({ id }: { id: string }) {
     const amount = Number(counterofferAmount || 0);
     if (!canCounteroffer || !amount) return;
     submitNegotiationProposal(job.id, "client", amount);
+  };
+
+  const applyAutoReleaseDemo = () => {
+    if (!job.completionDeadline) return;
+    autoReleaseCompletedJob(
+      job.id,
+      new Date(new Date(job.completionDeadline).getTime() + 1000).toISOString(),
+    );
   };
 
   return (
@@ -517,6 +530,9 @@ function Inner({ id }: { id: string }) {
           actions={clientActions}
           postPaymentActions={postPaymentActions}
           existingReview={existingClientReview}
+          completionDeadline={job.completionDeadline}
+          autoReleaseApplied={autoReleaseApplied}
+          onApplyAutoReleaseDemo={applyAutoReleaseDemo}
         />
       </ScreenBody>
     </div>
@@ -532,6 +548,9 @@ function ActionsForStatus({
   actions,
   postPaymentActions,
   existingReview,
+  completionDeadline,
+  autoReleaseApplied,
+  onApplyAutoReleaseDemo,
 }: {
   jobId: string;
   status: JobStatus;
@@ -541,6 +560,9 @@ function ActionsForStatus({
   actions: ReturnType<typeof getJobActionsForClient>;
   postPaymentActions: ReturnType<typeof getPostPaymentJobActionsForClient>;
   existingReview?: Review;
+  completionDeadline?: string;
+  autoReleaseApplied: boolean;
+  onApplyAutoReleaseDemo: () => void;
 }) {
   if (actions.includes("pay")) {
     return (
@@ -569,6 +591,11 @@ function ActionsForStatus({
         <div className="text-[12px] text-violet-700 mb-3">
           Revisa el resultado y confirma el cierre del trabajo en la demo. El pago protegido mock sigue asociado al acuerdo.
         </div>
+        {completionDeadline && (
+          <div className="mb-3 rounded-xl border border-violet-100 bg-white px-3 py-2 text-[11.5px] text-violet-700 leading-snug" data-testid="client-auto-release-deadline">
+            Auto-release demo en {Math.max(0, daysBetween(new Date().toISOString(), completionDeadline))} día{Math.max(0, daysBetween(new Date().toISOString(), completionDeadline)) === 1 ? "" : "s"} si no confirmas ni abres disputa.
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-2">
           <Button full href={`/cliente/trabajos/${jobId}/confirmar`} testId="client-confirm-completion">
             Confirmar trabajo
@@ -579,18 +606,23 @@ function ActionsForStatus({
             </Button>
           )}
         </div>
+        <Button full variant="outline" className="mt-2" onClick={onApplyAutoReleaseDemo} testId="client-apply-auto-release-demo">
+          Aplicar auto-release demo
+        </Button>
       </Card>
     );
   }
   if (status === "completed") {
     return (
       <>
-        <Card className="mb-3 bg-teal-50/40 border-teal-100" testId="client-job-completed-state">
+        <Card className="mb-3 bg-teal-50/40 border-teal-100" testId={autoReleaseApplied ? "client-auto-release-applied-state" : "client-job-completed-state"}>
           <div className="font-bold text-[13.5px] text-teal-700 mb-1">
             Trabajo completado
           </div>
           <div className="text-[11.5px] text-teal-700/80 leading-snug">
-            El cliente ya confirmó este trabajo en la demo y el acuerdo queda cerrado. El pago protegido mock sigue visible como referencia del flujo.
+            {autoReleaseApplied
+              ? "El trabajo se completó por auto-release demo tras vencer el plazo de confirmación."
+              : "El cliente ya confirmó este trabajo en la demo y el acuerdo queda cerrado."} El pago protegido mock sigue visible como referencia del flujo.
           </div>
         </Card>
         {existingReview ? (

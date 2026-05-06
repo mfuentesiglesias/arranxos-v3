@@ -1,5 +1,5 @@
 "use client";
-import { use, Suspense, useMemo, useState } from "react";
+import { use, Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
@@ -8,13 +8,13 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { jobs } from "@/lib/data";
-import { canConfirmCompletedJob, getAgreement, getCommissionAmount, getEffectiveFinalPrice } from "@/lib/domain/policies";
+import { canAutoReleaseCompletedJob, canConfirmCompletedJob, getAgreement, getCommissionAmount, getEffectiveFinalPrice } from "@/lib/domain/policies";
 import {
   getEffectiveAdminConfig,
   getEffectiveJobById,
   useSession,
 } from "@/lib/store";
-import { formatEuro } from "@/lib/utils";
+import { daysBetween, formatEuro } from "@/lib/utils";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -27,8 +27,13 @@ function Inner({ id }: { id: string }) {
   const effectiveJob = useMemo(() => getEffectiveJobById(session, id), [session, id]);
   const agreement = session.agreements[id];
   const confirmCompletedJob = useSession((s) => s.confirmCompletedJob);
+  const autoReleaseCompletedJob = useSession((s) => s.autoReleaseCompletedJob);
   const job = effectiveJob ?? jobs.find((j) => j.id === id) ?? jobs[0];
   const resolvedAgreement = getAgreement(agreement);
+  const autoReleaseApplied = session.notifications.some(
+    (notification) =>
+      notification.jobId === id && notification.text.includes("Auto-release demo aplicado"),
+  );
   const [confirming, setConfirming] = useState(false);
   const total =
     getEffectiveFinalPrice(job, resolvedAgreement) ??
@@ -42,6 +47,18 @@ function Inner({ id }: { id: string }) {
     role: "client",
     completionDeadline: job.completionDeadline,
   });
+  const canAutoRelease = canAutoReleaseCompletedJob({
+    status: job.status,
+    agreement: resolvedAgreement,
+    completionDeadline: job.completionDeadline,
+  });
+
+  useEffect(() => {
+    if (!canAutoRelease) return;
+    autoReleaseCompletedJob(id);
+    router.replace(`/cliente/trabajos/${id}?autoReleased=1`);
+  }, [autoReleaseCompletedJob, canAutoRelease, id, router]);
+
   const confirm = () => {
     if (!canConfirm) return;
     setConfirming(true);
@@ -49,11 +66,31 @@ function Inner({ id }: { id: string }) {
     setTimeout(() => router.push(`/cliente/trabajos/${id}`), 800);
   };
 
+  const applyAutoReleaseDemo = () => {
+    if (!job.completionDeadline) return;
+    autoReleaseCompletedJob(
+      id,
+      new Date(new Date(job.completionDeadline).getTime() + 1000).toISOString(),
+    );
+    router.replace(`/cliente/trabajos/${id}?autoReleased=1`);
+  };
+
   return (
     <div className="flex-1 flex flex-col bg-sand-50">
       <StatusBar />
       <TopBar title="Confirmar trabajo" />
       <ScreenBody className="px-4 pt-3 pb-6">
+        {job.status === "completed" && autoReleaseApplied && (
+          <Card className="mb-3 bg-teal-50/40 border-teal-100" testId="confirm-auto-release-applied-state">
+            <div className="font-bold text-[13px] text-teal-700 mb-1">
+              Auto-release demo aplicado
+            </div>
+            <div className="text-[11.5px] text-teal-700/80 leading-snug">
+              El plazo venció y el trabajo quedó completado automáticamente en la demo.
+            </div>
+          </Card>
+        )}
+
         <Card className="mb-3 text-center">
           <div className="w-14 h-14 rounded-full bg-teal-100 text-teal-600 flex items-center justify-center mx-auto mb-3">
             <Icon name="check" size={28} stroke={2.5} />
@@ -91,6 +128,17 @@ function Inner({ id }: { id: string }) {
           El acuerdo y el pago protegido seguirán visibles tras la confirmación.
         </Card>
 
+        {job.status === "completed_pending_confirmation" && job.completionDeadline && (
+          <Card className="mt-3 bg-violet-50/60 border-violet-100" testId="confirm-auto-release-deadline">
+            <div className="font-bold text-[13px] text-violet-800 mb-1">
+              Plazo de auto-release demo
+            </div>
+            <div className="text-[11.5px] text-violet-700 leading-snug">
+              Auto-release en {Math.max(0, daysBetween(new Date().toISOString(), job.completionDeadline))} día{Math.max(0, daysBetween(new Date().toISOString(), job.completionDeadline)) === 1 ? "" : "s"} si no confirmas ni abres disputa.
+            </div>
+          </Card>
+        )}
+
         {!canConfirm && (
           <Card className="bg-amber-50 border-amber-100 text-[12px] text-amber-700 leading-snug">
             Este trabajo solo puede confirmarse cuando esté pendiente de confirmación y el pago siga protegido.
@@ -102,6 +150,11 @@ function Inner({ id }: { id: string }) {
         <Button full onClick={confirm} disabled={confirming || !canConfirm}>
           {confirming ? "Confirmando…" : "Confirmar y cerrar trabajo"}
         </Button>
+        {job.status === "completed_pending_confirmation" && job.completionDeadline && (
+          <Button full variant="outline" onClick={applyAutoReleaseDemo} testId="confirm-apply-auto-release-demo">
+            Aplicar auto-release demo
+          </Button>
+        )}
       </div>
     </div>
   );

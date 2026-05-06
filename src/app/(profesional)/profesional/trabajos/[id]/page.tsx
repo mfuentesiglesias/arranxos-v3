@@ -46,6 +46,10 @@ function Inner({ id }: { id: string }) {
   const effectiveJob = getEffectiveJobById(session, id);
   const existingRequest = getJobRequestForProfessional(session, id, currentProfessionalId);
   const jobDispute = session.disputes.find((dispute) => dispute.jobId === id);
+  const autoReleaseApplied = session.notifications.some(
+    (notification) =>
+      notification.jobId === id && notification.text.includes("Auto-release demo aplicado"),
+  );
   const agreement = useSession((s) => getAgreementByJobId(s, id));
   const negotiation = useSession((s) => getNegotiationByJobId(s, id));
   const autoReleaseCompletedJob = useSession((s) => s.autoReleaseCompletedJob);
@@ -282,16 +286,23 @@ function Inner({ id }: { id: string }) {
             <div className="text-[11.5px] text-violet-700 leading-snug">
               El cliente debe revisar el resultado y confirmar el cierre del trabajo. El pago protegido mock sigue asociado al acuerdo.
             </div>
+            {job.completionDeadline && (
+              <div className="mt-2 text-[11px] font-semibold text-violet-700/80">
+                Auto-release demo en {Math.max(0, daysBetween(new Date().toISOString(), job.completionDeadline))} día{Math.max(0, daysBetween(new Date().toISOString(), job.completionDeadline)) === 1 ? "" : "s"}.
+              </div>
+            )}
           </Card>
         )}
 
         {resolvedAgreement && job.status === "completed" && (
-          <Card className="mb-3 bg-teal-50/40 border-teal-100" testId="pro-job-completed-state">
+          <Card className="mb-3 bg-teal-50/40 border-teal-100" testId={autoReleaseApplied ? "pro-auto-release-completed-state" : "pro-job-completed-state"}>
             <div className="font-bold text-[13px] text-teal-700 mb-1">
               Trabajo completado
             </div>
             <div className="text-[11.5px] text-teal-700/80 leading-snug">
-              El cliente ya confirmó este trabajo en la demo y el acuerdo queda cerrado. El pago protegido mock queda visible como referencia del flujo.
+              {autoReleaseApplied
+                ? "El trabajo se completó por auto-release demo tras vencer el plazo de confirmación."
+                : "El cliente ya confirmó este trabajo en la demo y el acuerdo queda cerrado."} El pago protegido mock queda visible como referencia del flujo.
             </div>
           </Card>
         )}

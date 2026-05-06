@@ -1,0 +1,104 @@
+import { expect, test, type Page } from "@playwright/test";
+
+function byTestId(page: Page, testId: string) {
+  return page.getByTestId(testId).first();
+}
+
+async function expectVisibleByTestId(page: Page, testId: string) {
+  await expect(byTestId(page, testId)).toBeVisible();
+}
+
+async function clickByTestId(page: Page, testId: string) {
+  await byTestId(page, testId).click();
+}
+
+async function loginWithDemoAccess(page: Page, testId: string) {
+  await page.goto("/login");
+  await expectVisibleByTestId(page, testId);
+  await clickByTestId(page, testId);
+}
+
+test.beforeEach(async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+  });
+});
+
+test("auto-release demo completa el trabajo pendiente de confirmación", async ({ page }) => {
+  const jobTitle = "Puerta corredera demo auto-release";
+  const requestMessage = "Puedo instalar la puerta corredera y dejarla ajustada esta semana.";
+
+  await loginWithDemoAccess(page, "demo-client");
+  await page.goto("/cliente/publicar");
+  await byTestId(page, "client-publish-category-search").fill("Carpintería");
+  await clickByTestId(page, "client-category-carpinteria-y-madera");
+  await expectVisibleByTestId(page, "client-service-muebles-a-medida");
+  await clickByTestId(page, "client-service-muebles-a-medida");
+  await page.getByRole("button", { name: "Continuar" }).first().click();
+  await page.getByPlaceholder("Ej. Reparar cuadro eléctrico en piso").first().fill(jobTitle);
+  await page
+    .getByPlaceholder("Describe qué necesitas. Cuanto más detalle, mejor.")
+    .first()
+    .fill("Necesito instalar una puerta corredera en el pasillo.");
+  await page.locator("select").nth(1).selectOption("700–1.500€");
+  await page.getByRole("button", { name: "Revisar y publicar" }).first().click();
+  await page.getByRole("button", { name: "Publicar trabajo" }).first().click();
+  await expect(page).toHaveURL(/\/cliente\/trabajos\/demo-job-/);
+  const createdJobId = page.url().match(/demo-job-[^/?]+/)?.[0];
+  expect(createdJobId).toBeTruthy();
+
+  await loginWithDemoAccess(page, "demo-pro-approved");
+  await page.goto(`/profesional/trabajos/${createdJobId}`);
+  await page.getByRole("link", { name: "Solicitar este trabajo" }).first().click();
+  await page
+    .getByPlaceholder(
+      "Preséntate brevemente y explica qué harás, qué incluye el precio y si necesitas más información.",
+    )
+    .first()
+    .fill(requestMessage);
+  await page.getByRole("button", { name: "Enviar solicitud" }).first().click();
+  await expect(page.getByText("Solicitud enviada ✓").first()).toBeVisible();
+
+  await loginWithDemoAccess(page, "demo-client");
+  await page.goto(`/cliente/trabajos/${createdJobId}`);
+  await expect(page.getByText(requestMessage).first()).toBeVisible();
+  await page.goto(`/cliente/trabajos/${createdJobId}/solicitudes`);
+  await page.getByRole("link", { name: "Aceptar" }).first().click();
+  await page.getByRole("button", { name: "Aceptar solicitud" }).first().click();
+  await expectVisibleByTestId(page, "client-job-status-in_progress");
+
+  await loginWithDemoAccess(page, "demo-pro-approved");
+  await page.goto(`/profesional/trabajos/${createdJobId}`);
+  await byTestId(page, "pro-offer-amount").fill("980");
+  await clickByTestId(page, "pro-send-offer");
+  await expectVisibleByTestId(page, "pro-job-status-agreement_pending");
+
+  await loginWithDemoAccess(page, "demo-client");
+  await page.goto(`/cliente/trabajos/${createdJobId}`);
+  await clickByTestId(page, "client-accept-offer");
+  await expectVisibleByTestId(page, "client-job-status-agreed");
+  await clickByTestId(page, "client-pay-protected");
+  await clickByTestId(page, "confirm-mock-payment");
+  await expectVisibleByTestId(page, "client-protected-payment-state");
+
+  await loginWithDemoAccess(page, "demo-pro-approved");
+  await page.goto(`/profesional/trabajos/${createdJobId}`);
+  await clickByTestId(page, "pro-mark-completed-cta");
+  await page.getByRole("button", { name: "Marcar terminado y avisar al cliente" }).first().click();
+  await expectVisibleByTestId(page, "pro-awaiting-client-confirmation");
+  await expectVisibleByTestId(page, "pro-auto-release-deadline");
+
+  await loginWithDemoAccess(page, "demo-client");
+  await page.goto(`/cliente/trabajos/${createdJobId}`);
+  await expectVisibleByTestId(page, "client-auto-release-deadline");
+  await clickByTestId(page, "client-apply-auto-release-demo");
+  await expectVisibleByTestId(page, "client-auto-release-applied-state");
+
+  await loginWithDemoAccess(page, "demo-pro-approved");
+  await page.goto(`/profesional/trabajos/${createdJobId}/seguimiento`);
+  await expectVisibleByTestId(page, "pro-auto-release-applied-state");
+  await page.goto(`/profesional/trabajos/${createdJobId}`);
+  await expectVisibleByTestId(page, "pro-auto-release-completed-state");
+});

@@ -64,7 +64,7 @@ function Inner({ id }: { id: string }) {
       <ScreenBody className="px-4 pt-3 pb-6">
         <Card className="mb-3">
           <div className="text-[13px] text-ink-700 mb-2 leading-relaxed">
-            Avisaremos al cliente para que revise el trabajo y lo confirme en la demo.
+            Avisaremos al cliente para que revise el trabajo y lo confirme en la demo en un plazo de <strong>{adminConfig.autoReleaseDays} días</strong>.
           </div>
           <div className="bg-teal-50 rounded-xl p-3 border border-teal-100 flex items-center gap-2.5 text-[12px] text-teal-700">
             <Icon name="shield" size={16} />
