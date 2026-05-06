@@ -104,6 +104,12 @@ export default function AdminDashboard() {
       icon: "layers",
       sub: "Categorías y servicios efectivos seed + admin",
     },
+    {
+      href: "/admin/economia",
+      label: "Economía",
+      icon: "euro",
+      sub: "Acuerdos, custodia mock, comisión y neto profesional",
+    },
     { href: "/admin/configuracion", label: "Configuración", icon: "settings", sub: `Comisión ${defaultAdminConfig.commissionPct}% · auto-release ${defaultAdminConfig.autoReleaseDays}d` },
   ];
 
