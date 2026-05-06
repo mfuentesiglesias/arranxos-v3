@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState, Suspense, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, Suspense, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { HeaderActionSheet } from "@/components/layout/header-action-sheet";
 import { StatusBar } from "@/components/layout/status-bar";
@@ -24,6 +24,7 @@ import {
   getProfessionalCatalogProfile,
   useSession,
 } from "@/lib/store";
+import type { Job } from "@/lib/types";
 
 const KM_OPTIONS = [5, 10, 25, 50, 100] as const;
 const OPPORTUNITY_FILTERS = [
@@ -34,6 +35,14 @@ const OPPORTUNITY_FILTERS = [
 ] as const;
 
 type OpportunityFilterMode = (typeof OPPORTUNITY_FILTERS)[number]["id"];
+
+type DistanceState = "within" | "outside" | "unavailable";
+
+type DistanceClassification = {
+  distanceState: DistanceState;
+  distanceKm?: number;
+  distanceLabel: string;
+};
 
 function Inner() {
   const params = useSearchParams();
@@ -53,6 +62,7 @@ function Inner() {
     currentProfessionalSeed,
     professionalCatalogProfile,
   );
+  const defaultRadiusKm = professionalCatalogProfile?.radiusKm ?? currentProfessional.radiusKm ?? 25;
   const catalogServices = getEffectiveCatalogServices(approvedCatalogServices);
   const suggestedFilters = getProfessionalSpecialtyFilterSuggestions(
     currentProfessional,
@@ -75,8 +85,8 @@ function Inner() {
     useState<OpportunityFilterMode>("all");
   const [selectedSuggestedFilterIds, setSelectedSuggestedFilterIds] = useState<string[]>([]);
   const [draftSuggestedFilterIds, setDraftSuggestedFilterIds] = useState<string[]>([]);
-  const [maxKm, setMaxKm] = useState<number>(50);
-  const [draftMaxKm, setDraftMaxKm] = useState<number>(50);
+  const [maxKm, setMaxKm] = useState<number>(defaultRadiusKm);
+  const [draftMaxKm, setDraftMaxKm] = useState<number>(defaultRadiusKm);
   const [selectedMapJobId, setSelectedMapJobId] = useState<string | null>(null);
   const [highlightedJobId, setHighlightedJobId] = useState<string | null>(null);
   const jobRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -100,7 +110,7 @@ function Inner() {
   const resetDraftFilters = () => {
     setDraftOpportunityFilter("all");
     setDraftSuggestedFilterIds([]);
-    setDraftMaxKm(50);
+    setDraftMaxKm(defaultRadiusKm);
   };
 
   const applyFilters = () => {
@@ -166,14 +176,40 @@ function Inner() {
     return true;
   });
 
-  const displayJobs =
+  const distanceAwareJobs = useMemo(
+    () =>
+      filtered.map(({ job, specialtyMatch }) => ({
+        job,
+        specialtyMatch,
+        distance: classifyJobDistanceForProfessional({
+          job,
+          professional: currentProfessional,
+          profile: professionalCatalogProfile,
+          radiusKm: maxKm,
+        }),
+      })),
+    [filtered, currentProfessional, professionalCatalogProfile, maxKm],
+  );
+
+  const sortByMode = (items: typeof distanceAwareJobs) =>
     opportunityFilter === "recommended"
-      ? [...filtered].sort(
+      ? [...items].sort(
           (a, b) => Number(b.specialtyMatch.isMatch) - Number(a.specialtyMatch.isMatch),
         )
-      : filtered;
+      : items;
 
-  const pins = displayJobs.slice(0, 8).map(({ job }, i) => ({
+  const withinRadiusJobs = sortByMode(
+    distanceAwareJobs.filter((entry) => entry.distance.distanceState === "within"),
+  );
+  const unavailableDistanceJobs = sortByMode(
+    distanceAwareJobs.filter((entry) => entry.distance.distanceState === "unavailable"),
+  );
+  const outsideRadiusJobs = sortByMode(
+    distanceAwareJobs.filter((entry) => entry.distance.distanceState === "outside"),
+  );
+  const visibleJobs = [...withinRadiusJobs, ...unavailableDistanceJobs];
+
+  const pins = visibleJobs.slice(0, 8).map(({ job }, i) => ({
     id: job.id,
     x: 15 + ((i * 13) % 70),
     y: 20 + ((i * 19) % 60),
@@ -370,7 +406,7 @@ function Inner() {
                     Radio de búsqueda
                   </div>
                   <div className="text-[11px] text-ink-400 leading-snug">
-                    Vista aproximada. El filtrado real por distancia se conectará en la siguiente fase.
+                     Demo activa: el radio ya filtra la lista de oportunidades con distancia mock aproximada.
                   </div>
                 </div>
                 <div className="rounded-full bg-coral-50 px-3 py-1 text-[12px] font-bold text-coral-700 whitespace-nowrap">
@@ -407,26 +443,47 @@ function Inner() {
                 ))}
               </div>
             </div>
-            <p className="text-[11px] text-ink-400 mt-2 text-center italic">
-              DEMO: mapa simulado. Producción → MapLibre + PostGIS.
-            </p>
+             <p className="text-[11px] text-ink-400 mt-2 text-center italic">
+               DEMO: mapa simulado con radio aplicado sobre la lista. Producción → MapLibre + PostGIS.
+             </p>
+           </div>
+         )}
+
+         <div className="flex items-center justify-between mb-2 px-1">
+           <span className="text-[12px] text-ink-400 font-semibold">
+             {visibleJobs.length} trabajo{visibleJobs.length === 1 ? "" : "s"}
+           </span>
+           <span className="text-[11px] text-ink-400 font-semibold">
+             Radio: {maxKm} km
+           </span>
+         </div>
+
+          <div data-testid="professional-jobs-radius-filter" className="mb-2 grid grid-cols-3 gap-2">
+            <div
+              data-testid="professional-jobs-within-radius"
+              className="rounded-xl bg-teal-50 px-3 py-2 text-[11px] font-bold text-teal-700 text-center"
+            >
+              Dentro: {withinRadiusJobs.length}
+            </div>
+            <div
+              data-testid="professional-jobs-distance-unavailable"
+              className="rounded-xl bg-sand-100 px-3 py-2 text-[11px] font-bold text-ink-600 text-center"
+            >
+              Sin distancia: {unavailableDistanceJobs.length}
+            </div>
+            <div
+              data-testid="professional-jobs-outside-radius"
+              className="rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-bold text-amber-700 text-center"
+            >
+              Fuera: {outsideRadiusJobs.length}
+            </div>
           </div>
-        )}
 
-        <div className="flex items-center justify-between mb-2 px-1">
-          <span className="text-[12px] text-ink-400 font-semibold">
-            {displayJobs.length} trabajo{displayJobs.length === 1 ? "" : "s"}
-          </span>
-          <span className="text-[11px] text-ink-400 font-semibold">
-            Radio: {maxKm} km
-          </span>
-        </div>
-
-        <div className="flex flex-col gap-2.5">
-          {displayJobs.map(({ job, specialtyMatch }, i) => {
-            return (
-              <div
-                key={job.id}
+         <div className="flex flex-col gap-2.5">
+           {withinRadiusJobs.map(({ job, specialtyMatch, distance }) => {
+             return (
+               <div
+                 key={job.id}
                 id={`job-card-${job.id}`}
                 data-testid={`job-card-${job.id}`}
                 ref={(element) => {
@@ -442,9 +499,8 @@ function Inner() {
                   job={job}
                   href={`/profesional/trabajos/${job.id}`}
                   approxLocation={!myOnly && job.status === "published"}
-                  showDistance={
-                    !myOnly ? `${1 + ((i * 3) % 12)} km` : undefined
-                  }
+                  showDistance={!myOnly ? distance.distanceLabel : undefined}
+                  distanceTestId={!myOnly ? `professional-jobs-distance-badge-${job.id}` : undefined}
                   specialtyMatchLabel={specialtyMatch?.label}
                   specialtyMatch={
                     specialtyMatch
@@ -455,16 +511,56 @@ function Inner() {
                   }
                 />
               </div>
-            );
-          })}
-          {displayJobs.length === 0 && (
-            <div className="text-center py-12 text-ink-400 text-[13px]">
-              No hay trabajos que coincidan.
+             );
+           })}
+           {unavailableDistanceJobs.length > 0 && (
+            <div className="pt-1">
+              <div className="px-1 pb-2 text-[11px] font-bold uppercase tracking-wide text-ink-400">
+                Distancia no disponible
+              </div>
+              <div className="flex flex-col gap-2.5">
+                {unavailableDistanceJobs.map(({ job, specialtyMatch, distance }) => (
+                  <div
+                    key={job.id}
+                    id={`job-card-${job.id}`}
+                    data-testid={`job-card-${job.id}`}
+                    ref={(element) => {
+                      jobRefs.current[job.id] = element;
+                    }}
+                  >
+                    <JobCard
+                      job={job}
+                      href={`/profesional/trabajos/${job.id}`}
+                      approxLocation={!myOnly && job.status === "published"}
+                      showDistance={!myOnly ? distance.distanceLabel : undefined}
+                      distanceTestId={!myOnly ? `professional-jobs-distance-badge-${job.id}` : undefined}
+                      specialtyMatchLabel={specialtyMatch?.label}
+                      specialtyMatch={
+                        specialtyMatch
+                          ? specialtyMatch.isMatch
+                            ? "match"
+                            : "outside"
+                          : undefined
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
-          )}
-        </div>
-      </ScreenBody>
-    </div>
+           )}
+           {visibleJobs.length === 0 && (
+             <div className="text-center py-12 text-ink-400 text-[13px]">
+               No hay trabajos dentro del radio actual ni con distancia disponible para estos filtros.
+             </div>
+           )}
+           {outsideRadiusJobs.length > 0 && (
+            <div className="rounded-2xl border border-amber-100 bg-amber-50/70 px-4 py-3 text-[12px] text-amber-700 leading-snug">
+              {outsideRadiusJobs.length} trabajo{outsideRadiusJobs.length === 1 ? "" : "s"} quedan fuera del radio actual. Amplía el radio para incluirlos en la lista.
+            </div>
+           )}
+         </div>
+       </ScreenBody>
+     </div>
   );
 }
 
@@ -521,4 +617,96 @@ export default function Page() {
       <Inner />
     </Suspense>
   );
+}
+
+function classifyJobDistanceForProfessional({
+  job,
+  professional,
+  profile,
+  radiusKm,
+}: {
+  job: Job;
+  professional: typeof professionals[number];
+  profile: {
+    workBase: {
+      locality: string;
+      municipality: string;
+    };
+  } | undefined;
+  radiusKm: number;
+}): DistanceClassification {
+  if (hasCoordinates(job.lat, job.lng) && hasCoordinates(professional.lat, professional.lng)) {
+    const distanceKm = haversineDistanceKm(
+      professional.lat!,
+      professional.lng!,
+      job.lat,
+      job.lng,
+    );
+
+    return {
+      distanceState: distanceKm <= radiusKm ? "within" : "outside",
+      distanceKm,
+      distanceLabel: `${formatDistanceKm(distanceKm)} km`,
+    };
+  }
+
+  const textualBase = [
+    profile?.workBase.locality,
+    profile?.workBase.municipality,
+    professional.zone,
+    professional.location,
+  ]
+    .filter(Boolean)
+    .map((value) => normalizeLocationText(value ?? ""));
+  const jobAreas = [job.location, job.locationApprox]
+    .filter(Boolean)
+    .map((value) => normalizeLocationText(value));
+
+  if (
+    textualBase.some(
+      (base) =>
+        jobAreas.some((jobArea) => jobArea.includes(base)) ||
+        jobAreas.some((jobArea) => base.includes(jobArea)),
+    )
+  ) {
+    return {
+      distanceState: "within",
+      distanceLabel: "Misma zona (demo)",
+    };
+  }
+
+  return {
+    distanceState: "unavailable",
+    distanceLabel: "Distancia no disponible",
+  };
+}
+
+function hasCoordinates(lat?: number, lng?: number) {
+  return typeof lat === "number" && typeof lng === "number";
+}
+
+function normalizeLocationText(text: string) {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function haversineDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return 6371 * c;
+}
+
+function formatDistanceKm(distanceKm: number) {
+  return distanceKm < 10 ? distanceKm.toFixed(1) : Math.round(distanceKm).toString();
 }

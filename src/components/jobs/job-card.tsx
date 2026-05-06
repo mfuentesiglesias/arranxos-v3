@@ -9,6 +9,7 @@ interface Props {
   href?: string;
   approxLocation?: boolean; // pro view before acceptance
   showDistance?: string;
+  distanceTestId?: string;
   specialtyMatchLabel?: string;
   specialtyMatch?: "match" | "outside";
 }
@@ -18,6 +19,7 @@ export function JobCard({
   href,
   approxLocation = false,
   showDistance,
+  distanceTestId,
   specialtyMatchLabel,
   specialtyMatch,
 }: Props) {
@@ -36,7 +38,12 @@ export function JobCard({
           {approxLocation ? job.locationApprox : job.location}
         </span>
         {showDistance && (
-          <span className="whitespace-nowrap font-semibold text-coral-600">· {showDistance}</span>
+          <span
+            data-testid={distanceTestId}
+            className="whitespace-nowrap font-semibold text-coral-600"
+          >
+            · {showDistance}
+          </span>
         )}
         <span className="ml-auto whitespace-nowrap text-ink-400">{job.posted}</span>
       </div>
