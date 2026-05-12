@@ -56,3 +56,17 @@ test("profesional ve score mock de fiabilidad en perfil privado y publico", asyn
     /Alta|Media|Baja/,
   );
 });
+
+test("admin ve score mock de fiabilidad en listado de profesionales", async ({ page }) => {
+  await loginWithDemoAccess(page, "demo-admin");
+
+  await page.goto("/admin/profesionales");
+  await page.getByRole("button", { name: /Aprobados/i }).first().click();
+
+  await expectVisibleByTestId(page, "admin-professional-reliability-score-p1");
+  await expectVisibleByTestId(page, "admin-professional-reliability-label-p1");
+  await expectReliabilityScoreInRange(page, "admin-professional-reliability-score-p1");
+  await expect(byTestId(page, "admin-professional-reliability-label-p1")).toContainText(
+    /Alta|Media|Baja/,
+  );
+});
