@@ -19,6 +19,7 @@ import {
 import { currentPro, defaultAdminConfig, professionals } from "@/lib/data";
 import {
   getCurrentProfessionalId,
+  getEffectiveJobs,
   getEffectiveApprovedCatalogServices,
   getEffectiveCatalogRequests,
   getProfessionalCatalogProfile,
@@ -26,6 +27,7 @@ import {
   type ProfessionalCatalogProfile,
   useSession,
 } from "@/lib/store";
+import { getProfessionalReliabilitySummary } from "@/lib/reliability";
 import type { CatalogRequest, CatalogService, Professional } from "@/lib/types";
 const SPECIALTY_RADIUS_OPTIONS = [5, 10, 25, 50, 100] as const;
 const POSTAL_CODE_LOOKUP = {
@@ -90,6 +92,8 @@ export default function PerfilProPage() {
   const storeCatalogRequests = useSession(getEffectiveCatalogRequests);
   const approvedCatalogServices = useSession(getEffectiveApprovedCatalogServices);
   const session = useSession();
+  const effectiveJobs = useMemo(() => getEffectiveJobs(session), [session]);
+  const effectiveDisputes = session.disputes;
   const professionalCatalogProfile = useMemo(
     () => getProfessionalCatalogProfile(session, currentProfessionalId),
     [session, currentProfessionalId],
@@ -125,6 +129,16 @@ export default function PerfilProPage() {
   const myReviews = useMemo(
     () => allProfessionalReviews.slice(0, 3),
     [allProfessionalReviews],
+  );
+  const reliabilitySummary = useMemo(
+    () =>
+      getProfessionalReliabilitySummary({
+        professional,
+        reviews: allProfessionalReviews,
+        jobs: effectiveJobs,
+        disputes: effectiveDisputes,
+      }),
+    [allProfessionalReviews, effectiveDisputes, effectiveJobs, professional],
   );
   const displayedPrimarySpecialty =
     savedProfileState.specialties[0]?.label ?? professional.specialty;
@@ -965,12 +979,12 @@ export default function PerfilProPage() {
               )}
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-2 text-center">
-            {[
-              ["Trabajos", professional.jobs],
-              ["Fiabilidad", `${professional.reliability}%`],
-              ["Respuesta", professional.responseTime],
-            ].map(([l, v]) => (
+              <div className="grid grid-cols-3 gap-2 text-center">
+                {[
+                  ["Trabajos", professional.jobs],
+                  ["Fiabilidad", `${reliabilitySummary.score}/100`],
+                  ["Respuesta", professional.responseTime],
+                ].map(([l, v]) => (
               <div
                 key={String(l)}
                 className="rounded-xl bg-sand-50 border border-sand-200/70 py-2.5"
@@ -981,6 +995,40 @@ export default function PerfilProPage() {
                 </div>
               </div>
             ))}
+          </div>
+        </Card>
+
+        <Card className="mb-3" testId="professional-reliability-summary">
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <div>
+              <div className="font-bold text-[13px] text-ink-800">Fiabilidad</div>
+              <div className="mt-0.5 text-[11.5px] text-ink-400">
+                Score mock/demo derivado para profesionales.
+              </div>
+            </div>
+            <div className="text-right">
+              <div
+                className="font-extrabold text-[22px] leading-none text-ink-900"
+                data-testid="professional-reliability-score"
+              >
+                {reliabilitySummary.score}
+              </div>
+              <div
+                className={`mt-1 text-[11px] font-bold uppercase tracking-wide ${getReliabilityLabelClassName(reliabilitySummary.label)}`}
+                data-testid="professional-reliability-label"
+              >
+                {getReliabilityLabelText(reliabilitySummary.label)}
+              </div>
+            </div>
+          </div>
+          <div className="text-[12px] text-ink-600 leading-snug">
+            {reliabilitySummary.reviewCount} reseñas, media de {reliabilitySummary.averageRating.toFixed(1)}, {reliabilitySummary.completedJobs} trabajos completados y {reliabilitySummary.strikes} strikes.
+          </div>
+          <div className="mt-2 text-[11.5px] text-ink-400 leading-snug">
+            Cancelados: {reliabilitySummary.cancelledJobs} · Disputas abiertas: {reliabilitySummary.openDisputes} · Resueltas contra el pro: {reliabilitySummary.resolvedAgainstPro} · Split: {reliabilitySummary.splitDisputes}
+          </div>
+          <div className="mt-2 rounded-2xl border border-sand-200/70 bg-sand-50/70 px-3 py-2 text-[11.5px] text-ink-500 leading-snug">
+            Este indicador es mock/demo y no activa bloqueos ni reglas automáticas en esta fase.
           </div>
         </Card>
 
@@ -1335,6 +1383,20 @@ function getPanelDescription(panelId: ProfilePanelId | null) {
       reviews: "Vista ampliada de las valoraciones recientes del profesional.",
     } satisfies Record<ProfilePanelId, string>
   )[panelId ?? "edit"];
+}
+
+function getReliabilityLabelText(label: "alta" | "media" | "baja") {
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function getReliabilityLabelClassName(label: "alta" | "media" | "baja") {
+  return (
+    {
+      alta: "text-teal-700",
+      media: "text-amber-700",
+      baja: "text-rose-600",
+    } satisfies Record<"alta" | "media" | "baja", string>
+  )[label];
 }
 
 function ChecklistRow({

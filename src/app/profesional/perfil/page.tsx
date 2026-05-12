@@ -1,7 +1,6 @@
 "use client";
 import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { HeaderActionSheet } from "@/components/layout/header-action-sheet";
 import { HeaderIconButton } from "@/components/layout/header-icon-button";
 import { StatusBar } from "@/components/layout/status-bar";
@@ -14,7 +13,8 @@ import { Icon } from "@/components/ui/icon";
 import { RatingStars } from "@/components/pros/rating-stars";
 import { StrikeBadge } from "@/components/pros/strike-badge";
 import { professionals } from "@/lib/data";
-import { getReviewsForProfessional, useSession } from "@/lib/store";
+import { getProfessionalReliabilitySummary } from "@/lib/reliability";
+import { getEffectiveJobs, getReviewsForProfessional, useSession } from "@/lib/store";
 
 function Inner() {
   const session = useSession();
@@ -27,6 +27,16 @@ function Inner() {
     (review) => review.targetId === pro.id && review.targetType === "professional",
   );
   const proReviews = useMemo(() => getReviewsForProfessional(session, pro.id), [session, pro.id]);
+  const reliabilitySummary = useMemo(
+    () =>
+      getProfessionalReliabilitySummary({
+        professional: pro,
+        reviews: proReviews,
+        jobs: getEffectiveJobs(session),
+        disputes: session.disputes,
+      }),
+    [pro, proReviews, session],
+  );
   const displayedRating =
     mockProReviews.length > 0 && proReviews.length > 0
       ? proReviews.reduce((total, review) => total + review.rating, 0) / proReviews.length
@@ -103,7 +113,7 @@ function Inner() {
           <div className="grid grid-cols-3 gap-2 text-center">
             {[
               ["Trabajos", pro.jobs ?? 0],
-              ["Fiabilidad", `${pro.reliability ?? 0}%`],
+              ["Fiabilidad", `${reliabilitySummary.score}/100`],
               ["Respuesta", pro.responseTime],
             ].map(([l, v]) => (
               <div
@@ -145,6 +155,37 @@ function Inner() {
             </div>
           </Card>
         )}
+
+        <Card className="mb-3">
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <div>
+              <div className="font-bold text-[13px] text-ink-800">Fiabilidad</div>
+              <div className="mt-0.5 text-[11.5px] text-ink-400">
+                Score publico mock derivado para esta demo.
+              </div>
+            </div>
+            <div className="text-right">
+              <div
+                className="font-extrabold text-[22px] leading-none text-ink-900"
+                data-testid="public-professional-reliability-score"
+              >
+                {reliabilitySummary.score}
+              </div>
+              <div
+                className={`mt-1 text-[11px] font-bold uppercase tracking-wide ${getReliabilityLabelClassName(reliabilitySummary.label)}`}
+                data-testid="public-professional-reliability-label"
+              >
+                {getReliabilityLabelText(reliabilitySummary.label)}
+              </div>
+            </div>
+          </div>
+          <div className="text-[12px] text-ink-600 leading-snug">
+            {reliabilitySummary.reviewCount} reseñas, media de {reliabilitySummary.averageRating.toFixed(1)} y {reliabilitySummary.completedJobs} trabajos completados.
+          </div>
+          <div className="mt-2 text-[11.5px] text-ink-400 leading-snug">
+            Cancelados: {reliabilitySummary.cancelledJobs} · Disputas abiertas: {reliabilitySummary.openDisputes} · Resueltas contra el pro: {reliabilitySummary.resolvedAgainstPro}
+          </div>
+        </Card>
 
         <Card className="mb-3">
           <div className="flex items-center justify-between mb-1">
@@ -227,4 +268,18 @@ export default function Page() {
       <Inner />
     </Suspense>
   );
+}
+
+function getReliabilityLabelText(label: "alta" | "media" | "baja") {
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function getReliabilityLabelClassName(label: "alta" | "media" | "baja") {
+  return (
+    {
+      alta: "text-teal-700",
+      media: "text-amber-700",
+      baja: "text-rose-600",
+    } satisfies Record<"alta" | "media" | "baja", string>
+  )[label];
 }
