@@ -1,13 +1,18 @@
 import type { Metadata, Viewport } from "next";
 import { PhoneFrame } from "@/components/layout/phone-frame";
 import { InstallPrompt } from "@/components/layout/install-prompt";
+import { ServiceWorkerRegister } from "@/components/layout/service-worker-register";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  applicationName: "Arranxos",
   title: "Arranxos — Servicios de confianza cerca de ti",
   description:
     "Conecta con profesionales verificados cerca de ti. Pago protegido, sin sorpresas.",
   manifest: "/manifest.json",
+  formatDetection: {
+    telephone: false,
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -17,14 +22,16 @@ export const metadata: Metadata = {
     icon: "/icons/icon-192.svg",
     apple: "/icons/icon-192.svg",
   },
+  other: {
+    "mobile-web-app-capable": "yes",
+  },
 };
 
 export const viewport: Viewport = {
   themeColor: "#FF5A5F",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -44,6 +51,7 @@ export default function RootLayout({
       </head>
       <body className="app-root">
         <PhoneFrame>{children}</PhoneFrame>
+        <ServiceWorkerRegister />
         <InstallPrompt />
       </body>
     </html>

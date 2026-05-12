@@ -1,0 +1,54 @@
+import { expect, test, type Page } from "@playwright/test";
+
+function byTestId(page: Page, testId: string) {
+  return page.getByTestId(testId).first();
+}
+
+async function expectVisibleByTestId(page: Page, testId: string) {
+  await expect(byTestId(page, testId)).toBeVisible();
+}
+
+test.beforeEach(async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+  });
+});
+
+test("manifest y service worker responden", async ({ request }) => {
+  const manifestResponse = await request.get("/manifest.json");
+  expect(manifestResponse.ok()).toBeTruthy();
+
+  const manifest = await manifestResponse.json();
+  expect(manifest.display).toBe("standalone");
+  expect(manifest.start_url).toBe("/");
+  expect(Array.isArray(manifest.icons)).toBeTruthy();
+
+  const serviceWorkerResponse = await request.get("/sw.js");
+  expect(serviceWorkerResponse.ok()).toBeTruthy();
+
+  const serviceWorkerSource = await serviceWorkerResponse.text();
+  expect(serviceWorkerSource).toContain('self.addEventListener("install"');
+  expect(serviceWorkerSource).toContain('self.addEventListener("fetch"');
+});
+
+test("login muestra reset demo y permite limpiar sesion mock", async ({ page }) => {
+  await page.goto("/login");
+  await expectVisibleByTestId(page, "demo-reset-button");
+
+  await page.getByTestId("demo-pro-approved").first().click();
+  await expect(page).toHaveURL(/\/profesional\/inicio/);
+
+  await page.goto("/login");
+  await page.getByTestId("demo-reset-button").first().click();
+  await expectVisibleByTestId(page, "demo-reset-confirm");
+  await page.getByTestId("demo-reset-confirm").first().click();
+
+  await expect(page).toHaveURL(/\/welcome/);
+
+  const persistedKeys = await page.evaluate(() =>
+    Object.keys(window.localStorage).filter((key) => key.startsWith("arranxos-")),
+  );
+  expect(persistedKeys).toHaveLength(0);
+});

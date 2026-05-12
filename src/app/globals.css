@@ -10,6 +10,7 @@
     --ink: #26231c;
     --ink-muted: #716b5e;
     --coral: #ff5a5f;
+    --app-safe-top: env(safe-area-inset-top);
     --app-safe-bottom: env(safe-area-inset-bottom);
     --app-bottom-nav-height: 68px;
     --app-bottom-nav-offset: calc(var(--app-bottom-nav-height) + var(--app-safe-bottom));
@@ -115,6 +116,16 @@
     padding-bottom: calc(var(--app-safe-bottom) + 0.5rem);
   }
 
+  .app-install-prompt {
+    left: 1rem;
+    right: 1rem;
+    bottom: calc(var(--app-safe-bottom) + 1rem);
+  }
+
+  .app-install-prompt-with-nav {
+    bottom: calc(var(--app-safe-bottom) + var(--app-bottom-nav-height) + 1rem);
+  }
+
   .app-bottom-bar {
     padding-bottom: calc(var(--app-safe-bottom) + 1.25rem);
   }
@@ -125,5 +136,9 @@
 
   .app-safe-bottom {
     padding-bottom: calc(var(--app-safe-bottom) + 0.75rem);
+  }
+
+  .app-safe-top {
+    padding-top: calc(var(--app-safe-top) + 0.75rem);
   }
 }

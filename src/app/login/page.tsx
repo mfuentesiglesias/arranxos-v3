@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Divider } from "@/components/ui/divider";
 import { Icon } from "@/components/ui/icon";
 import { ScreenBody } from "@/components/layout/screen-body";
+import { clearPersistedDemoSession } from "@/lib/demo-session";
 import { useSession } from "@/lib/store";
 
 export default function LoginPage() {
@@ -17,6 +18,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("antia.bouzas@gmail.com");
   const [pass, setPass] = useState("········");
   const [loading, setLoading] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const doLogin = () => {
     setLoading(true);
@@ -128,6 +130,44 @@ export default function LoginPage() {
                   </div>
                 </button>
               ))}
+            </div>
+            <div className="mt-3 flex flex-col items-center gap-2">
+              <button
+                type="button"
+                data-testid="demo-reset-button"
+                onClick={() => setShowResetConfirm((current) => !current)}
+                className="text-[12px] font-semibold text-ink-400 underline-offset-2 hover:text-ink-600 hover:underline"
+              >
+                Reset demo
+              </button>
+              {showResetConfirm && (
+                <div className="w-full rounded-2xl border border-sand-200 bg-sand-50 px-3 py-3 text-left">
+                  <div className="text-[12px] font-semibold text-ink-700">
+                    Limpia la sesion demo persistida y vuelve al estado inicial.
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    <Button
+                      full
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setShowResetConfirm(false)}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      full
+                      size="sm"
+                      testId="demo-reset-confirm"
+                      onClick={() => {
+                        clearPersistedDemoSession();
+                        window.location.href = "/welcome";
+                      }}
+                    >
+                      Confirmar reset
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <div className="mt-auto pt-5 text-center text-[13px] text-ink-400">

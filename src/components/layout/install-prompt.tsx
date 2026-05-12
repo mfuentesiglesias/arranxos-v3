@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
+import { cn } from "@/lib/utils";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -12,8 +14,19 @@ interface BeforeInstallPromptEvent extends Event {
 export function InstallPrompt() {
   const [evt, setEvt] = useState<BeforeInstallPromptEvent | null>(null);
   const [shown, setShown] = useState(false);
+  const pathname = usePathname() ?? "";
+  const hasBottomNav =
+    pathname.startsWith("/cliente") ||
+    pathname.startsWith("/profesional") ||
+    pathname.startsWith("/admin");
 
   useEffect(() => {
+    const isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+
+    if (isStandalone) return;
+
     const handler = (e: Event) => {
       e.preventDefault();
       setEvt(e as BeforeInstallPromptEvent);
@@ -32,7 +45,12 @@ export function InstallPrompt() {
   };
 
   return (
-    <div className="fixed bottom-20 left-4 right-4 md:hidden z-50 rounded-2xl bg-white shadow-cardHover border border-sand-200 p-3 flex items-center gap-3 animate-slideUp">
+    <div
+      className={cn(
+        "app-install-prompt fixed md:hidden z-50 rounded-2xl bg-white shadow-cardHover border border-sand-200 p-3 flex items-center gap-3 animate-slideUp",
+        hasBottomNav && "app-install-prompt-with-nav",
+      )}
+    >
       <div className="w-10 h-10 rounded-xl bg-coral-500 text-white flex items-center justify-center">
         <Icon name="download" size={18} />
       </div>

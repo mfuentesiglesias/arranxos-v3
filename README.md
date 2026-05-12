@@ -1,10 +1,10 @@
 # Arranxos
 
-**Servicios de confianza en Galicia** — marketplace PWA que conecta clientes con profesionales verificados (electricistas, fontaneros, reformas, viticultores, ganadería, digital, eventos, turismo rural…). Pago en custodia, anti-fuga de contactos, strikes configurables y panel admin completo.
+**Servicios de confianza en Galicia** — marketplace PWA que conecta clientes con profesionales verificados (electricistas, fontaneros, reformas, viticultores, ganadería, digital, eventos, turismo rural…). Pago en custodia futuro, anti-fuga de contactos, strikes configurables y panel admin completo.
 
 Este repo es el **prototipo navegable completo** migrado a Next.js 15 + TypeScript + Tailwind + App Router. Preparado para PWA instalable.
 
-> ⚠️ **Es un prototipo de frontend.** Todos los datos están mockeados (`src/lib/data.ts`). No hay backend real, no hay autenticación real, no hay pagos reales. Lee la sección "¿Qué falta para producción?" al final.
+> ⚠️ **Es un prototipo frontend demo.** Todos los datos viven en mocks/localStorage (`src/lib/data.ts` + Zustand persist). No hay Supabase real, no hay backend real, no hay autenticación real y no hay pagos reales. Lee la sección "¿Qué falta para producción?" al final.
 
 ---
 
@@ -22,7 +22,7 @@ Requiere Node 20+.
 
 ## Cuentas demo
 
-En `/login` hay tres botones rápidos para entrar como cada rol. También puedes navegar directamente:
+En `/login` hay cuatro accesos demo rápidos. También puedes navegar directamente:
 
 | Rol           | URL de inicio                      |
 |---------------|------------------------------------|
@@ -34,6 +34,12 @@ En `/login` hay tres botones rápidos para entrar como cada rol. También puedes
 
 En escritorio verás un marco de móvil (PhoneFrame) con una barra lateral para saltar entre pantallas. En móvil ocupa toda la pantalla.
 
+### Reset demo
+
+- En `/login` tienes un botón discreto `Reset demo` para limpiar el estado mock persistido.
+- El reset borra claves `arranxos-*` de `localStorage` y limpia `sessionStorage`.
+- Úsalo cuando quieras volver a probar flujos desde cero en móvil o escritorio.
+
 ---
 
 ## Estructura
@@ -43,9 +49,9 @@ src/
 ├── app/
 │   ├── layout.tsx                 # Root + manifest + install prompt
 │   ├── page.tsx                   # redirect → /splash
-│   ├── splash/                    # Splash auto-redirige a /welcome
+│   ├── splash/                    # Splash y reentrada demo por rol persistido
 │   ├── welcome/                   # Onboarding con CTAs
-│   ├── login/                     # Email + 3 atajos demo
+│   ├── login/                     # Email + 4 accesos demo + reset
 │   ├── register/                  # Registro cliente o pro
 │   ├── (cliente)/cliente/         # Área cliente (con BottomNav cliente)
 │   │   ├── inicio/
@@ -145,11 +151,33 @@ Busca `DEMO` en el código para ver todas las marcas explícitas.
 
 Configuración mínima para instalación:
 
-- `public/manifest.json` con `display: standalone`, iconos SVG 192/512, theme `#FF5A5F`.
-- Meta tags en `src/app/layout.tsx` (`manifest`, `appleWebApp`, `themeColor`).
+- `public/manifest.json` con `display: standalone`, `start_url: /`, `scope: /` y theme `#FF5A5F`.
+- Meta tags en `src/app/layout.tsx` (`manifest`, `appleWebApp`, `themeColor`, `viewportFit=cover`).
 - `components/layout/install-prompt.tsx` escucha `beforeinstallprompt` y muestra un banner instalable.
+- `public/sw.js` y `components/layout/service-worker-register.tsx` añaden el minimo necesario para reforzar la instalacion sin meter offline complejo.
 
-**No** hay service worker ni caching offline por decisión de producto. Si quieres añadirlos más adelante, `next-pwa` o un `sw.js` manual son opciones.
+### Probar en movil
+
+1. Abre la demo desplegada por HTTPS en tu movil.
+2. Comprueba `/manifest.json` y `/sw.js` si quieres validar la base PWA.
+3. Si vienes de otras pruebas, usa `Reset demo` antes de empezar.
+
+### Instalar en Android
+
+1. Abre la demo en Chrome para Android.
+2. Si el navegador muestra el banner `Instala Arranxos`, úsalo.
+3. Si no aparece, abre el menu del navegador y usa `Instalar aplicacion` o `Anadir a pantalla de inicio`.
+
+### Instalar en iPhone
+
+1. Abre la demo en Safari.
+2. Pulsa `Compartir`.
+3. Elige `Añadir a pantalla de inicio`.
+
+### Limitacion actual
+
+- La demo no implementa offline completo ni cache agresiva.
+- Los iconos actuales siguen siendo SVG; si en una iteracion futura hiciera falta mejorar compatibilidad iOS, convendria añadir PNG dedicados y `apple-touch-icon` especifico.
 
 ---
 
@@ -170,6 +198,8 @@ npm start
 ```
 
 El proyecto es una app Next.js estándar. No usa Edge runtime, ni middlewares, ni databases.
+
+No hay configuración validada de Cloudflare Pages en este repo ahora mismo. Si se menciona, debe considerarse futuro/pendiente.
 
 ### Dominio personalizado
 
