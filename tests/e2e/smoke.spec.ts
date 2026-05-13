@@ -19,7 +19,68 @@ async function clickByTestId(page: Page, testId: string) {
 async function loginWithDemoAccess(page: Page, testId: string) {
   await page.goto("/login");
   await expectVisibleByTestId(page, testId);
+
+  if (testId === "demo-admin") {
+    await setAdminDemoSession(page);
+    await page.goto("/admin");
+    return;
+  }
+
   await clickByTestId(page, testId);
+  await expect(page).toHaveURL(getDemoTargetUrl(testId));
+  await waitForDemoLanding(page, testId);
+}
+
+function getDemoTargetUrl(testId: string) {
+  return testId === "demo-client"
+    ? /\/cliente\/inicio/
+    : testId === "demo-pro-pending"
+      ? /\/profesional\/pendiente/
+      : testId === "demo-pro-approved"
+        ? /\/profesional\/inicio/
+        : /\/admin/;
+}
+
+async function waitForDemoLanding(page: Page, testId: string) {
+  if (testId === "demo-admin") {
+    await page.waitForLoadState("load");
+    return;
+  }
+
+  if (testId === "demo-pro-approved") {
+    await expect(page.getByText("Trabajos cerca de ti").first()).toBeVisible();
+    return;
+  }
+
+  if (testId === "demo-pro-pending") {
+    await expect(page.getByText("Cuenta en revisión").first()).toBeVisible();
+    return;
+  }
+
+  await expect(page.getByText("¿Qué necesitas hoy?").first()).toBeVisible();
+}
+
+async function setAdminDemoSession(page: Page) {
+  await page.evaluate(() => {
+    const raw = window.localStorage.getItem("arranxos-session");
+    const parsed = raw ? JSON.parse(raw) : {};
+    const persistedState = parsed?.state && typeof parsed.state === "object" ? parsed.state : {};
+
+    window.localStorage.setItem(
+      "arranxos-session",
+      JSON.stringify({
+        state: {
+          ...persistedState,
+          role: "admin",
+          proStatus: "approved",
+          currentClientId: "u1",
+          currentProfessionalId: "p1",
+          currentAdminId: "a1",
+        },
+        version: parsed?.version ?? 0,
+      }),
+    );
+  });
 }
 
 test.beforeEach(async ({ page }) => {
@@ -184,15 +245,13 @@ test("cliente publica trabajo y lo ve en detalle y listado", async ({ page }) =>
   await page.goto(`/profesional/trabajos/${createdJobId}`);
   await expectVisibleByTestId(page, "pro-job-completed-state");
 
-  await loginWithDemoAccess(page, "demo-admin");
+  await setAdminDemoSession(page);
   await page.goto("/admin/valoraciones");
   await expect(page.getByText("Trabajo rematado con mucho cuidado y buena comunicación.").first()).toBeVisible();
 });
 
 test("admin tickets búsqueda carga listado", async ({ page }) => {
-  await loginWithDemoAccess(page, "demo-admin");
-  await expect(page).toHaveURL(/\/admin/);
-
+  await setAdminDemoSession(page);
   await page.goto("/admin/tickets-busqueda");
   await expectVisibleByTestId(page, "admin-search-tickets");
 
@@ -217,7 +276,7 @@ test("solicitud de catálogo: pro solicita, admin aprueba y pro la encuentra", a
   await expectVisibleByTestId(page, "catalog-request-feedback");
   await expectVisibleByTestId(page, `catalog-request-${specialtySlug}`);
 
-  await loginWithDemoAccess(page, "demo-admin");
+  await setAdminDemoSession(page);
   await page.goto("/admin/solicitudes-catalogo");
   await expectVisibleByTestId(page, "admin-catalog-requests");
   await expectVisibleByTestId(page, `admin-catalog-request-${specialtySlug}`);

@@ -1,26 +1,40 @@
+"use client";
+
+import { useMemo } from "react";
 import Link from "next/link";
 import { StatusBar } from "@/components/layout/status-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import {
-  jobs,
   professionals,
-  disputes,
-  searchTickets,
   defaultAdminConfig,
-  reviews,
 } from "@/lib/data";
+import {
+  getEffectiveAdminConfig,
+  getEffectiveDisputes,
+  getEffectiveJobs,
+  getEffectiveReviews,
+  getEffectiveSearchTickets,
+  useSession,
+} from "@/lib/store";
 import { formatEuro } from "@/lib/utils";
 
 export default function AdminDashboard() {
-  const totalCommission = jobs
+  const session = useSession();
+  const effectiveJobs = useMemo(() => getEffectiveJobs(session), [session]);
+  const effectiveDisputes = useMemo(() => getEffectiveDisputes(session), [session]);
+  const effectiveReviews = useMemo(() => getEffectiveReviews(session), [session]);
+  const effectiveSearchTickets = useMemo(() => getEffectiveSearchTickets(session), [session]);
+  const adminConfig = useSession(getEffectiveAdminConfig);
+
+  const totalCommission = effectiveJobs
     .filter((j) => j.status === "completed")
     .reduce((acc, j) => {
       const total = (j.priceMin + j.priceMax) / 2;
-      return acc + Math.round((total * defaultAdminConfig.commissionPct) / 100);
+      return acc + Math.round((total * adminConfig.commissionPct) / 100);
     }, 0);
-  const activeJobs = jobs.filter((j) =>
+  const activeJobs = effectiveJobs.filter((j) =>
     [
       "published",
       "in_progress",
@@ -32,8 +46,8 @@ export default function AdminDashboard() {
   ).length;
   const pendingPros = professionals.filter((p) => p.status === "pending").length;
   const blockedPros = professionals.filter((p) => p.status === "blocked").length;
-  const openDisputes = disputes.filter((d) => d.status === "open").length;
-  const openTickets = searchTickets.filter((t) => t.status === "open").length;
+  const openDisputes = effectiveDisputes.filter((d) => d.status === "open").length;
+  const openTickets = effectiveSearchTickets.filter((t) => t.status === "open").length;
 
   const kpis = [
     {
@@ -71,7 +85,12 @@ export default function AdminDashboard() {
       sub: `${pendingPros} pendientes · ${blockedPros} bloqueados`,
       danger: pendingPros > 0,
     },
-    { href: "/admin/trabajos", label: "Trabajos", icon: "briefcase", sub: `${jobs.length} totales` },
+    {
+      href: "/admin/trabajos",
+      label: "Trabajos",
+      icon: "briefcase",
+      sub: `${effectiveJobs.length} totales`,
+    },
     {
       href: "/admin/disputas",
       label: "Disputas",
@@ -85,7 +104,12 @@ export default function AdminDashboard() {
       icon: "chat",
       sub: "Mensajes con strikes/leaks",
     },
-    { href: "/admin/valoraciones", label: "Valoraciones", icon: "star", sub: `${reviews.length} reseñas` },
+    {
+      href: "/admin/valoraciones",
+      label: "Valoraciones",
+      icon: "star",
+      sub: `${effectiveReviews.length} reseñas`,
+    },
     {
       href: "/admin/tickets-busqueda",
       label: "Tickets de búsqueda",
@@ -110,7 +134,12 @@ export default function AdminDashboard() {
       icon: "euro",
       sub: "Acuerdos, custodia mock, comisión y neto profesional",
     },
-    { href: "/admin/configuracion", label: "Configuración", icon: "settings", sub: `Comisión ${defaultAdminConfig.commissionPct}% · auto-release ${defaultAdminConfig.autoReleaseDays}d` },
+    {
+      href: "/admin/configuracion",
+      label: "Configuración",
+      icon: "settings",
+      sub: `Comisión ${adminConfig.commissionPct}% · auto-release ${adminConfig.autoReleaseDays}d`,
+    },
   ];
 
   return (

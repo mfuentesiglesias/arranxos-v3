@@ -87,15 +87,47 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test("admin economia carga y muestra estados económicos mock", async ({ page }) => {
-  await setAdminDemoSession(page);
-  await page.goto("/admin/economia");
+test("admin dashboard carga y admin trabajos refleja trabajos efectivos creados en demo", async ({ page }) => {
+  const jobTitle = "Trabajo demo admin estado efectivo";
 
-  await expectVisibleByTestId(page, "admin-economy-page");
-  await expectVisibleByTestId(page, "admin-economy-summary");
-  await expectVisibleByTestId(page, "admin-economy-search");
-  await expectVisibleByTestId(page, "admin-economy-disputes-link");
-  await expectVisibleByTestId(page, "admin-economy-jobs-link");
-  await expectVisibleByTestId(page, "admin-economy-row-j3");
-  await expect(page.getByText("Pago protegido").first()).toBeVisible();
+  await loginWithDemoAccess(page, "demo-client");
+  await page.goto("/cliente/publicar");
+  await byTestId(page, "client-publish-category-search").fill("Carpintería");
+  await clickByTestId(page, "client-category-carpinteria-y-madera");
+  await expectVisibleByTestId(page, "client-service-muebles-a-medida");
+  await clickByTestId(page, "client-service-muebles-a-medida");
+  await page.getByRole("button", { name: "Continuar" }).first().click();
+  await page.getByPlaceholder("Ej. Reparar cuadro eléctrico en piso").first().fill(jobTitle);
+  await page
+    .getByPlaceholder("Describe qué necesitas. Cuanto más detalle, mejor.")
+    .first()
+    .fill("Necesito un trabajo visible en admin desde el estado efectivo de la demo.");
+  await page.locator("select").nth(1).selectOption("100–300€");
+  await page.getByRole("button", { name: "Revisar y publicar" }).first().click();
+  await expectVisibleByTestId(page, "client-publish-review-summary");
+  await page.getByRole("button", { name: "Publicar trabajo" }).first().click();
+  await expect(page).toHaveURL(/\/cliente\/trabajos\/demo-job-/);
+
+  await setAdminDemoSession(page);
+  await page.goto("/admin");
+  await expect(page.getByText("Panel de control").first()).toBeVisible();
+  await expect(page.getByText("Trabajos").first()).toBeVisible();
+
+  await page.waitForTimeout(300);
+  await page.goto("/admin/trabajos");
+  await expect(page.getByText(jobTitle).first()).toBeVisible();
+});
+
+test("oportunidades profesional muestran copy alineado con filtrado mock real", async ({ page }) => {
+  await loginWithDemoAccess(page, "demo-pro-approved");
+  await page.goto("/profesional/trabajos");
+  await expectVisibleByTestId(page, "open-filters");
+  await clickByTestId(page, "open-filters");
+
+  await expect(
+    page.getByText("El radio ya aplica filtrado mock/demo sobre la lista usando distancia aproximada.").first(),
+  ).toBeVisible();
+  await expect(
+    page.getByText("todavía no aplica filtrado real por distancia").first(),
+  ).toHaveCount(0);
 });

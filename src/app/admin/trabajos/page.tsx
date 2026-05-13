@@ -1,12 +1,12 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icon";
-import { jobs, defaultAdminConfig } from "@/lib/data";
+import { getEffectiveAdminConfig, getEffectiveJobs, useSession } from "@/lib/store";
 import type { JobStatus } from "@/lib/types";
 import { formatEuro } from "@/lib/utils";
 import Link from "next/link";
@@ -25,8 +25,11 @@ const FILTERS: { id: JobStatus | "all"; label: string }[] = [
 export default function AdminTrabajosPage() {
   const [filter, setFilter] = useState<JobStatus | "all">("all");
   const [q, setQ] = useState("");
+  const session = useSession();
+  const effectiveJobs = useMemo(() => getEffectiveJobs(session), [session]);
+  const adminConfig = useSession(getEffectiveAdminConfig);
 
-  const filtered = jobs.filter((j) => {
+  const filtered = effectiveJobs.filter((j) => {
     const ms = filter === "all" || j.status === filter;
     const mq =
       !q ||
@@ -41,13 +44,13 @@ export default function AdminTrabajosPage() {
     0,
   );
   const commissionValue = Math.round(
-    (totalValue * defaultAdminConfig.commissionPct) / 100,
+    (totalValue * adminConfig.commissionPct) / 100,
   );
 
   return (
     <div className="flex-1 flex flex-col bg-sand-50">
       <StatusBar />
-      <TopBar title="Trabajos" subtitle={`${jobs.length} totales`} />
+      <TopBar title="Trabajos" subtitle={`${effectiveJobs.length} totales`} />
       <ScreenBody className="px-4 pt-3 pb-6">
         <Card className="mb-3 !p-3 bg-ink-900 text-white border-ink-900">
           <div className="flex items-center justify-between">
@@ -61,7 +64,7 @@ export default function AdminTrabajosPage() {
             </div>
             <div className="text-right">
               <div className="text-[10.5px] text-white/60 uppercase tracking-wide font-semibold">
-                Comisión ({defaultAdminConfig.commissionPct}%)
+                Comisión ({adminConfig.commissionPct}%)
               </div>
               <div className="font-extrabold text-[18px] text-coral-400">
                 {formatEuro(commissionValue)}
@@ -101,7 +104,7 @@ export default function AdminTrabajosPage() {
 
         <div className="flex flex-col gap-2">
           {filtered.map((j) => (
-            <Card key={j.id} className="!p-3">
+            <Card key={j.id} className="!p-3" testId={`admin-jobs-row-${j.id}`}>
               <div className="flex items-start gap-2 mb-2">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">

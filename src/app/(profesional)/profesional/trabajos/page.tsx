@@ -318,7 +318,7 @@ function Inner() {
               ))}
             </div>
             <div className="text-[11px] text-ink-400 leading-snug mt-2">
-              En esta fase, el radio actualiza la vista, pero todavía no aplica filtrado real por distancia.
+              El radio ya aplica filtrado mock/demo sobre la lista usando distancia aproximada.
             </div>
           </FilterSection>
 

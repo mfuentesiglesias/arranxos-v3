@@ -119,6 +119,12 @@ export default function LoginPage() {
                   }
                   onClick={() => {
                     enterDemoAccess(demo.key);
+
+                    if (demo.key === "admin") {
+                      window.location.assign(demo.target);
+                      return;
+                    }
+
                     router.push(demo.target);
                   }}
                   className="rounded-2xl border-[1.5px] border-sand-200 bg-white px-3 py-3 text-left active:scale-[0.98]"
