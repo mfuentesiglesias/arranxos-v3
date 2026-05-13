@@ -43,6 +43,7 @@ import type {
   Job,
   ChatMessage,
   Notification,
+  Professional,
   ProStatus,
   Review,
   SearchTicket,
@@ -263,6 +264,8 @@ export interface SessionState {
     body: string,
     senderRole: "client" | "professional",
   ) => ChatMessage | undefined;
+  professionalStatusOverrides: Record<string, ProStatus>;
+  setProfessionalStatus: (professionalId: string, status: ProStatus) => void;
   professionalProfileOverrides: Record<string, ProfessionalCatalogProfile>;
   updateProfessionalCatalogProfile: (
     professionalId: string,
@@ -344,6 +347,12 @@ function cloneJob(job: Job): Job {
 
 function cloneCreatedJobs(createdJobs: Job[] = []) {
   return createdJobs.map((job) => cloneJob(job));
+}
+
+function cloneProfessionalStatusOverrides(
+  overrides: Record<string, ProStatus> = {},
+) {
+  return { ...overrides };
 }
 
 function cloneJobRequest(jobRequest: JobRequest): JobRequest {
@@ -676,6 +685,20 @@ export function getCurrentClientId(state: SessionState) {
   return state.currentClientId;
 }
 
+export function getEffectiveProfessionals(state: SessionState): Professional[] {
+  return professionals.map((professional) => ({
+    ...professional,
+    status: state.professionalStatusOverrides?.[professional.id] ?? professional.status,
+  }));
+}
+
+export function getEffectiveProfessionalById(
+  state: SessionState,
+  professionalId: string,
+) {
+  return getEffectiveProfessionals(state).find((professional) => professional.id === professionalId);
+}
+
 export function getEffectiveJobs(state: SessionState) {
   const effectiveJobs = [...(state.createdJobs ?? []).map(cloneJob), ...jobs];
   const effectiveJobRequests = state.jobRequests ?? [];
@@ -833,7 +856,7 @@ export const useSession = create<SessionState>()(
       setCurrentProfessionalId: (currentProfessionalId) => set({ currentProfessionalId }),
       setCurrentAdminId: (currentAdminId) => set({ currentAdminId }),
       enterDemoAccess: (preset) =>
-        set(() => {
+        set((s) => {
           if (preset === "client") {
             return {
               role: "client" as const,
@@ -845,9 +868,10 @@ export const useSession = create<SessionState>()(
           }
 
           if (preset === "professional_pending") {
+            const nextStatus = s.professionalStatusOverrides?.p4 ?? "pending";
             return {
               role: "professional" as const,
-              proStatus: "pending" as const,
+              proStatus: nextStatus,
               currentClientId: "u1",
               currentProfessionalId: "p4",
               currentAdminId: "a1",
@@ -855,9 +879,10 @@ export const useSession = create<SessionState>()(
           }
 
           if (preset === "professional_approved") {
+            const nextStatus = s.professionalStatusOverrides?.p1 ?? "approved";
             return {
               role: "professional" as const,
-              proStatus: "approved" as const,
+              proStatus: nextStatus,
               currentClientId: "u1",
               currentProfessionalId: "p1",
               currentAdminId: "a1",
@@ -893,6 +918,7 @@ export const useSession = create<SessionState>()(
           chats: [],
           chatMessages: [],
           jobOutreachMeta: {},
+          professionalStatusOverrides: {},
           professionalProfileOverrides: {},
           catalogRequests: [],
           approvedCatalogServices: [],
@@ -924,6 +950,28 @@ export const useSession = create<SessionState>()(
       chats: [],
       chatMessages: [],
       jobOutreachMeta: {},
+      professionalStatusOverrides: {},
+      setProfessionalStatus: (professionalId, status) =>
+        set((s) => {
+          const seedProfessional = professionals.find((entry) => entry.id === professionalId);
+          if (!seedProfessional) return {};
+
+          const nextOverrides = cloneProfessionalStatusOverrides(s.professionalStatusOverrides);
+
+          if (seedProfessional.status === status) {
+            delete nextOverrides[professionalId];
+          } else {
+            nextOverrides[professionalId] = status;
+          }
+
+          return {
+            professionalStatusOverrides: nextOverrides,
+            proStatus:
+              s.role === "professional" && s.currentProfessionalId === professionalId
+                ? status
+                : s.proStatus,
+          };
+        }),
       professionalProfileOverrides: {},
       catalogRequests: [],
       approvedCatalogServices: [],

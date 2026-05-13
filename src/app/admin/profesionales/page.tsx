@@ -9,19 +9,25 @@ import { Icon } from "@/components/ui/icon";
 import { RatingStars } from "@/components/pros/rating-stars";
 import { StrikeBadge } from "@/components/pros/strike-badge";
 import { Button } from "@/components/ui/button";
-import { professionals as seed, defaultAdminConfig } from "@/lib/data";
+import { defaultAdminConfig } from "@/lib/data";
 import { getProfessionalReliabilitySummary } from "@/lib/reliability";
-import { getEffectiveJobs, getReviewsForProfessional, useSession } from "@/lib/store";
+import {
+  getEffectiveJobs,
+  getEffectiveProfessionals,
+  getReviewsForProfessional,
+  useSession,
+} from "@/lib/store";
 import type { ProStatus } from "@/lib/types";
 
 export default function AdminProsPage() {
-  const [list, setList] = useState(seed);
   const [filter, setFilter] = useState<ProStatus | "all">("pending");
   const [q, setQ] = useState("");
   const session = useSession();
   const effectiveJobs = useMemo(() => getEffectiveJobs(session), [session]);
+  const effectiveProfessionals = useMemo(() => getEffectiveProfessionals(session), [session]);
+  const setProfessionalStatus = useSession((s) => s.setProfessionalStatus);
 
-  const filtered = list.filter((p) => {
+  const filtered = effectiveProfessionals.filter((p) => {
     const ms = filter === "all" || p.status === filter;
     const mq =
       !q ||
@@ -31,26 +37,23 @@ export default function AdminProsPage() {
     return ms && mq;
   });
 
-  const setStatus = (id: string, status: ProStatus) =>
-    setList((l) => l.map((p) => (p.id === id ? { ...p, status } : p)));
-
   const counts = {
-    pending: list.filter((p) => p.status === "pending").length,
-    approved: list.filter((p) => p.status === "approved").length,
-    blocked: list.filter((p) => p.status === "blocked").length,
+    pending: effectiveProfessionals.filter((p) => p.status === "pending").length,
+    approved: effectiveProfessionals.filter((p) => p.status === "approved").length,
+    blocked: effectiveProfessionals.filter((p) => p.status === "blocked").length,
   };
 
   const TABS: { id: ProStatus | "all"; label: string; count?: number }[] = [
     { id: "pending", label: "Pendientes", count: counts.pending },
     { id: "approved", label: "Aprobados", count: counts.approved },
     { id: "blocked", label: "Bloqueados", count: counts.blocked },
-    { id: "all", label: "Todos", count: list.length },
+    { id: "all", label: "Todos", count: effectiveProfessionals.length },
   ];
 
   return (
     <div className="flex-1 flex flex-col bg-sand-50">
       <StatusBar />
-      <TopBar title="Profesionales" subtitle={`${list.length} totales`} />
+      <TopBar title="Profesionales" subtitle={`${effectiveProfessionals.length} totales`} />
       <ScreenBody className="px-4 pt-3 pb-6">
         <div className="flex items-center gap-2 bg-white rounded-2xl px-3.5 py-2.5 mb-3 border border-sand-200/70">
           <Icon name="search" size={16} stroke={2.2} />
@@ -103,7 +106,7 @@ export default function AdminProsPage() {
             });
 
             return (
-              <Card key={p.id} className="!p-3">
+              <Card key={p.id} className="!p-3" testId={`admin-professional-card-${p.id}`}>
                 <div className="flex items-start gap-3 mb-2">
                   <Avatar initials={p.avatar} size={44} />
                   <div className="flex-1 min-w-0">
@@ -111,7 +114,7 @@ export default function AdminProsPage() {
                       <div className="font-bold text-[13.5px] text-ink-800 truncate">
                         {p.name}
                       </div>
-                      <StatusPill status={p.status} />
+                      <StatusPill status={p.status} professionalId={p.id} />
                     </div>
                     <div className="text-[11.5px] text-ink-500 mb-1 truncate">
                       {p.specialty} · {p.location} · desde {p.since}
@@ -152,10 +155,11 @@ export default function AdminProsPage() {
                   · Strikes: {reliability.strikes}
                 </div>
                 <ProActions
+                  professionalId={p.id}
                   status={p.status}
-                  onApprove={() => setStatus(p.id, "approved")}
-                  onBlock={() => setStatus(p.id, "blocked")}
-                  onReinstate={() => setStatus(p.id, "approved")}
+                  onApprove={() => setProfessionalStatus(p.id, "approved")}
+                  onBlock={() => setProfessionalStatus(p.id, "blocked")}
+                  onReinstate={() => setProfessionalStatus(p.id, "approved")}
                 />
               </Card>
             );
@@ -185,25 +189,36 @@ function getReliabilityLabelClassName(label: "alta" | "media" | "baja") {
   )[label];
 }
 
-function StatusPill({ status }: { status: ProStatus }) {
+function StatusPill({
+  status,
+  professionalId,
+}: {
+  status: ProStatus;
+  professionalId: string;
+}) {
   const m = {
     pending: { label: "Pendiente", cls: "bg-amber-50 text-amber-700" },
     approved: { label: "Aprobado", cls: "bg-teal-50 text-teal-700" },
     blocked: { label: "Bloqueado", cls: "bg-rose-50 text-rose-700" },
   }[status];
   return (
-    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${m.cls}`}>
+    <span
+      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${m.cls}`}
+      data-testid={`admin-professional-status-${professionalId}`}
+    >
       {m.label}
     </span>
   );
 }
 
 function ProActions({
+  professionalId,
   status,
   onApprove,
   onBlock,
   onReinstate,
 }: {
+  professionalId: string;
   status: ProStatus;
   onApprove: () => void;
   onBlock: () => void;
@@ -212,10 +227,21 @@ function ProActions({
   if (status === "pending") {
     return (
       <div className="grid grid-cols-2 gap-2">
-        <Button full size="sm" variant="outline" onClick={onBlock}>
+        <Button
+          full
+          size="sm"
+          variant="outline"
+          onClick={onBlock}
+          testId={`admin-professional-block-${professionalId}`}
+        >
           Rechazar
         </Button>
-        <Button full size="sm" onClick={onApprove}>
+        <Button
+          full
+          size="sm"
+          onClick={onApprove}
+          testId={`admin-professional-approve-${professionalId}`}
+        >
           Aprobar
         </Button>
       </div>
@@ -223,13 +249,25 @@ function ProActions({
   }
   if (status === "approved") {
     return (
-      <Button full size="sm" variant="danger" onClick={onBlock}>
+      <Button
+        full
+        size="sm"
+        variant="danger"
+        onClick={onBlock}
+        testId={`admin-professional-block-${professionalId}`}
+      >
         Bloquear cuenta
       </Button>
     );
   }
   return (
-    <Button full size="sm" variant="outline" onClick={onReinstate}>
+    <Button
+      full
+      size="sm"
+      variant="outline"
+      onClick={onReinstate}
+      testId={`admin-professional-reactivate-${professionalId}`}
+    >
       Reactivar cuenta
     </Button>
   );

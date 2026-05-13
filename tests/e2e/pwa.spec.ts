@@ -37,7 +37,22 @@ test("login muestra reset demo y permite limpiar sesion mock", async ({ page }) 
   await page.goto("/login");
   await expectVisibleByTestId(page, "demo-reset-button");
 
-  await page.getByTestId("demo-pro-approved").first().click();
+  await page.evaluate(() => {
+    window.localStorage.setItem(
+      "arranxos-session",
+      JSON.stringify({
+        state: {
+          role: "professional",
+          proStatus: "approved",
+          currentClientId: "u1",
+          currentProfessionalId: "p1",
+          currentAdminId: "a1",
+        },
+        version: 0,
+      }),
+    );
+  });
+  await page.goto("/profesional/inicio");
   await expect(page).toHaveURL(/\/profesional\/inicio/);
 
   await page.goto("/login");
