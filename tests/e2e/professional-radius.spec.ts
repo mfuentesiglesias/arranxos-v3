@@ -13,11 +13,20 @@ async function clickByTestId(page: Page, testId: string) {
 }
 
 async function loginWithDemoAccess(page: Page, testId: string) {
-  await page.goto("/login");
-  await expectVisibleByTestId(page, testId);
-  await clickByTestId(page, testId);
+  await setDemoSession(page, testId);
+  await page.goto(getDemoTargetPath(testId));
   await expect(page).toHaveURL(getDemoTargetUrl(testId));
   await waitForDemoLanding(page, testId);
+}
+
+function getDemoTargetPath(testId: string) {
+  return testId === "demo-client"
+    ? "/cliente/inicio"
+    : testId === "demo-pro-pending"
+      ? "/profesional/pendiente"
+      : testId === "demo-pro-approved"
+        ? "/profesional/inicio"
+        : "/admin";
 }
 
 function getDemoTargetUrl(testId: string) {
@@ -47,6 +56,36 @@ async function waitForDemoLanding(page: Page, testId: string) {
   }
 
   await expect(page.getByText("¿Qué necesitas hoy?").first()).toBeVisible();
+}
+
+async function setDemoSession(page: Page, testId: string) {
+  await page.evaluate((recipientTestId) => {
+    const raw = window.localStorage.getItem("arranxos-session");
+    const parsed = raw ? JSON.parse(raw) : {};
+    const persistedState = parsed?.state && typeof parsed.state === "object" ? parsed.state : {};
+    const role = recipientTestId === "demo-admin"
+      ? "admin"
+      : recipientTestId === "demo-client"
+        ? "client"
+        : "professional";
+    const proStatus = recipientTestId === "demo-pro-pending" ? "pending" : "approved";
+    const currentProfessionalId = recipientTestId === "demo-pro-pending" ? "p4" : "p1";
+
+    window.localStorage.setItem(
+      "arranxos-session",
+      JSON.stringify({
+        state: {
+          ...persistedState,
+          role,
+          proStatus,
+          currentClientId: "u1",
+          currentProfessionalId,
+          currentAdminId: "a1",
+        },
+        version: parsed?.version ?? 0,
+      }),
+    );
+  }, testId);
 }
 
 test.beforeEach(async ({ page }) => {

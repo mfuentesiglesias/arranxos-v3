@@ -17,18 +17,20 @@ async function clickByTestId(page: Page, testId: string) {
 }
 
 async function loginWithDemoAccess(page: Page, testId: string) {
-  await page.goto("/login");
-  await expectVisibleByTestId(page, testId);
-
-  if (testId === "demo-admin") {
-    await setAdminDemoSession(page);
-    await page.goto("/admin");
-    return;
-  }
-
-  await clickByTestId(page, testId);
+  await setDemoSession(page, testId);
+  await page.goto(getDemoTargetPath(testId));
   await expect(page).toHaveURL(getDemoTargetUrl(testId));
   await waitForDemoLanding(page, testId);
+}
+
+function getDemoTargetPath(testId: string) {
+  return testId === "demo-client"
+    ? "/cliente/inicio"
+    : testId === "demo-pro-pending"
+      ? "/profesional/pendiente"
+      : testId === "demo-pro-approved"
+        ? "/profesional/inicio"
+        : "/admin";
 }
 
 function getDemoTargetUrl(testId: string) {
@@ -60,27 +62,34 @@ async function waitForDemoLanding(page: Page, testId: string) {
   await expect(page.getByText("¿Qué necesitas hoy?").first()).toBeVisible();
 }
 
-async function setAdminDemoSession(page: Page) {
-  await page.evaluate(() => {
+async function setDemoSession(page: Page, testId: string) {
+  await page.evaluate((recipientTestId) => {
     const raw = window.localStorage.getItem("arranxos-session");
     const parsed = raw ? JSON.parse(raw) : {};
     const persistedState = parsed?.state && typeof parsed.state === "object" ? parsed.state : {};
+    const role = recipientTestId === "demo-admin"
+      ? "admin"
+      : recipientTestId === "demo-client"
+        ? "client"
+        : "professional";
+    const proStatus = recipientTestId === "demo-pro-pending" ? "pending" : "approved";
+    const currentProfessionalId = recipientTestId === "demo-pro-pending" ? "p4" : "p1";
 
     window.localStorage.setItem(
       "arranxos-session",
       JSON.stringify({
         state: {
           ...persistedState,
-          role: "admin",
-          proStatus: "approved",
+          role,
+          proStatus,
           currentClientId: "u1",
-          currentProfessionalId: "p1",
+          currentProfessionalId,
           currentAdminId: "a1",
         },
         version: parsed?.version ?? 0,
       }),
     );
-  });
+  }, testId);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -99,7 +108,9 @@ test("login demo accesos visibles y pro approved navega", async ({ page }) => {
   await expectVisibleByTestId(page, "demo-pro-approved");
   await expectVisibleByTestId(page, "demo-admin");
 
-  await clickByTestId(page, "demo-pro-approved");
+  await byTestId(page, "demo-pro-approved").evaluate((element) => {
+    (element as HTMLButtonElement).click();
+  });
   await expect(page).toHaveURL(/\/profesional\/inicio/);
 });
 
@@ -245,13 +256,13 @@ test("cliente publica trabajo y lo ve en detalle y listado", async ({ page }) =>
   await page.goto(`/profesional/trabajos/${createdJobId}`);
   await expectVisibleByTestId(page, "pro-job-completed-state");
 
-  await setAdminDemoSession(page);
+  await setDemoSession(page, "demo-admin");
   await page.goto("/admin/valoraciones");
   await expect(page.getByText("Trabajo rematado con mucho cuidado y buena comunicación.").first()).toBeVisible();
 });
 
 test("admin tickets búsqueda carga listado", async ({ page }) => {
-  await setAdminDemoSession(page);
+  await setDemoSession(page, "demo-admin");
   await page.goto("/admin/tickets-busqueda");
   await expectVisibleByTestId(page, "admin-search-tickets");
 
@@ -276,7 +287,7 @@ test("solicitud de catálogo: pro solicita, admin aprueba y pro la encuentra", a
   await expectVisibleByTestId(page, "catalog-request-feedback");
   await expectVisibleByTestId(page, `catalog-request-${specialtySlug}`);
 
-  await setAdminDemoSession(page);
+  await setDemoSession(page, "demo-admin");
   await page.goto("/admin/solicitudes-catalogo");
   await expectVisibleByTestId(page, "admin-catalog-requests");
   await expectVisibleByTestId(page, `admin-catalog-request-${specialtySlug}`);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { StatusBar } from "@/components/layout/status-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
 import { HeaderActionSheet } from "@/components/layout/header-action-sheet";
@@ -8,24 +8,77 @@ import { HeaderIconButton } from "@/components/layout/header-icon-button";
 import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { JobCard } from "@/components/jobs/job-card";
 import { ProCard } from "@/components/pros/pro-card";
 import { SectionHeading } from "@/components/ui/section-heading";
-import { Button } from "@/components/ui/button";
-import { getEffectiveNotifications, useSession } from "@/lib/store";
+import {
+  getCurrentClientId,
+  getEffectiveJobs,
+  getEffectiveNotifications,
+  useSession,
+} from "@/lib/store";
 import {
   currentClient,
-  jobs,
   professionals,
   categoryGroups,
 } from "@/lib/data";
 import Link from "next/link";
 
+const CLIENT_ACTIVE_JOB_STATUSES = [
+  "published",
+  "in_progress",
+  "agreement_pending",
+  "agreed",
+  "escrow_funded",
+  "completed_pending_confirmation",
+  "dispute",
+] as const;
+
+const CLIENT_PENDING_ACTION_STATUSES = [
+  "agreement_pending",
+  "agreed",
+  "escrow_funded",
+  "completed_pending_confirmation",
+  "dispute",
+] as const;
+
 export default function HomeClientePage() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const notifications = useSession(getEffectiveNotifications);
-  const myJobs = jobs.filter((j) => j.clientId === "u1").slice(0, 2);
+  const session = useSession();
+  const currentClientId = getCurrentClientId(session);
+  const notifications = useMemo(() => getEffectiveNotifications(session), [session]);
+  const effectiveJobs = useMemo(() => getEffectiveJobs(session), [session]);
+  const myClientJobs = useMemo(
+    () =>
+      effectiveJobs
+        .filter((job) => job.clientId === currentClientId)
+        .sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime()),
+    [currentClientId, effectiveJobs],
+  );
+  const myActiveJobs = useMemo(
+    () =>
+      myClientJobs.filter((job) =>
+        CLIENT_ACTIVE_JOB_STATUSES.includes(
+          job.status as (typeof CLIENT_ACTIVE_JOB_STATUSES)[number],
+        ),
+      ),
+    [myClientJobs],
+  );
+  const myPendingActionJobs = useMemo(
+    () =>
+      myClientJobs.filter((job) =>
+        CLIENT_PENDING_ACTION_STATUSES.includes(
+          job.status as (typeof CLIENT_PENDING_ACTION_STATUSES)[number],
+        ),
+      ),
+    [myClientJobs],
+  );
+  const myClosedJobsCount = useMemo(
+    () =>
+      myClientJobs.filter((job) => ["completed", "cancelled"].includes(job.status)).length,
+    [myClientJobs],
+  );
+  const myJobsPreview = useMemo(() => myActiveJobs.slice(0, 3), [myActiveJobs]);
   const topPros = professionals
     .filter((p) => p.status === "approved" && p.rating >= 4.7)
     .slice(0, 4);
@@ -33,7 +86,7 @@ export default function HomeClientePage() {
   const featured = categoryGroups[0].categories.slice(0, 8);
 
   return (
-    <div className="flex-1 flex flex-col">
+    <div className="flex-1 flex flex-col" data-testid="client-home-page">
       <StatusBar />
       {/* Header */}
       <div className="px-5 pt-2 pb-4 bg-white border-b border-sand-200/70">
@@ -100,6 +153,25 @@ export default function HomeClientePage() {
           </div>
         </Link>
 
+        <Card className="mb-5" testId="client-home-pending-actions">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <div className="font-bold text-[13px] text-ink-800">Resumen de tus trabajos</div>
+              <div className="text-[11px] text-ink-400 leading-snug">
+                Basado en el estado efectivo de esta demo.
+              </div>
+            </div>
+            <Link href="/cliente/trabajos" className="text-[11px] font-bold text-coral-600">
+              Ver todos
+            </Link>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <HomeStatTile label="Activos" value={String(myActiveJobs.length)} />
+            <HomeStatTile label="Pendientes" value={String(myPendingActionJobs.length)} />
+            <HomeStatTile label="Cerrados" value={String(myClosedJobsCount)} />
+          </div>
+        </Card>
+
         {/* Quick categories */}
         <SectionHeading title="Categorías populares" action="Ver todas" href="/cliente/explorar" />
         <div className="grid grid-cols-4 gap-2.5 mb-5">
@@ -120,11 +192,11 @@ export default function HomeClientePage() {
         </div>
 
         {/* Active jobs */}
-        {myJobs.length > 0 && (
+        {myJobsPreview.length > 0 && (
           <>
             <SectionHeading title="Tus trabajos activos" action="Ver todos" href="/cliente/trabajos" />
-            <div className="flex flex-col gap-2.5 mb-5">
-              {myJobs.map((j) => (
+            <div className="flex flex-col gap-2.5 mb-5" data-testid="client-home-active-jobs">
+              {myJobsPreview.map((j) => (
                 <JobCard key={j.id} job={j} href={`/cliente/trabajos/${j.id}`} />
               ))}
             </div>
@@ -157,6 +229,17 @@ export default function HomeClientePage() {
           </div>
         </Card>
       </ScreenBody>
+    </div>
+  );
+}
+
+function HomeStatTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-sand-200/70 bg-sand-50/80 px-3 py-2.5">
+      <div className="font-extrabold text-[16px] text-ink-900">{value}</div>
+      <div className="text-[10.5px] font-semibold uppercase tracking-wide text-ink-400">
+        {label}
+      </div>
     </div>
   );
 }

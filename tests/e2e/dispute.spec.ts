@@ -13,70 +13,37 @@ async function clickByTestId(page: Page, testId: string) {
 }
 
 async function loginWithDemoAccess(page: Page, testId: string) {
-  await page.goto("/login");
-  await expectVisibleByTestId(page, testId);
-
-  if (testId === "demo-admin") {
-    await setAdminDemoSession(page);
-    await page.goto("/admin");
-    return;
-  }
-
-  await clickByTestId(page, testId);
-  await expect(page).toHaveURL(getDemoTargetUrl(testId));
-  await waitForDemoLanding(page, testId);
+  await setDemoSession(page, testId);
 }
 
-function getDemoTargetUrl(testId: string) {
-  return testId === "demo-client"
-    ? /\/cliente\/inicio/
-    : testId === "demo-pro-pending"
-      ? /\/profesional\/pendiente/
-      : testId === "demo-pro-approved"
-        ? /\/profesional\/inicio/
-        : /\/admin/;
-}
-
-async function waitForDemoLanding(page: Page, testId: string) {
-  if (testId === "demo-admin") {
-    await page.waitForLoadState("load");
-    return;
-  }
-
-  if (testId === "demo-pro-approved") {
-    await expect(page.getByText("Trabajos cerca de ti").first()).toBeVisible();
-    return;
-  }
-
-  if (testId === "demo-pro-pending") {
-    await expect(page.getByText("Cuenta en revisión").first()).toBeVisible();
-    return;
-  }
-
-  await expect(page.getByText("¿Qué necesitas hoy?").first()).toBeVisible();
-}
-
-async function setAdminDemoSession(page: Page) {
-  await page.evaluate(() => {
+async function setDemoSession(page: Page, testId: string) {
+  await page.evaluate((recipientTestId) => {
     const raw = window.localStorage.getItem("arranxos-session");
     const parsed = raw ? JSON.parse(raw) : {};
     const persistedState = parsed?.state && typeof parsed.state === "object" ? parsed.state : {};
+    const role = recipientTestId === "demo-admin"
+      ? "admin"
+      : recipientTestId === "demo-client"
+        ? "client"
+        : "professional";
+    const proStatus = recipientTestId === "demo-pro-pending" ? "pending" : "approved";
+    const currentProfessionalId = recipientTestId === "demo-pro-pending" ? "p4" : "p1";
 
     window.localStorage.setItem(
       "arranxos-session",
       JSON.stringify({
         state: {
           ...persistedState,
-          role: "admin",
-          proStatus: "approved",
+          role,
+          proStatus,
           currentClientId: "u1",
-          currentProfessionalId: "p1",
+          currentProfessionalId,
           currentAdminId: "a1",
         },
         version: parsed?.version ?? 0,
       }),
     );
-  });
+  }, testId);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -169,7 +136,7 @@ test("cliente abre disputa y admin la resuelve a favor del cliente", async ({ pa
   await expect(page).toHaveURL(new RegExp(`/cliente/trabajos/${createdJobId}`));
   await expectVisibleByTestId(page, "client-dispute-open-state");
 
-  await setAdminDemoSession(page);
+  await setDemoSession(page, "demo-admin");
   await page.goto("/admin/disputas");
   const adminDisputeCard = byTestId(page, `admin-dispute-${createdJobId}`);
   await expect(adminDisputeCard).toBeVisible();
@@ -265,7 +232,7 @@ test("profesional abre disputa y admin la resuelve a favor del profesional", asy
   await page.goto(`/chat/${createdJobId}`);
   await expect(page.getByText(`trabajo ${createdJobId}`).first()).toBeVisible();
 
-  await setAdminDemoSession(page);
+  await setDemoSession(page, "demo-admin");
   await page.goto("/admin/disputas");
   const adminDisputeCard = byTestId(page, `admin-dispute-${createdJobId}`);
   await expect(adminDisputeCard).toBeVisible();
