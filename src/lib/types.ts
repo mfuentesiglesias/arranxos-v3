@@ -131,6 +131,20 @@ export interface ChatMessage {
   redacted?: string;
 }
 
+export interface ModerationFlag {
+  id: string;
+  jobId: string;
+  chatId?: string;
+  senderRole: "client" | "professional";
+  senderId?: string;
+  text: string;
+  redactedText?: string;
+  leakTypes: Array<"phone" | "email" | "url" | "whatsapp" | "telegram">;
+  createdAt: string;
+  resolvedAt?: string;
+  strikeApplied?: boolean;
+}
+
 export interface Review {
   id: string;
   author: string;

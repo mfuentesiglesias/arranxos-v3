@@ -42,6 +42,7 @@ import type {
   JobRequest,
   Job,
   ChatMessage,
+  ModerationFlag,
   Notification,
   Professional,
   ProStatus,
@@ -258,13 +259,25 @@ export interface SessionState {
   acceptJobRequest: (jobId: string, requestId: string) => JobRequest | undefined;
   chats: JobChat[];
   chatMessages: ChatMessage[];
+  moderationFlags: ModerationFlag[];
   ensureChatForAcceptedJob: (jobId: string) => JobChat | undefined;
   sendChatMessage: (
     chatId: string,
     body: string,
     senderRole: "client" | "professional",
   ) => ChatMessage | undefined;
+  recordModerationFlag: (input: {
+    jobId: string;
+    chatId?: string;
+    senderRole: "client" | "professional";
+    senderId?: string;
+    text: string;
+    redactedText?: string;
+    leakTypes: ModerationFlag["leakTypes"];
+  }) => ModerationFlag;
+  applyModerationStrike: (flagId: string) => ModerationFlag | undefined;
   professionalStatusOverrides: Record<string, ProStatus>;
+  professionalStrikeOverrides: Record<string, number>;
   setProfessionalStatus: (professionalId: string, status: ProStatus) => void;
   professionalProfileOverrides: Record<string, ProfessionalCatalogProfile>;
   updateProfessionalCatalogProfile: (
@@ -353,6 +366,19 @@ function cloneProfessionalStatusOverrides(
   overrides: Record<string, ProStatus> = {},
 ) {
   return { ...overrides };
+}
+
+function cloneProfessionalStrikeOverrides(
+  overrides: Record<string, number> = {},
+) {
+  return { ...overrides };
+}
+
+function cloneModerationFlags(flags: ModerationFlag[] = []) {
+  return flags.map((flag) => ({
+    ...flag,
+    leakTypes: [...flag.leakTypes],
+  }));
 }
 
 function cloneJobRequest(jobRequest: JobRequest): JobRequest {
@@ -567,6 +593,29 @@ function buildPersistedChatMessage(
   };
 }
 
+function buildModerationFlag(input: {
+  jobId: string;
+  chatId?: string;
+  senderRole: "client" | "professional";
+  senderId?: string;
+  text: string;
+  redactedText?: string;
+  leakTypes: ModerationFlag["leakTypes"];
+}): ModerationFlag {
+  return {
+    id: `moderation-flag-${Date.now()}-${Math.round(Math.random() * 1000)}`,
+    jobId: input.jobId,
+    chatId: input.chatId,
+    senderRole: input.senderRole,
+    senderId: input.senderId,
+    text: input.text,
+    redactedText: input.redactedText,
+    leakTypes: [...input.leakTypes],
+    createdAt: new Date().toISOString(),
+    strikeApplied: false,
+  };
+}
+
 function cloneProfessionalWorkBase(
   workBase?: Partial<ProfessionalCatalogWorkBase>,
 ): ProfessionalCatalogWorkBase {
@@ -689,6 +738,7 @@ export function getEffectiveProfessionals(state: SessionState): Professional[] {
   return professionals.map((professional) => ({
     ...professional,
     status: state.professionalStatusOverrides?.[professional.id] ?? professional.status,
+    strikes: state.professionalStrikeOverrides?.[professional.id] ?? professional.strikes,
   }));
 }
 
@@ -804,6 +854,10 @@ export function getEffectiveApprovedCatalogCategories(state: SessionState) {
   return state.approvedCatalogCategories ?? [];
 }
 
+export function getEffectiveModerationFlags(state: SessionState) {
+  return state.moderationFlags ?? [];
+}
+
 export function getJobOutreachMeta(state: SessionState, jobId: string) {
   return state.jobOutreachMeta[jobId];
 }
@@ -917,8 +971,10 @@ export const useSession = create<SessionState>()(
           jobRequests: [],
           chats: [],
           chatMessages: [],
+          moderationFlags: [],
           jobOutreachMeta: {},
           professionalStatusOverrides: {},
+          professionalStrikeOverrides: {},
           professionalProfileOverrides: {},
           catalogRequests: [],
           approvedCatalogServices: [],
@@ -949,8 +1005,10 @@ export const useSession = create<SessionState>()(
       jobRequests: [],
       chats: [],
       chatMessages: [],
+      moderationFlags: [],
       jobOutreachMeta: {},
       professionalStatusOverrides: {},
+      professionalStrikeOverrides: {},
       setProfessionalStatus: (professionalId, status) =>
         set((s) => {
           const seedProfessional = professionals.find((entry) => entry.id === professionalId);
@@ -972,6 +1030,49 @@ export const useSession = create<SessionState>()(
                 : s.proStatus,
           };
         }),
+      recordModerationFlag: (input) => {
+        let moderationFlag = buildModerationFlag(input);
+
+        set((s) => {
+          moderationFlag = buildModerationFlag(input);
+          return {
+            moderationFlags: [moderationFlag, ...cloneModerationFlags(s.moderationFlags ?? [])],
+          };
+        });
+
+        return moderationFlag;
+      },
+      applyModerationStrike: (flagId) => {
+        let appliedFlag: ModerationFlag | undefined;
+
+        set((s) => {
+          const flag = (s.moderationFlags ?? []).find((entry) => entry.id === flagId);
+          if (!flag || flag.strikeApplied || flag.senderRole !== "professional" || !flag.senderId) {
+            return {};
+          }
+
+          const effectiveProfessional = getEffectiveProfessionalById(s, flag.senderId);
+          const currentStrikes = effectiveProfessional?.strikes ?? 0;
+          const nextStrikes = currentStrikes + 1;
+          appliedFlag = {
+            ...flag,
+            strikeApplied: true,
+            resolvedAt: new Date().toISOString(),
+          };
+
+          return {
+            moderationFlags: (s.moderationFlags ?? []).map((entry) =>
+              entry.id === flagId ? appliedFlag! : entry,
+            ),
+            professionalStrikeOverrides: {
+              ...cloneProfessionalStrikeOverrides(s.professionalStrikeOverrides),
+              [flag.senderId]: nextStrikes,
+            },
+          };
+        });
+
+        return appliedFlag;
+      },
       professionalProfileOverrides: {},
       catalogRequests: [],
       approvedCatalogServices: [],

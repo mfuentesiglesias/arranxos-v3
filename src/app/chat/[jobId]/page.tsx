@@ -18,6 +18,7 @@ import {
   isProfessionalOperative,
 } from "@/lib/domain/policies";
 import { scanLeaks } from "@/lib/anti-leak";
+import { redactLeaks } from "@/lib/anti-leak";
 import {
   getAgreementByJobId,
   getChatForJob,
@@ -56,6 +57,7 @@ function Inner({ jobId }: { jobId: string }) {
   const proStatus = useSession((s) => s.proStatus);
   const ensureChatForAcceptedJob = useSession((s) => s.ensureChatForAcceptedJob);
   const sendChatMessage = useSession((s) => s.sendChatMessage);
+  const recordModerationFlag = useSession((s) => s.recordModerationFlag);
   const effectiveJob = getEffectiveJobById(session, jobId);
   const role = sessionRole === "professional" ? "pro" : "client";
   const job = effectiveJob ?? jobs[0];
@@ -172,6 +174,18 @@ function Inner({ jobId }: { jobId: string }) {
     const text = input.trim();
     if (!text) return;
     if (liveLeaks.length > 0 || !jobChat) {
+      if (liveLeaks.length > 0) {
+        recordModerationFlag({
+          jobId,
+          chatId: jobChat?.id,
+          senderRole: sessionRole === "professional" ? "professional" : "client",
+          senderId: sessionRole === "professional" ? session.currentProfessionalId : session.currentClientId,
+          text,
+          redactedText: redactLeaks(text),
+          leakTypes: Array.from(new Set(liveLeaks.map((leak) => leak.type))),
+        });
+      }
+
       setBlockedNotice(
         liveLeaks.length > 0
           ? "Bloqueamos este mensaje porque contiene datos de contacto o enlaces externos."
@@ -327,7 +341,10 @@ function Inner({ jobId }: { jobId: string }) {
         <div>
           {liveLeaks.length > 0 && <AntiLeakAlert leaks={liveLeaks} />}
           {blockedNotice && (
-            <div className="border-t border-sand-200/70 bg-amber-50 px-4 py-3 text-[12px] font-semibold text-amber-700">
+            <div
+              className="border-t border-sand-200/70 bg-amber-50 px-4 py-3 text-[12px] font-semibold text-amber-700"
+              data-testid="chat-leak-blocked-message"
+            >
               {blockedNotice}
             </div>
           )}
@@ -385,7 +402,7 @@ function Inner({ jobId }: { jobId: string }) {
           </div>
           <button
             onClick={send}
-            disabled={!input.trim() || liveLeaks.length > 0}
+            disabled={!input.trim()}
             data-testid="chat-send-message"
             className="w-10 h-10 rounded-full bg-coral-500 text-white flex items-center justify-center flex-shrink-0 disabled:opacity-40"
           >
