@@ -7,13 +7,17 @@ import { ScreenBody } from "@/components/layout/screen-body";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import {
-  professionals,
-  defaultAdminConfig,
+  getAgreement,
+  getCommissionAmount,
+  getEffectiveFinalPrice,
+} from "@/lib/domain/policies";
+import {
 } from "@/lib/data";
 import {
   getEffectiveAdminConfig,
   getEffectiveDisputes,
   getEffectiveJobs,
+  getEffectiveProfessionals,
   getEffectiveReviews,
   getEffectiveSearchTickets,
   useSession,
@@ -23,17 +27,29 @@ import { formatEuro } from "@/lib/utils";
 export default function AdminDashboard() {
   const session = useSession();
   const effectiveJobs = useMemo(() => getEffectiveJobs(session), [session]);
+  const effectiveProfessionals = useMemo(() => getEffectiveProfessionals(session), [session]);
   const effectiveDisputes = useMemo(() => getEffectiveDisputes(session), [session]);
   const effectiveReviews = useMemo(() => getEffectiveReviews(session), [session]);
   const effectiveSearchTickets = useMemo(() => getEffectiveSearchTickets(session), [session]);
   const adminConfig = useSession(getEffectiveAdminConfig);
 
-  const totalCommission = effectiveJobs
-    .filter((j) => j.status === "completed")
-    .reduce((acc, j) => {
-      const total = (j.priceMin + j.priceMax) / 2;
-      return acc + Math.round((total * adminConfig.commissionPct) / 100);
-    }, 0);
+  const economicJobs = effectiveJobs.filter((job) =>
+    [
+      "agreed",
+      "escrow_funded",
+      "completed_pending_confirmation",
+      "completed",
+      "dispute",
+    ].includes(job.status),
+  );
+  const totalCommission = economicJobs.reduce((acc, job) => {
+    const agreement = getAgreement(session.agreements[job.id]);
+    const finalPrice = getEffectiveFinalPrice(job, agreement);
+    if (!finalPrice) return acc;
+
+    const commissionPct = agreement?.commissionPct ?? job.commissionPct ?? adminConfig.commissionPct;
+    return acc + getCommissionAmount({ amount: finalPrice, commissionPct });
+  }, 0);
   const activeJobs = effectiveJobs.filter((j) =>
     [
       "published",
@@ -44,31 +60,35 @@ export default function AdminDashboard() {
       "completed_pending_confirmation",
     ].includes(j.status),
   ).length;
-  const pendingPros = professionals.filter((p) => p.status === "pending").length;
-  const blockedPros = professionals.filter((p) => p.status === "blocked").length;
+  const pendingPros = effectiveProfessionals.filter((p) => p.status === "pending").length;
+  const blockedPros = effectiveProfessionals.filter((p) => p.status === "blocked").length;
   const openDisputes = effectiveDisputes.filter((d) => d.status === "open").length;
   const openTickets = effectiveSearchTickets.filter((t) => t.status === "open").length;
 
   const kpis = [
     {
-      label: "Comisión generada",
+      id: "commission",
+      label: "Comisión generada mock",
       value: formatEuro(totalCommission),
       tone: "coral",
       icon: "euro",
     },
     {
+      id: "active-jobs",
       label: "Trabajos activos",
       value: activeJobs,
       tone: "teal",
       icon: "briefcase",
     },
     {
+      id: "pending-pros",
       label: "Pros pendientes",
       value: pendingPros,
       tone: "amber",
       icon: "users",
     },
     {
+      id: "open-disputes",
       label: "Disputas abiertas",
       value: openDisputes,
       tone: "rose",
@@ -160,7 +180,12 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-2 gap-2">
           {kpis.map((k) => (
             <div
-              key={k.label}
+              key={k.id}
+              data-testid={
+                k.id === "pending-pros"
+                  ? "admin-kpi-pending-professionals"
+                  : `admin-dashboard-kpi-${k.id}`
+              }
               className="bg-white/5 backdrop-blur rounded-2xl px-3 py-2.5 border border-white/10"
             >
               <div className="flex items-center gap-2 text-[10px] text-white/60 font-semibold uppercase tracking-wide mb-1">
@@ -193,7 +218,10 @@ export default function AdminDashboard() {
                   )}
                 </div>
                 <div className="font-bold text-[13px] text-ink-800">{l.label}</div>
-                <div className="text-[11px] text-ink-400 leading-snug">
+                <div
+                  className="text-[11px] text-ink-400 leading-snug"
+                  data-testid={l.href === "/admin/profesionales" ? "admin-kpi-blocked-professionals" : undefined}
+                >
                   {l.sub}
                 </div>
               </Card>

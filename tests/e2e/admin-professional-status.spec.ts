@@ -63,13 +63,15 @@ test("admin bloquea profesional y el cambio persiste y afecta al guard", async (
   await expect(byTestId(page, "admin-professional-status-p1")).toContainText("Bloqueado");
 
   await page.goto("/admin");
+  await expect(page.getByTestId("admin-kpi-pending-professionals").first()).toContainText("4");
+  await expect(page.getByTestId("admin-kpi-blocked-professionals").first()).toContainText("2 bloqueados");
   await page.goto("/admin/profesionales");
   await page.getByRole("button", { name: /Bloqueados/i }).first().click();
   await expectVisibleByTestId(page, "admin-professional-card-p1");
   await expect(byTestId(page, "admin-professional-status-p1")).toContainText("Bloqueado");
 
-  await setDemoSession(page, "professional_approved");
-  await page.goto("/profesional/inicio");
+  await page.goto("/login");
+  await page.getByTestId("demo-pro-approved").first().click();
   await expect(page).toHaveURL(/\/profesional\/bloqueado/);
   await expect(page.getByText("Cuenta bloqueada").first()).toBeVisible();
 });
