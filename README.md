@@ -151,8 +151,8 @@ Busca `DEMO` en el código para ver todas las marcas explícitas.
 
 Configuración mínima para instalación:
 
-- `public/manifest.json` con `display: standalone`, `start_url: /`, `scope: /` y theme `#FF5A5F`.
-- Meta tags en `src/app/layout.tsx` (`manifest`, `appleWebApp`, `themeColor`, `viewportFit=cover`).
+- `public/manifest.json` con `display: standalone`, `start_url: /`, `scope: /`, theme `#FF5A5F` e iconos PNG 192/512.
+- Meta tags en `src/app/layout.tsx` (`manifest`, `appleWebApp`, `themeColor`, `viewportFit=cover`, `apple-touch-icon`).
 - `components/layout/install-prompt.tsx` escucha `beforeinstallprompt` y muestra un banner instalable.
 - `public/sw.js` y `components/layout/service-worker-register.tsx` añaden el minimo necesario para reforzar la instalacion sin meter offline complejo.
 
@@ -177,7 +177,8 @@ Configuración mínima para instalación:
 ### Limitacion actual
 
 - La demo no implementa offline completo ni cache agresiva.
-- Los iconos actuales siguen siendo SVG; si en una iteracion futura hiciera falta mejorar compatibilidad iOS, convendria añadir PNG dedicados y `apple-touch-icon` especifico.
+- La demo no implementa offline completo ni cache agresiva.
+- La base PWA ya incluye iconos PNG reales y `apple-touch-icon`, pero sigue siendo una app web instalable, no una app de App Store.
 
 ---
 

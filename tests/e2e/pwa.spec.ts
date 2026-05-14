@@ -24,6 +24,8 @@ test("manifest y service worker responden", async ({ request }) => {
   expect(manifest.display).toBe("standalone");
   expect(manifest.start_url).toBe("/");
   expect(Array.isArray(manifest.icons)).toBeTruthy();
+  expect(manifest.icons.some((icon: { src: string }) => icon.src === "/icons/icon-192.png")).toBeTruthy();
+  expect(manifest.icons.some((icon: { src: string }) => icon.src === "/icons/icon-512.png")).toBeTruthy();
 
   const serviceWorkerResponse = await request.get("/sw.js");
   expect(serviceWorkerResponse.ok()).toBeTruthy();
@@ -31,6 +33,15 @@ test("manifest y service worker responden", async ({ request }) => {
   const serviceWorkerSource = await serviceWorkerResponse.text();
   expect(serviceWorkerSource).toContain('self.addEventListener("install"');
   expect(serviceWorkerSource).toContain('self.addEventListener("fetch"');
+
+  const icon192Response = await request.get("/icons/icon-192.png");
+  expect(icon192Response.ok()).toBeTruthy();
+
+  const icon512Response = await request.get("/icons/icon-512.png");
+  expect(icon512Response.ok()).toBeTruthy();
+
+  const appleTouchIconResponse = await request.get("/icons/apple-touch-icon.png");
+  expect(appleTouchIconResponse.ok()).toBeTruthy();
 });
 
 test("login muestra reset demo y permite limpiar sesion mock", async ({ page }) => {
