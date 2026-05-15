@@ -1,0 +1,14 @@
+-- ARRANXOS v3 - Supabase Phase 1
+-- File: 00_schema.sql
+-- Purpose: Base schema definitions (tables, enums, constraints) for Phase 1.
+-- Execution order: 1 of 5
+--
+-- IMPORTANT:
+-- - Do NOT execute SQL that has not been reviewed.
+-- - SQL in this repository must be non-destructive by default.
+-- - Do NOT use destructive DROP statements unless they are in a dedicated file
+--   and explicitly approved in review.
+--
+-- NOTE:
+-- - This file is an initial placeholder for structure only.
+-- - Do not add full production schema here without explicit step approval.

@@ -1,0 +1,15 @@
+-- ARRANXOS v3 - Supabase Phase 1
+-- File: 03_rpc_functions.sql
+-- Purpose: RPC functions for sensitive operations and controlled writes.
+-- Execution order: 4 of 5
+--
+-- IMPORTANT:
+-- - Do NOT execute SQL that has not been reviewed.
+-- - SQL in this repository must be non-destructive by default.
+-- - Do NOT use destructive DROP statements unless they are in a dedicated file
+--   and explicitly approved in review.
+--
+-- NOTE:
+-- - This file is an initial placeholder for structure only.
+-- - Sensitive operations should be implemented via SECURITY DEFINER functions
+--   with explicit search_path in a later approved step.

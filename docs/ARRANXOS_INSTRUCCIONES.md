@@ -224,3 +224,20 @@ Comando:
 
 ```bash
 npm run test:e2e
+```
+
+## 9. Supabase Fase 1 (reglas de implementación)
+
+- Supabase es acelerador inicial, no destino final.
+- Programar con posibilidad de migrar a backend propio o alternativa futura.
+- No llamar Supabase directamente desde componentes/páginas.
+- Crear capa intermedia en `src/lib/api`.
+- Mantener tipos propios de dominio.
+- SQL versionado en `/sql`.
+- Orden de trabajo: primero schema, luego RLS, luego RPC, luego frontend.
+- Operaciones sensibles vía RPC.
+- RPC `SECURITY DEFINER` con `search_path` explícito.
+- OpenCode solo read-only para auditar Supabase.
+- No usar `service_role`.
+- No ejecutar SQL automáticamente.
+- No mezclar Supabase Fase 1 con Stripe, mapas, emails, deploy migration o backend propio.

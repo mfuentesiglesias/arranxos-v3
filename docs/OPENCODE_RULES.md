@@ -28,3 +28,23 @@ Después de cada Build, ejecutar:
 npm run typecheck
 npm run build
 npm run test:e2e
+```
+
+## 4. Guardrails Supabase Fase 1
+
+- Si un paso toca Supabase, indicar explícitamente si hay SQL o no.
+- Si hay SQL, indicar en qué archivo de `/sql` está.
+- No ejecutar SQL sin instrucción explícita.
+- No pedir `service_role`.
+- No meter `supabase.from(...)` en `src/app`.
+- Usar `src/lib/api` cuando toque integración.
+- Confirmar siempre si el cambio toca:
+  - SQL
+  - RLS
+  - RPC
+  - Supabase
+  - frontend
+- Confirmar siempre:
+  - `SQL en Supabase: SI/NO`
+  - si requiere ejecutar SQL antes del código
+- No mezclar Fase 1 con Stripe, mapas, emails o deploy migration.
