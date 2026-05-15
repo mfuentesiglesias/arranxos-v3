@@ -15,10 +15,12 @@ export default function BloqueadoPage() {
         <div className="font-extrabold text-[20px] text-ink-900 mb-2">
           Cuenta bloqueada
         </div>
+        <div className="mb-3 rounded-full bg-rose-50 px-3 py-1 text-[11px] font-bold text-rose-700">
+          Simulación demo · No hay incidencias reales
+        </div>
         <div className="text-[13px] text-ink-500 leading-relaxed max-w-[320px] mb-6">
-          Hemos detectado 3 incidencias graves en tus últimas interacciones.
-          Tu acceso a Arranxos queda suspendido mientras el equipo revisa el
-          caso.
+          Esta pantalla representa un bloqueo de ejemplo. En producción, el
+          equipo revisaría el caso antes de decidir la reactivación.
         </div>
         <Card className="w-full bg-rose-50/50 border-rose-100 mb-5 text-left">
           <div className="text-[12px] font-bold text-rose-700 mb-2 uppercase tracking-wide">
@@ -47,12 +49,11 @@ export default function BloqueadoPage() {
           Contactar con soporte
         </Button>
         <div className="text-[11px] text-ink-400 mt-4 max-w-[280px] leading-snug">
-          Si consideras que se trata de un error, nuestro equipo revisará tu caso
-          en un plazo de 48 h.
+          En producción, soporte podría revisar estos casos con SLA operativo.
         </div>
         <div className="text-[11px] text-ink-400 mt-1 max-w-[280px] leading-snug">
-          Demo: este acceso abre tu app de correo. No crea tickets reales en esta
-          versión.
+          Demo: este acceso abre tu app de correo. No crea tickets reales ni
+          envía emails automáticos en esta versión.
         </div>
       </ScreenBody>
     </div>

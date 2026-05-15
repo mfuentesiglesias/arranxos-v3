@@ -196,14 +196,16 @@ function Inner({ id }: { id: string }) {
             icon: "plus",
             href: `/cliente/trabajos/${job.id}/invitaciones`,
           },
-          {
-            label: "Abrir chat",
-            description: canOpenChat
-              ? "Accede a la negociación y seguimiento del acuerdo."
-              : "Disponible cuando el profesional haya sido aceptado.",
-            icon: "chat",
-            href: canOpenChat ? `/chat/${job.id}` : undefined,
-          },
+          ...(canOpenChat
+            ? [
+                {
+                  label: "Abrir chat",
+                  description: "Accede a la negociación y seguimiento del acuerdo.",
+                  icon: "chat",
+                  href: `/chat/${job.id}`,
+                },
+              ]
+            : []),
         ]}
       />
 
@@ -219,7 +221,8 @@ function Inner({ id }: { id: string }) {
                   ¡Trabajo publicado!
                 </div>
                 <div className="text-[11.5px] text-teal-700/80">
-                  Te avisamos cuando los profesionales soliciten el trabajo.
+                  En producción recibirías avisos cuando los profesionales
+                  soliciten el trabajo.
                 </div>
               </div>
             </div>

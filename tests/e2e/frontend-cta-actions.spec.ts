@@ -50,7 +50,7 @@ test("profesional bloqueado tiene contacto soporte funcional", async ({ page }) 
   const supportLink = page.getByTestId("blocked-support-contact").first();
   await expect(supportLink).toBeVisible();
   await expect(supportLink).toHaveAttribute("href", /mailto:soporte@arranxos\.gal/);
-  await expect(page.getByText("No crea tickets reales en esta versión.").first()).toBeVisible();
+  await expect(page.getByText("No crea tickets reales").first()).toBeVisible();
 });
 
 test("perfil profesional permite ver todas las reseñas demo", async ({ page }) => {

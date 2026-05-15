@@ -342,7 +342,7 @@ export default function PerfilProPage() {
           },
           {
             label: "Cuenta bancaria",
-            description: "Revisa la cuenta donde recibirás las liberaciones.",
+            description: "Revisa la cuenta demo donde se simulan liberaciones.",
             icon: "card",
             onClick: () => openPanel("banking"),
           },
@@ -402,7 +402,7 @@ export default function PerfilProPage() {
             </div>
             {editSaved && (
               <div className="rounded-2xl border border-teal-100 bg-teal-50 px-3.5 py-3 text-[12px] font-semibold text-teal-700">
-                Cambios guardados en demo.
+                Cambios guardados solo en esta sesión demo/localStorage.
               </div>
             )}
             <Button
@@ -720,11 +720,13 @@ export default function PerfilProPage() {
                 Estado de cobros
               </div>
               <div className="text-[12px] text-ink-500 leading-snug">
-                Cuenta preparada para cobrar tras completar la verificación y cerrar trabajos con pago protegido.
+                Cuenta preparada para cobrar (simulación demo) tras completar
+                verificación mock y cerrar trabajos con pago protegido mock.
               </div>
             </div>
             <div className="rounded-2xl border border-sand-200/70 bg-sand-50/70 p-3.5 text-[12px] text-ink-500 leading-snug">
-              Tus datos fiscales y bancarios serán privados y solo se usarán para pagos, facturación y revisiones internas de Arranxos.
+              En esta demo no se guardan datos bancarios reales. En producción,
+              los datos fiscales y bancarios tendrían tratamiento restringido.
             </div>
             <div className="grid grid-cols-2 gap-2 text-[12px]">
               <div className="rounded-2xl border border-sand-200/70 bg-white px-3.5 py-3">
@@ -753,6 +755,10 @@ export default function PerfilProPage() {
             >
               Añadir datos
             </Button>
+            <div className="rounded-2xl border border-sand-200/70 bg-sand-50/70 px-3.5 py-3 text-[12px] text-ink-500 leading-snug">
+              Acción demo: no persistimos cuentas bancarias reales ni iniciamos
+              validaciones externas.
+            </div>
           </div>
         )}
 

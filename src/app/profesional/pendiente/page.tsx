@@ -14,11 +14,12 @@ export default function PendientePage() {
           <Icon name="clock" size={36} stroke={2} />
         </div>
         <div className="font-extrabold text-[20px] text-ink-900 mb-2">
-          Cuenta en revisión
+          Estado pendiente simulado
         </div>
         <div className="text-[13px] text-ink-500 leading-relaxed max-w-[300px] mb-6">
-          Estamos verificando tus datos de profesional. Te avisaremos por correo
-          en un plazo de <strong>24-48 horas laborales</strong>.
+          En producción se verificaría la documentación profesional antes de
+          aprobar la cuenta. En esta demo no se envían emails ni se aprueban
+          cuentas reales.
         </div>
         <Card className="w-full bg-white border-sand-200/70 mb-3 text-left">
           <div className="text-[12px] font-bold text-ink-700 mb-2 uppercase tracking-wide">
@@ -27,15 +28,15 @@ export default function PendientePage() {
           <ul className="space-y-1.5 text-[12.5px] text-ink-500 leading-relaxed">
             <li className="flex items-start gap-2">
               <Icon name="check" size={14} stroke={2.5} className="text-teal-500 mt-0.5" />
-              <span>Tus datos están seguros</span>
+              <span>Flujo de revisión representado en modo demo</span>
             </li>
             <li className="flex items-start gap-2">
               <Icon name="check" size={14} stroke={2.5} className="text-teal-500 mt-0.5" />
-              <span>Recibirás email cuando se aprueben</span>
+              <span>En producción se enviaría un email de confirmación</span>
             </li>
             <li className="flex items-start gap-2">
               <Icon name="check" size={14} stroke={2.5} className="text-teal-500 mt-0.5" />
-              <span>Podrás empezar a recibir trabajos al instante</span>
+              <span>En producción, tras aprobación, podrías recibir trabajos</span>
             </li>
           </ul>
         </Card>

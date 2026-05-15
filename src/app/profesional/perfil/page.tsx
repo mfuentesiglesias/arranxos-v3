@@ -19,6 +19,7 @@ import { getEffectiveJobs, getReviewsForProfessional, useSession } from "@/lib/s
 function Inner() {
   const session = useSession();
   const [shareOpen, setShareOpen] = useState(false);
+  const [shareNotice, setShareNotice] = useState<string | null>(null);
   const [showAllReviews, setShowAllReviews] = useState(false);
   const params = useSearchParams();
   const id = params?.get("id") ?? "p1";
@@ -66,18 +67,37 @@ function Inner() {
         items={[
           {
             label: "Copiar enlace del perfil",
-            description: "Disponible como acción nativa en la siguiente iteración.",
+            description: "Acción demo: copia la URL actual del perfil en tu dispositivo.",
             icon: "share",
+            onClick: async () => {
+              const url = typeof window !== "undefined" ? window.location.href : "";
+              try {
+                if (navigator?.clipboard?.writeText) {
+                  await navigator.clipboard.writeText(url);
+                }
+                setShareNotice("Enlace copiado (demo).");
+              } catch {
+                setShareNotice("No se pudo copiar automáticamente. Copia manualmente la URL.");
+              }
+            },
           },
           {
             label: "Volver al trabajo",
             description: jobId ? "Regresa al detalle del trabajo actual." : "No hay trabajo vinculado en esta vista.",
             icon: "briefcase",
             href: jobId ? `/cliente/trabajos/${jobId}` : undefined,
+            onClick: jobId
+              ? undefined
+              : () => setShareNotice("Esta vista demo no tiene un trabajo vinculado."),
           },
         ]}
       />
       <ScreenBody className="px-4 pt-3 pb-6">
+        {shareNotice && (
+          <Card className="mb-3 bg-teal-50/60 border-teal-100 text-[12px] text-teal-700 leading-snug">
+            {shareNotice}
+          </Card>
+        )}
         <Card className="mb-3">
           <div className="flex items-start gap-3 mb-3">
             <div className="relative">
@@ -162,7 +182,7 @@ function Inner() {
             <div>
               <div className="font-bold text-[13px] text-ink-800">Fiabilidad</div>
               <div className="mt-0.5 text-[11.5px] text-ink-400">
-                Score publico mock derivado para esta demo.
+                Score público demo derivado para esta simulación.
               </div>
             </div>
             <div className="text-right">
@@ -181,7 +201,7 @@ function Inner() {
             </div>
           </div>
           <div className="text-[12px] text-ink-600 leading-snug">
-            {reliabilitySummary.reviewCount} reseñas, media de {reliabilitySummary.averageRating.toFixed(1)} y {reliabilitySummary.completedJobs} trabajos completados.
+            {reliabilitySummary.reviewCount} reseñas demo, media de {reliabilitySummary.averageRating.toFixed(1)} y {reliabilitySummary.completedJobs} trabajos completados en la simulación.
           </div>
           <div className="mt-2 text-[11.5px] text-ink-400 leading-snug">
             Cancelados: {reliabilitySummary.cancelledJobs} · Disputas abiertas: {reliabilitySummary.openDisputes} · Resueltas contra el pro: {reliabilitySummary.resolvedAgainstPro}
@@ -194,8 +214,8 @@ function Inner() {
             <StrikeBadge strikes={pro.strikes ?? 0} />
           </div>
           <div className="text-[12px] text-ink-500 leading-snug">
-            En Arranxos desde {pro.since}. Cumple plazos en{" "}
-            <strong>{pro.completedOnTime ?? 95}%</strong> de los trabajos.
+            Datos simulados de confianza en esta demo: en Arranxos desde {pro.since}
+            y cumplimiento estimado del <strong>{pro.completedOnTime ?? 95}%</strong>.
           </div>
         </Card>
 

@@ -106,7 +106,8 @@ test("dashboard admin calcula la comisión desde agreement/finalPrice", async ({
     );
   });
 
-  await page.goto("/admin");
+  await page.reload();
+  await expect(page).toHaveURL(/\/admin/);
   await expect(page.getByText("Panel de control").first()).toBeVisible();
   await expect(page.getByTestId("admin-dashboard-kpi-commission").first()).toContainText(
     "Comisión generada mock",

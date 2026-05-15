@@ -58,7 +58,7 @@ function Inner({ id }: { id: string }) {
   return (
     <div className="flex-1 flex flex-col bg-sand-50">
       <StatusBar />
-      <TopBar title="Pagar con custodia" subtitle="Tu dinero está protegido" />
+      <TopBar title="Pagar con custodia" subtitle="Demo · Simulación de pago protegido" />
       <ScreenBody className="px-4 pt-3 pb-6">
         {!canPay && (
           <Card className="bg-amber-50 border-amber-100 mb-3 text-[12px] text-amber-700 leading-snug">
@@ -75,7 +75,7 @@ function Inner({ id }: { id: string }) {
                 {formatEuro(total)} en custodia
               </div>
               <div className="text-[11.5px] text-teal-700/80 leading-snug">
-                Pago protegido mock. Los fondos quedan retenidos en la demo hasta un paso posterior.
+                En esta demo no se procesa ningún cobro real. En producción, el pago quedaría retenido según el acuerdo.
               </div>
             </div>
           </div>
@@ -97,7 +97,7 @@ function Inner({ id }: { id: string }) {
               <span className="font-bold text-ink-800">{formatEuro(commission)}</span>
             </div>
             <div className="border-t border-sand-200 pt-2 text-[11.5px] text-ink-500 leading-snug">
-              Demo PWA: al confirmar este paso solo marcamos el acuerdo como financiado y el estado del trabajo pasa a pago protegido.
+              Demo PWA: al confirmar este paso solo marcamos el acuerdo como financiado y el estado del trabajo pasa a pago protegido mock.
             </div>
           </div>
         </Card>
@@ -111,7 +111,7 @@ function Inner({ id }: { id: string }) {
 
       <div className="app-bottom-bar px-5 pb-5 pt-3 bg-white border-t border-sand-200/70">
         <Button full onClick={pay} disabled={paying || !canPay} testId="confirm-mock-payment">
-          {paying ? "Reteniendo fondos…" : `Pagar y retener ${formatEuro(total)}`}
+          {paying ? "Simulando retención…" : `Simular pago y retener ${formatEuro(total)}`}
         </Button>
       </div>
     </div>

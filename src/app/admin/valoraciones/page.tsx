@@ -121,6 +121,9 @@ export default function AdminValoracionesPage() {
                     </span>
                   )}
                 </div>
+                <div className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-ink-400">
+                  Acciones demo
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <Button
                     size="sm"

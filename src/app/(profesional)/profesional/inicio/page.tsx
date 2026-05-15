@@ -192,10 +192,11 @@ export default function HomeProPage() {
             </div>
             <div className="flex-1">
               <div className="font-bold text-[13px] text-teal-700">
-                Cuenta verificada · {professional.reliability ?? currentPro.reliability}% fiabilidad
+                Cuenta validada demo · {professional.reliability ?? currentPro.reliability}% fiabilidad demo
               </div>
               <div className="text-[11px] text-teal-700/80">
-                Ganas más visibilidad completando tu perfil al 100%.
+                Datos simulados para la demo. En producción, la validación sería
+                operativa.
               </div>
             </div>
           </div>

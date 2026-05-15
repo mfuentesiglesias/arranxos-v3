@@ -166,7 +166,7 @@ function Inner({ id }: { id: string }) {
             <Avatar initials={job.clientAvatar} size={44} />
             <div className="flex-1 min-w-0">
               <div className="font-bold text-[13.5px] text-ink-800 truncate">
-                {accepted ? job.clientName : `Cliente verificado`}
+                {accepted ? job.clientName : "Cliente de la demo"}
               </div>
               <div className="text-[11.5px] text-ink-500">
                 ★ {job.clientRating.toFixed(1)} · {job.requests} solicitudes
@@ -201,8 +201,8 @@ function Inner({ id }: { id: string }) {
             ~ {formatEuro(commission)}. Recibirás{" "}
             <strong>{formatEuro(agreedAmount - commission)}</strong>{" "}
             {resolvedAgreement
-              ? "según el acuerdo actual."
-              : "(si se acuerda en el rango medio)."}
+              ? "según el acuerdo actual de esta demo."
+              : "(si se acuerda en el rango medio de la simulación)."}
           </div>
         </Card>
 
@@ -258,7 +258,7 @@ function Inner({ id }: { id: string }) {
         {resolvedAgreement && job.status === "agreed" && (
           <Card className="mb-3 bg-amber-50/60 border-amber-100" testId="pro-payment-pending-state">
             <div className="font-bold text-[13px] text-amber-800 mb-1">
-              Pendiente de pago protegido
+              Pendiente de pago protegido (mock)
             </div>
             <div className="text-[11.5px] text-amber-700 leading-snug">
               El cliente ya aceptó el acuerdo. Falta financiarlo en la demo para que el dinero quede retenido.

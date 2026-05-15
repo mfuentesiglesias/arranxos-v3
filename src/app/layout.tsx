@@ -6,9 +6,9 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   applicationName: "Arranxos",
-  title: "Arranxos — Servicios de confianza cerca de ti",
+  title: "Arranxos — Demo PWA de servicios locales",
   description:
-    "Conecta con profesionales verificados cerca de ti. Pago protegido, sin sorpresas.",
+    "Demo PWA para conectar clientes y profesionales. Simulación de trabajos, acuerdos y pago protegido mock.",
   manifest: "/manifest.json",
   formatDetection: {
     telephone: false,

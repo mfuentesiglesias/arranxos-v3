@@ -86,7 +86,8 @@ function Inner({ id }: { id: string }) {
             <div className="text-[12px] text-rose-700 leading-snug">
               Resolución demo: registramos tu disputa para este flujo de prueba.
               En producción habría revisión operativa en 48-72 h y pago protegido
-              hasta la resolución.
+              hasta la resolución. En esta demo no interviene ningún equipo real
+              ni se mueve dinero real.
             </div>
           </div>
         </Card>
@@ -124,7 +125,7 @@ function Inner({ id }: { id: string }) {
 
         {!canSubmitDispute && (
           <Card className="bg-amber-50 border-amber-100 text-[12px] text-amber-700 leading-snug">
-            Este trabajo solo puede entrar en disputa mientras siga pendiente de confirmación y el pago continúe protegido.
+            Este trabajo solo puede entrar en disputa mientras siga pendiente de confirmación y el pago mock continúe protegido.
           </Card>
         )}
       </ScreenBody>

@@ -171,8 +171,9 @@ function RegisterInner() {
               <div className="rounded-2xl bg-amber-50 border border-amber-100 px-3.5 py-3 text-[12px] text-amber-700 font-semibold flex gap-2">
                 <span>ℹ️</span>
                 <span>
-                  Tu cuenta quedará <strong>pendiente de aprobación</strong> por
-                  nuestro equipo. Recibirás confirmación en 24–48 h.
+                  En producción tu cuenta pasaría a <strong>revisión</strong>. En
+                  esta demo no se revisa documentación ni se envían emails reales.
+                  Puedes usar los accesos demo para probar roles.
                 </span>
               </div>
               <Input

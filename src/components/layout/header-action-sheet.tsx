@@ -91,6 +91,14 @@ export function HeaderActionSheet({
                 );
               }
 
+              if (!item.onClick) {
+                return (
+                  <div key={item.label} className="opacity-75" aria-disabled="true">
+                    {content}
+                  </div>
+                );
+              }
+
               return (
                 <button
                   key={item.label}

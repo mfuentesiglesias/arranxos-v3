@@ -64,16 +64,16 @@ export default function AdminEconomiaPage() {
         );
 
         let paymentStatusLabel = "No registrado";
-        if (agreement?.paymentStatus === "pending") paymentStatusLabel = "Pendiente";
-        if (agreement?.paymentStatus === "protected") paymentStatusLabel = "Protegido";
+        if (agreement?.paymentStatus === "pending") paymentStatusLabel = "Pendiente (demo)";
+        if (agreement?.paymentStatus === "protected") paymentStatusLabel = "Protegido (mock)";
         if (!agreement && ["escrow_funded", "completed_pending_confirmation", "completed", "dispute", "cancelled"].includes(job.status)) {
-          paymentStatusLabel = "Protegido";
+          paymentStatusLabel = "Protegido (mock)";
         }
 
         let economicBadge = "No registrado";
-        if (job.status === "agreed") economicBadge = "Acuerdo pendiente de pago";
-        if (job.status === "escrow_funded") economicBadge = "Pago protegido";
-        if (job.status === "completed_pending_confirmation") economicBadge = "Pendiente de confirmación";
+        if (job.status === "agreed") economicBadge = "Acuerdo pendiente de pago (demo)";
+        if (job.status === "escrow_funded") economicBadge = "Pago protegido (mock)";
+        if (job.status === "completed_pending_confirmation") economicBadge = "Pendiente de confirmación (demo)";
         if (job.status === "completed") {
           economicBadge = autoReleased
             ? "Completado · auto-release demo"
@@ -147,16 +147,19 @@ export default function AdminEconomiaPage() {
         <div data-testid="admin-economy-page" className="flex flex-col gap-3">
           <Card className="bg-ink-900 text-white border-ink-900" testId="admin-economy-summary">
             <div className="grid grid-cols-2 gap-3 text-[12px]">
-              <SummaryMetric label="Con acuerdo" value={String(summary.withAgreement)} />
-              <SummaryMetric label="Agreed" value={String(summary.agreed)} />
-              <SummaryMetric label="Escrow funded" value={String(summary.escrowFunded)} />
-              <SummaryMetric label="Pend. confirmación" value={String(summary.pendingConfirmation)} />
-              <SummaryMetric label="Completed" value={String(summary.completed)} />
-              <SummaryMetric label="Cancelled" value={String(summary.cancelled)} />
-              <SummaryMetric label="Dispute" value={String(summary.dispute)} />
-              <SummaryMetric label="Importe acordado" value={formatEuro(summary.totalFinalPrice)} />
-              <SummaryMetric label="Comisión mock" value={formatEuro(summary.totalCommission)} />
-              <SummaryMetric label="Neto estimado pro" value={formatEuro(summary.totalNet)} />
+               <SummaryMetric label="Con acuerdo (demo)" value={String(summary.withAgreement)} />
+               <SummaryMetric label="Agreed (demo)" value={String(summary.agreed)} />
+               <SummaryMetric label="Escrow funded (mock)" value={String(summary.escrowFunded)} />
+               <SummaryMetric label="Pend. confirmación (demo)" value={String(summary.pendingConfirmation)} />
+               <SummaryMetric label="Completed (demo)" value={String(summary.completed)} />
+               <SummaryMetric label="Cancelled (demo)" value={String(summary.cancelled)} />
+               <SummaryMetric label="Dispute (demo)" value={String(summary.dispute)} />
+               <SummaryMetric label="Importe acordado (demo)" value={formatEuro(summary.totalFinalPrice)} />
+               <SummaryMetric label="Comisión mock" value={formatEuro(summary.totalCommission)} />
+               <SummaryMetric label="Neto pro estimado (demo)" value={formatEuro(summary.totalNet)} />
+             </div>
+            <div className="mt-3 rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-[11px] leading-snug text-white/85">
+              Panel económico demo: no hay Stripe, transferencias ni pagos reales.
             </div>
             <div className="mt-3 flex gap-2">
               <Link
@@ -193,12 +196,12 @@ export default function AdminEconomiaPage() {
             {(
               [
                 { id: "all", label: "Todos" },
-                { id: "agreed", label: "Agreed" },
-                { id: "escrow_funded", label: "Custodia" },
-                { id: "completed_pending_confirmation", label: "Confirmación" },
-                { id: "completed", label: "Completed" },
-                { id: "cancelled", label: "Cancelled" },
-                { id: "dispute", label: "Dispute" },
+                 { id: "agreed", label: "Agreed (demo)" },
+                 { id: "escrow_funded", label: "Custodia mock" },
+                 { id: "completed_pending_confirmation", label: "Confirmación demo" },
+                 { id: "completed", label: "Completed demo" },
+                 { id: "cancelled", label: "Cancelled demo" },
+                 { id: "dispute", label: "Dispute demo" },
               ] as const
             ).map((option) => {
               const selected = filter === option.id;
@@ -239,18 +242,18 @@ export default function AdminEconomiaPage() {
                     <div className="font-extrabold text-[14px] text-ink-900">
                       {formatEuro(row.finalPrice)}
                     </div>
-                    <div className="text-[10px] text-ink-400">importe acordado</div>
+                    <div className="text-[10px] text-ink-400">importe acordado (demo)</div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 text-[11.5px] mb-3">
                   <MetricLine label="Estado económico" value={row.economicBadge} />
-                  <MetricLine label="Payment status" value={row.paymentStatusLabel} />
-                  <MetricLine label="Comisión snapshot" value={`${row.commissionPct}%`} />
-                  <MetricLine label="Comisión calculada" value={formatEuro(row.commission)} />
-                  <MetricLine label="Neto pro" value={formatEuro(row.net)} />
-                  <MetricLine label="Cierre" value={row.closureOrigin} />
-                  <MetricLine label="Paid at" value={row.paidAt ? row.paidAt.slice(0, 16).replace("T", " ") : "No registrado"} />
+                   <MetricLine label="Payment status (mock)" value={row.paymentStatusLabel} />
+                   <MetricLine label="Comisión snapshot" value={`${row.commissionPct}%`} />
+                   <MetricLine label="Comisión calculada" value={formatEuro(row.commission)} />
+                   <MetricLine label="Neto pro estimado (demo)" value={formatEuro(row.net)} />
+                   <MetricLine label="Cierre (demo)" value={row.closureOrigin} />
+                   <MetricLine label="Paid at (mock)" value={row.paidAt ? row.paidAt.slice(0, 16).replace("T", " ") : "No registrado"} />
                 </div>
 
                 <div className="flex gap-2">

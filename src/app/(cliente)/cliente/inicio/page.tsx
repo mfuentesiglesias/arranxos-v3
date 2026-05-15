@@ -145,7 +145,7 @@ export default function HomeClientePage() {
             ¿Qué necesitas hoy?
           </div>
           <div className="text-white/85 text-[13px] mt-1 mb-3">
-            Publica tu trabajo en 2 minutos. Recibe propuestas en horas.
+            Publica tu trabajo en 2 minutos. En producción recibirías propuestas y notificaciones en poco tiempo.
           </div>
           <div className="inline-flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1.5 text-[13px] font-bold">
             Publicar trabajo
@@ -219,11 +219,11 @@ export default function HomeClientePage() {
             </div>
             <div className="flex-1">
               <div className="font-bold text-[14px] text-teal-700">
-                Pago protegido
+                Pago protegido mock
               </div>
               <div className="text-[12px] text-teal-700/80 leading-snug">
-                Retenemos tu pago hasta que confirmes. Si algo va mal, abres una
-                disputa.
+                En producción el importe quedaría retenido hasta tu confirmación.
+                En esta demo no se realiza ningún cargo real.
               </div>
             </div>
           </div>

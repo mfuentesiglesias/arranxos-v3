@@ -13,17 +13,23 @@ export default function WelcomePage() {
           <h1 className="text-white text-[28px] font-extrabold leading-tight tracking-tight">
             Conecta con profesionales de confianza
           </h1>
+          <div className="mt-3 inline-flex rounded-full bg-white/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
+            Demo PWA · flujo simulado
+          </div>
           <p className="text-white/85 text-[14px] mt-3 leading-relaxed">
-            Profesionales verificados para tus trabajos.
+            Demo de profesionales de confianza para tus trabajos.
             <br />
-            Pago protegido, sin sorpresas.
+            Simulación de pago protegido (en producción sería real).
+          </p>
+          <p className="mt-2 text-[11px] text-white/80">
+            En esta demo no se procesan pagos ni verificaciones reales.
           </p>
         </div>
         <div className="flex gap-5 mt-2 z-10">
           {[
-            ["✓", "Verificados"],
-            ["✓", "Pago seguro"],
-            ["✓", "Reseñas reales"],
+            ["✓", "Validación demo"],
+            ["✓", "Pago protegido mock"],
+            ["✓", "Reseñas demo"],
           ].map(([icon, text]) => (
             <div key={text} className="text-white/90 text-[11px] font-bold flex items-center gap-1">
               <span className="text-amber-100">{icon}</span>

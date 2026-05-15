@@ -55,10 +55,10 @@ export default function AdminConfiguracionPage() {
               onChange={(e) =>
                 setCfg({ ...cfg, commissionPct: Number(e.target.value) || 0 })
               }
-              note="Se aplica al importe acordado en cada trabajo."
+              note="Se aplica al importe acordado mock en cada trabajo de la demo."
             />
             <Input
-              label="Días para auto-liberación del pago"
+              label="Días para auto-liberación mock del pago"
               type="number"
               min={1}
               max={30}
@@ -66,7 +66,7 @@ export default function AdminConfiguracionPage() {
               onChange={(e) =>
                 setCfg({ ...cfg, autoReleaseDays: Number(e.target.value) || 1 })
               }
-              note="Si el cliente no confirma en este plazo tras el aviso del pro, se libera el pago."
+              note="Si el cliente no confirma en este plazo tras el aviso del pro, en la demo se simula la liberación del pago mock."
             />
           </div>
         </Card>
