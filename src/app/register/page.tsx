@@ -40,6 +40,7 @@ function RegisterInner() {
   const [specialtyQuery, setSpecialtyQuery] = useState("");
   const [selectedServices, setSelectedServices] = useState<CatalogService[]>([]);
   const [specialtyError, setSpecialtyError] = useState(false);
+  const [legalPanel, setLegalPanel] = useState<"terms" | "privacy" | null>(null);
 
   const query = normalizeSearchText(specialtyQuery.trim());
   const suggestedServices = catalogServices
@@ -283,8 +284,24 @@ function RegisterInner() {
           )}
           <p className="text-[11px] text-ink-400 leading-relaxed">
             Al registrarte aceptas los{" "}
-            <span className="text-coral-600 font-semibold">Términos de servicio</span> y la{" "}
-            <span className="text-coral-600 font-semibold">Política de privacidad</span>.
+            <button
+              type="button"
+              className="text-coral-600 font-semibold underline underline-offset-2"
+              onClick={() => setLegalPanel("terms")}
+              data-testid="register-open-terms"
+            >
+              Términos de servicio
+            </button>{" "}
+            y la{" "}
+            <button
+              type="button"
+              className="text-coral-600 font-semibold underline underline-offset-2"
+              onClick={() => setLegalPanel("privacy")}
+              data-testid="register-open-privacy"
+            >
+              Política de privacidad
+            </button>
+            .
           </p>
           <Button full onClick={submit} disabled={loading}>
             {loading
@@ -295,6 +312,45 @@ function RegisterInner() {
           </Button>
         </div>
       </ScreenBody>
+      {legalPanel && (
+        <div
+          className="fixed inset-0 z-[320] bg-black/45 px-4 py-6"
+          onClick={() => setLegalPanel(null)}
+          data-testid="register-legal-overlay"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="mx-auto mt-10 w-full max-w-sm rounded-3xl border border-sand-200/80 bg-white p-4 shadow-cardHover"
+            onClick={(event) => event.stopPropagation()}
+            data-testid="register-legal-panel"
+          >
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="font-extrabold text-[16px] text-ink-900">
+                {legalPanel === "terms" ? "Términos demo" : "Privacidad demo"}
+              </div>
+              <button
+                type="button"
+                onClick={() => setLegalPanel(null)}
+                className="h-8 w-8 rounded-full bg-sand-100 text-ink-600"
+                aria-label="Cerrar panel legal"
+                data-testid="register-legal-close"
+              >
+                ×
+              </button>
+            </div>
+            <div className="rounded-2xl bg-sand-50 px-3 py-2.5 text-[11.5px] text-ink-500 leading-snug">
+              Este contenido es informativo para la demo de Arranxos y no
+              sustituye documentación legal definitiva.
+            </div>
+            <div className="mt-3 text-[12px] text-ink-600 leading-snug">
+              {legalPanel === "terms"
+                ? "Uso demo: registro y flujos simulados sin pagos reales. En producción se publicarán condiciones legales completas, límites de responsabilidad y reglas operativas."
+                : "Privacidad demo: no se solicitan datos de pago reales en este entorno y la información se guarda localmente en el navegador para pruebas. En producción aplicará una política legal completa."}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

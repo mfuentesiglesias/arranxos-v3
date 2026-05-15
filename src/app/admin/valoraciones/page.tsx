@@ -14,6 +14,9 @@ export default function AdminValoracionesPage() {
   const session = useSession();
   const [filter, setFilter] = useState<"all" | "low" | "reported">("all");
   const [q, setQ] = useState("");
+  const [reviewActions, setReviewActions] = useState<
+    Record<string, { reviewed: boolean; hidden: boolean }>
+  >({});
   const reviews = useMemo(() => getEffectiveReviews(session), [session]);
 
   const filtered = reviews.filter((r) => {
@@ -70,40 +73,97 @@ export default function AdminValoracionesPage() {
         </div>
 
         <div className="flex flex-col gap-2">
-          {filtered.map((r) => (
-            <Card key={r.id}>
-              <div className="flex items-start gap-3 mb-2">
-                <Avatar initials={r.avatar} size={36} />
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-[13px] text-ink-800">
-                      {r.author}
-                    </span>
-                    <span className="text-[10.5px] text-ink-400 ml-auto">
-                      {r.date}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <RatingStars value={r.rating} />
-                    <span className="text-[11px] text-ink-400">
-                      · {r.targetType === "professional" ? `Pro ${r.targetId}` : `Cliente ${r.targetId}`}
-                    </span>
+          {filtered.map((r) => {
+            const actionState = reviewActions[r.id] ?? {
+              reviewed: false,
+              hidden: false,
+            };
+
+            return (
+              <Card key={r.id} testId={`admin-review-card-${r.id}`}>
+                <div className="flex items-start gap-3 mb-2">
+                  <Avatar initials={r.avatar} size={36} />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-[13px] text-ink-800">
+                        {r.author}
+                      </span>
+                      <span className="text-[10.5px] text-ink-400 ml-auto">
+                        {r.date}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <RatingStars value={r.rating} />
+                      <span className="text-[11px] text-ink-400">
+                        · {r.targetType === "professional" ? `Pro ${r.targetId}` : `Cliente ${r.targetId}`}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="text-[12.5px] text-ink-600 leading-snug mb-3">
-                “{r.text}”
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Button size="sm" full variant="outline">
-                  Ocultar reseña
-                </Button>
-                <Button size="sm" full>
-                  Marcar revisada
-                </Button>
-              </div>
-            </Card>
-          ))}
+                <div
+                  className={`text-[12.5px] leading-snug mb-3 ${
+                    actionState.hidden
+                      ? "text-ink-400 line-through"
+                      : "text-ink-600"
+                  }`}
+                >
+                  “{r.text}”
+                </div>
+                <div className="flex items-center gap-1.5 mb-2" data-testid={`admin-review-status-${r.id}`}>
+                  {actionState.reviewed && (
+                    <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-bold text-teal-700">
+                      Revisada (demo)
+                    </span>
+                  )}
+                  {actionState.hidden && (
+                    <span className="rounded-full bg-sand-100 px-2 py-0.5 text-[10px] font-bold text-ink-500">
+                      Oculta demo
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    size="sm"
+                    full
+                    variant="outline"
+                    onClick={() => {
+                      setReviewActions((current) => ({
+                        ...current,
+                        [r.id]: {
+                          reviewed: current[r.id]?.reviewed ?? false,
+                          hidden: true,
+                        },
+                      }));
+                    }}
+                    disabled={actionState.hidden}
+                    testId={`admin-review-hide-${r.id}`}
+                  >
+                    {actionState.hidden ? "Oculta demo ✓" : "Ocultar reseña"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    full
+                    onClick={() => {
+                      setReviewActions((current) => ({
+                        ...current,
+                        [r.id]: {
+                          reviewed: true,
+                          hidden: current[r.id]?.hidden ?? false,
+                        },
+                      }));
+                    }}
+                    disabled={actionState.reviewed}
+                    testId={`admin-review-reviewed-${r.id}`}
+                  >
+                    {actionState.reviewed ? "Revisada demo ✓" : "Marcar revisada"}
+                  </Button>
+                </div>
+                <div className="mt-2 text-[10.5px] text-ink-400">
+                  Acción demo local: no modifica backend ni elimina datos reales.
+                </div>
+              </Card>
+            );
+          })}
           {filtered.length === 0 && (
             <div className="text-center py-10 text-ink-400 text-[12.5px]">
               Sin valoraciones en este filtro.

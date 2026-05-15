@@ -142,8 +142,9 @@ function RevisarInner() {
                 Publicar es gratis
               </div>
               <div className="text-[11.5px] text-teal-700/80 leading-snug">
-                Solo pagas cuando aceptas a un profesional. El dinero se retiene
-                hasta que confirmas el trabajo.
+                En producción, solo pagarías cuando aceptas a un profesional y el
+                importe quedaría protegido hasta tu confirmación. En esta demo no
+                se solicita ningún dato bancario ni se realiza ningún cargo real.
               </div>
             </div>
           </div>

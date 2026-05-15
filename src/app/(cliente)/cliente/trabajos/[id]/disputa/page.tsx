@@ -84,8 +84,9 @@ function Inner({ id }: { id: string }) {
               <Icon name="alert" size={16} />
             </div>
             <div className="text-[12px] text-rose-700 leading-snug">
-              El equipo de Arranxos revisará la disputa en un plazo de 48-72 h.
-              El pago queda retenido hasta la resolución.
+              Resolución demo: registramos tu disputa para este flujo de prueba.
+              En producción habría revisión operativa en 48-72 h y pago protegido
+              hasta la resolución.
             </div>
           </div>
         </Card>

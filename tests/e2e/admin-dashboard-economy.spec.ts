@@ -2,8 +2,13 @@ import { expect, test } from "@playwright/test";
 
 async function readCommissionValue(page: import("@playwright/test").Page) {
   const text = (await page.getByTestId("admin-dashboard-kpi-commission").first().textContent()) ?? "";
-  const amount = Number((text.match(/(\d[\d\s.]*)\s*€/u)?.[1] ?? "0").replace(/\D/g, ""));
-  return amount;
+  const rawAmount = text.match(/(\d[\d\s.]*(?:[.,]\d+)?)\s*€/u)?.[1] ?? "0";
+  const normalized = rawAmount
+    .replace(/\s/g, "")
+    .replace(/\.(?=\d{3}(?:\D|$))/g, "")
+    .replace(",", ".");
+  const parsed = Number.parseFloat(normalized);
+  return Number.isFinite(parsed) ? Math.round(parsed) : 0;
 }
 
 test.beforeEach(async ({ page }) => {

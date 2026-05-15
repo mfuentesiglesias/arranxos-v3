@@ -130,11 +130,12 @@ function Inner({ id }: { id: string }) {
             </div>
             <div>
               <div className="font-bold text-[13px] text-teal-700">
-                Pago en custodia
+                Pago protegido mock
               </div>
               <div className="text-[11.5px] text-teal-700/80 leading-snug">
-                Retenemos el dinero. Solo se libera cuando confirmas que el trabajo
-                está bien hecho. Si surge un problema, abres una disputa.
+                En la versión real, el importe quedaría retenido y se liberaría al
+                confirmar el trabajo o resolver una disputa. En esta demo no se
+                procesa ningún cobro real.
               </div>
             </div>
           </div>

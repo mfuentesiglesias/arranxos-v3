@@ -86,7 +86,7 @@ export default function PagosPage() {
         <div className="grid grid-cols-2 gap-2 mb-4">
           <Card className="!p-4">
             <div className="text-[10.5px] font-semibold text-ink-400 uppercase tracking-wide mb-0.5">
-              En custodia
+              En custodia mock
             </div>
             <div className="font-extrabold text-[20px] text-ink-900">
               {formatEuro(pendingTotal)}
@@ -97,7 +97,7 @@ export default function PagosPage() {
           </Card>
           <Card className="!p-4">
             <div className="text-[10.5px] font-semibold text-ink-400 uppercase tracking-wide mb-0.5">
-              Liberado este mes
+              Liberado demo este mes
             </div>
             <div className="font-extrabold text-[20px] text-teal-600">
               {formatEuro(monthTotal)}
@@ -199,9 +199,9 @@ export default function PagosPage() {
         </div>
 
         <Card className="mt-4 bg-sand-50 text-[11.5px] text-ink-500 leading-snug">
-          La comisión de Arranxos ({adminConfig.commissionPct}%) se
-          descuenta automáticamente antes de la liberación. Las transferencias
-          llegan a tu cuenta bancaria en 1–3 días laborables.
+          Cobros mock: la comisión de Arranxos ({adminConfig.commissionPct}%) se
+          aplica de forma simulada. En esta demo no hay transferencias bancarias
+          reales ni abonos a cuentas.
         </Card>
       </ScreenBody>
     </div>
