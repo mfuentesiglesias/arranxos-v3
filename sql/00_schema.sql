@@ -192,8 +192,8 @@ create table if not exists jobs (
   constraint jobs_price_range_valid check (
     price_min is null or price_max is null or price_min <= price_max
   ),
-  constraint jobs_commission_pct_snapshot_nonnegative check (
-    commission_pct_snapshot is null or commission_pct_snapshot >= 0
+  constraint jobs_commission_pct_snapshot_range check (
+    commission_pct_snapshot is null or commission_pct_snapshot between 0 and 100
   ),
   constraint jobs_approx_radius_m_nonnegative check (approx_radius_m >= 0),
   constraint jobs_invited_count_nonnegative check (invited_count >= 0)
@@ -241,6 +241,7 @@ create table if not exists job_negotiations (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (job_id, professional_id),
+  unique (id, job_id),
   constraint job_negotiations_last_amount_nonnegative check (last_amount is null or last_amount >= 0),
   constraint job_negotiations_proposed_by_role check (
     proposed_by_role is null or proposed_by_role in ('client', 'professional')
@@ -249,7 +250,7 @@ create table if not exists job_negotiations (
 
 create table if not exists job_negotiation_events (
   id uuid primary key default gen_random_uuid(),
-  negotiation_id uuid not null references job_negotiations(id) on delete cascade,
+  negotiation_id uuid not null,
   job_id uuid not null references jobs(id) on delete cascade,
   by_profile_id uuid not null references profiles(id) on delete restrict,
   by_role profile_role not null,
@@ -257,6 +258,8 @@ create table if not exists job_negotiation_events (
   amount integer,
   note text,
   created_at timestamptz not null default now(),
+  constraint job_negotiation_events_negotiation_job_fk foreign key (negotiation_id, job_id)
+    references job_negotiations (id, job_id) on delete cascade,
   constraint job_negotiation_events_amount_nonnegative check (amount is null or amount >= 0)
 );
 
@@ -267,14 +270,15 @@ create table if not exists chats (
   professional_id uuid not null references professionals(profile_id) on delete restrict,
   created_at timestamptz not null default now(),
   last_message_at timestamptz,
-  unique (job_id)
+  unique (job_id),
+  unique (id, job_id)
 );
 
 create table if not exists chat_messages (
   id uuid primary key default gen_random_uuid(),
-  chat_id uuid not null references chats(id) on delete cascade,
+  chat_id uuid not null,
   job_id uuid not null references jobs(id) on delete cascade,
-  sender_profile_id uuid not null references profiles(id) on delete restrict,
+  sender_profile_id uuid references profiles(id) on delete restrict,
   sender_role chat_sender_role not null,
   content text not null,
   message_type text not null default 'text',
@@ -285,6 +289,12 @@ create table if not exists chat_messages (
   redacted_content text,
   blocked_reason text,
   created_at timestamptz not null default now(),
+  constraint chat_messages_chat_job_fk foreign key (chat_id, job_id)
+    references chats (id, job_id) on delete cascade,
+  constraint chat_messages_system_sender_consistency check (
+    (sender_role = 'system' and sender_profile_id is null)
+    or (sender_role <> 'system' and sender_profile_id is not null)
+  ),
   constraint chat_messages_proposal_amount_nonnegative check (
     proposal_amount is null or proposal_amount >= 0
   )
@@ -320,7 +330,7 @@ create table if not exists agreements (
   released_at timestamptz,
   unique (job_id),
   constraint agreements_final_price_nonnegative check (final_price >= 0),
-  constraint agreements_commission_pct_nonnegative check (commission_pct >= 0)
+  constraint agreements_commission_pct_range check (commission_pct between 0 and 100)
 );
 
 create table if not exists disputes (
@@ -367,7 +377,8 @@ create table if not exists admin_config (
   anti_leak_urls boolean not null default true,
   anti_leak_whatsapp boolean not null default true,
   updated_at timestamptz not null default now(),
-  constraint admin_config_commission_pct_nonnegative check (commission_pct >= 0),
+  constraint admin_config_singleton_id check (id = 'global'),
+  constraint admin_config_commission_pct_range check (commission_pct between 0 and 100),
   constraint admin_config_auto_release_days_positive check (auto_release_days > 0),
   constraint admin_config_invitation_limit_positive check (invitation_limit_per_job > 0),
   constraint admin_config_search_ticket_days_positive check (search_ticket_no_response_days > 0),
@@ -407,6 +418,34 @@ create table if not exists search_tickets (
   updated_at timestamptz not null default now(),
   constraint search_tickets_radius_km_nonnegative check (radius_km is null or radius_km >= 0)
 );
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'catalog_categories_created_from_request_fk'
+  ) then
+    alter table catalog_categories
+      add constraint catalog_categories_created_from_request_fk
+      foreign key (created_from_request_id)
+      references catalog_requests (id)
+      on delete set null;
+  end if;
+
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'catalog_services_created_from_request_fk'
+  ) then
+    alter table catalog_services
+      add constraint catalog_services_created_from_request_fk
+      foreign key (created_from_request_id)
+      references catalog_requests (id)
+      on delete set null;
+  end if;
+end
+$$;
 
 comment on table profiles is 'Core user profile linked to auth.users.';
 comment on table professionals is 'Professional-only data keyed by profile_id.';
