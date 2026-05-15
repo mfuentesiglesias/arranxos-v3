@@ -19,6 +19,7 @@ export default function LoginPage() {
   const [pass, setPass] = useState("········");
   const [loading, setLoading] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showRecoveryDemo, setShowRecoveryDemo] = useState(false);
 
   const doLogin = () => {
     setLoading(true);
@@ -95,9 +96,38 @@ export default function LoginPage() {
               placeholder="Tu contraseña"
             />
           </div>
-          <button className="text-[13px] text-coral-600 font-semibold text-left mb-5">
+          <button
+            type="button"
+            className="text-[13px] text-coral-600 font-semibold text-left mb-3"
+            onClick={() => setShowRecoveryDemo((current) => !current)}
+            data-testid="forgot-password-trigger"
+          >
             ¿Olvidaste la contraseña?
           </button>
+          {showRecoveryDemo && (
+            <div
+              className="mb-5 w-full rounded-2xl border border-sand-200 bg-sand-50 px-3 py-3"
+              data-testid="forgot-password-demo-panel"
+            >
+              <div className="text-[12.5px] font-bold text-ink-700">Recuperación demo</div>
+              <div className="mt-1 text-[11.5px] text-ink-500 leading-snug">
+                En producción se enviaría un email de recuperación.
+              </div>
+              <div className="mt-1 text-[11.5px] text-ink-500 leading-snug">
+                En esta demo no se envían emails reales.
+              </div>
+              <div className="mt-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowRecoveryDemo(false)}
+                  testId="forgot-password-demo-close"
+                >
+                  Cerrar
+                </Button>
+              </div>
+            </div>
+          )}
           <Button full onClick={doLogin} disabled={loading}>
             {loading ? "Entrando…" : "Iniciar sesión"}
           </Button>

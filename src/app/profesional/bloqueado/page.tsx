@@ -39,10 +39,20 @@ export default function BloqueadoPage() {
             </li>
           </ul>
         </Card>
-        <Button full>Contactar con soporte</Button>
+        <Button
+          full
+          href="mailto:soporte@arranxos.gal?subject=Revisi%C3%B3n%20de%20cuenta%20bloqueada%20%28demo%29"
+          testId="blocked-support-contact"
+        >
+          Contactar con soporte
+        </Button>
         <div className="text-[11px] text-ink-400 mt-4 max-w-[280px] leading-snug">
           Si consideras que se trata de un error, nuestro equipo revisará tu caso
           en un plazo de 48 h.
+        </div>
+        <div className="text-[11px] text-ink-400 mt-1 max-w-[280px] leading-snug">
+          Demo: este acceso abre tu app de correo. No crea tickets reales en esta
+          versión.
         </div>
       </ScreenBody>
     </div>

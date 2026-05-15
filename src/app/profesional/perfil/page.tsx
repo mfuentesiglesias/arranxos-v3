@@ -19,6 +19,7 @@ import { getEffectiveJobs, getReviewsForProfessional, useSession } from "@/lib/s
 function Inner() {
   const session = useSession();
   const [shareOpen, setShareOpen] = useState(false);
+  const [showAllReviews, setShowAllReviews] = useState(false);
   const params = useSearchParams();
   const id = params?.get("id") ?? "p1";
   const jobId = params?.get("jobId");
@@ -204,12 +205,25 @@ function Inner() {
               <div className="font-bold text-[13px] text-ink-800">
                 Reseñas ({proReviews.length})
               </div>
-              <button className="text-[12px] text-coral-600 font-bold">
-                Ver todas
+              <button
+                type="button"
+                className="text-[12px] text-coral-600 font-bold"
+                onClick={() => setShowAllReviews((current) => !current)}
+                data-testid="public-profile-toggle-reviews"
+              >
+                {showAllReviews ? "Ver menos" : "Ver todas"}
               </button>
             </div>
+            {showAllReviews && (
+              <div
+                className="mb-3 rounded-xl border border-teal-100 bg-teal-50/60 px-3 py-2 text-[11.5px] text-teal-700"
+                data-testid="public-profile-all-reviews-note"
+              >
+                Mostrando todas las reseñas demo.
+              </div>
+            )}
             <div className="flex flex-col gap-3">
-              {proReviews.slice(0, 3).map((r) => (
+              {(showAllReviews ? proReviews : proReviews.slice(0, 3)).map((r) => (
                 <div
                   key={r.id}
                   className="border-t border-sand-200/70 pt-3 first:border-t-0 first:pt-0"
