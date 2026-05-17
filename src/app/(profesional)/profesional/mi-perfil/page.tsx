@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { HeaderActionSheet } from "@/components/layout/header-action-sheet";
 import { HeaderIconButton } from "@/components/layout/header-icon-button";
@@ -12,6 +12,8 @@ import { Icon } from "@/components/ui/icon";
 import { Input, Textarea } from "@/components/ui/input";
 import { RatingStars } from "@/components/pros/rating-stars";
 import { StrikeBadge } from "@/components/pros/strike-badge";
+import { getCurrentProfile, type ApiProfile } from "@/lib/api/profiles";
+import { isSupabaseMode } from "@/lib/supabase/config";
 import {
   getEffectiveCatalogServices,
   slugifyCatalogText,
@@ -74,6 +76,7 @@ type WorkBaseDraft = {
 export default function PerfilProPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<ProfilePanelId | null>(null);
+  const [realProfile, setRealProfile] = useState<ApiProfile | null>(null);
   const [specialtySearch, setSpecialtySearch] = useState("");
   const [catalogRequestFeedback, setCatalogRequestFeedback] = useState<string | null>(null);
   const [editSaved, setEditSaved] = useState(false);
@@ -88,6 +91,7 @@ export default function PerfilProPage() {
   });
   const router = useRouter();
   const reset = useSession((s) => s.reset);
+  const isSupabase = isSupabaseMode();
   const currentProfessionalId = useSession(getCurrentProfessionalId);
   const storeCatalogRequests = useSession(getEffectiveCatalogRequests);
   const approvedCatalogServices = useSession(getEffectiveApprovedCatalogServices);
@@ -183,6 +187,40 @@ export default function PerfilProPage() {
   const professionalCatalogRequests = storeCatalogRequests.filter(
     (request) => request.requestedByUserId === professional.id,
   );
+  const displayAvatarInitials =
+    isSupabase && realProfile
+      ? realProfile.avatarInitials ?? realProfile.fullName.trim().charAt(0).toUpperCase()
+      : professional.avatar;
+  const displayProfileName = isSupabase && realProfile ? realProfile.fullName : profileDraft.name;
+  const displayProfileLocation =
+    isSupabase && realProfile?.locationLabel ? realProfile.locationLabel : profileDraft.location;
+  const displayProfessionalStatus =
+    isSupabase && realProfile?.professionalStatus ? realProfile.professionalStatus : null;
+
+  useEffect(() => {
+    if (!isSupabase) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadProfile = async () => {
+      try {
+        const profile = await getCurrentProfile();
+        if (!cancelled && profile) {
+          setRealProfile(profile);
+        }
+      } catch {
+        // Keep the current mock fallback if the real profile cannot be loaded.
+      }
+    };
+
+    void loadProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isSupabase]);
 
   const syncSpecialtiesDraftFromSaved = () => {
     setSpecialtiesDraft(savedProfileState.specialties);
@@ -940,7 +978,7 @@ export default function PerfilProPage() {
         <Card className="mb-3">
           <div className="flex items-start gap-3 mb-4">
             <div className="relative">
-              <Avatar initials={professional.avatar} size={68} />
+              <Avatar initials={displayAvatarInitials} size={68} />
               {professional.verified && (
                 <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-teal-500 text-white border-2 border-white flex items-center justify-center text-[10px] font-bold">
                   ✓
@@ -949,11 +987,16 @@ export default function PerfilProPage() {
             </div>
             <div className="flex-1 min-w-0">
               <div className="font-extrabold text-[17px] text-ink-900 truncate">
-                {profileDraft.name}
+                {displayProfileName}
               </div>
               <div className="text-[12.5px] text-ink-500">
-                {displayedPrimarySpecialty} · {profileDraft.location}
+                {displayedPrimarySpecialty} · {displayProfileLocation}
               </div>
+              {displayProfessionalStatus && (
+                <div className="mt-1 text-[11px] font-semibold text-ink-500">
+                  Estado real: {formatProfessionalStatusLabel(displayProfessionalStatus)}
+                </div>
+              )}
               <div className="mt-1 text-[11.5px] font-semibold text-ink-500">
                 Base: {formatWorkBaseSummary(savedProfileState.workBase, savedProfileState.radiusKm)}
               </div>
@@ -1204,6 +1247,16 @@ function inferSuggestedCategory(requestedName: string, services: CatalogService[
 
 function isActiveOrApprovedCatalogRequest(request: CatalogRequest) {
   return ["pending", "reviewing", "approved"].includes(request.status);
+}
+
+function formatProfessionalStatusLabel(status: "pending" | "approved" | "blocked") {
+  return (
+    {
+      pending: "Pendiente",
+      approved: "Aprobado",
+      blocked: "Bloqueado",
+    } satisfies Record<"pending" | "approved" | "blocked", string>
+  )[status];
 }
 
 function getCatalogRequestStatusLabel(status: CatalogRequest["status"]) {

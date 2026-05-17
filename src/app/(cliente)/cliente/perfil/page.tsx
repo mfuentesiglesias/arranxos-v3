@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { HeaderActionSheet } from "@/components/layout/header-action-sheet";
@@ -10,6 +10,8 @@ import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
+import { getCurrentProfile, type ApiProfile } from "@/lib/api/profiles";
+import { isSupabaseMode } from "@/lib/supabase/config";
 import { currentClient, jobs } from "@/lib/data";
 import { useSession } from "@/lib/store";
 
@@ -35,13 +37,53 @@ type ClientProfileAction = {
 export default function PerfilClientePage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<ClientProfilePanelId | null>(null);
+  const [realProfile, setRealProfile] = useState<ApiProfile | null>(null);
   const router = useRouter();
   const reset = useSession((s) => s.reset);
+  const isSupabase = isSupabaseMode();
   const mine = jobs.filter((j) => j.clientId === "u1");
   const completed = mine.filter((j) => j.status === "completed").length;
   const active = mine.filter((j) =>
     ["in_progress", "escrow_funded", "agreed"].includes(j.status),
   ).length;
+  const profileInitials =
+    isSupabase && realProfile
+      ? realProfile.avatarInitials ?? realProfile.fullName.trim().charAt(0).toUpperCase()
+      : currentClient.avatar;
+  const profileName = isSupabase && realProfile ? realProfile.fullName : currentClient.name;
+  const profileMetaPrimary =
+    isSupabase && realProfile
+      ? realProfile.locationLabel
+        ? `${realProfile.locationLabel} · Cliente`
+        : "Cliente"
+      : currentClient.email;
+  const profileMetaSecondary =
+    isSupabase && realProfile ? "Perfil real conectado" : `Miembro desde ${currentClient.memberSince}`;
+
+  useEffect(() => {
+    if (!isSupabase) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadProfile = async () => {
+      try {
+        const profile = await getCurrentProfile();
+        if (!cancelled && profile) {
+          setRealProfile(profile);
+        }
+      } catch {
+        // Keep the current mock fallback if the real profile cannot be loaded.
+      }
+    };
+
+    void loadProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isSupabase]);
 
   const openPanel = (panelId: ClientProfilePanelId) => {
     setSettingsOpen(false);
@@ -155,11 +197,11 @@ export default function PerfilClientePage() {
       <ScreenBody className="px-4 pt-4 pb-6">
         <Card className="mb-3">
           <div className="flex items-center gap-3 mb-4">
-            <Avatar initials={currentClient.avatar} size={64} />
+            <Avatar initials={profileInitials} size={64} />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <div className="font-extrabold text-[18px] text-ink-900 truncate">
-                  {currentClient.name}
+                  {profileName}
                 </div>
                 {currentClient.verified && (
                   <span className="bg-teal-100 text-teal-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
@@ -168,10 +210,10 @@ export default function PerfilClientePage() {
                 )}
               </div>
               <div className="text-[12.5px] text-ink-500">
-                {currentClient.email}
+                {profileMetaPrimary}
               </div>
               <div className="text-[11px] text-ink-400">
-                Miembro desde {currentClient.memberSince}
+                {profileMetaSecondary}
               </div>
             </div>
           </div>
