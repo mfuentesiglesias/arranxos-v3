@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { StatusBar } from "@/components/layout/status-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
@@ -12,6 +12,8 @@ import { Icon } from "@/components/ui/icon";
 import { JobCard } from "@/components/jobs/job-card";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { currentPro, defaultAdminConfig, professionals } from "@/lib/data";
+import { getCurrentProfile, type ApiProfile } from "@/lib/api/profiles";
+import { isSupabaseMode } from "@/lib/supabase/config";
 import {
   getCurrentProfessionalId,
   getEffectiveJobs,
@@ -48,7 +50,9 @@ const PROFESSIONAL_PENDING_ACTION_STATUSES = [
 
 export default function HomeProPage() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [realProfile, setRealProfile] = useState<ApiProfile | null>(null);
   const session = useSession();
+  const isSupabase = isSupabaseMode();
   const currentProfessionalId = getCurrentProfessionalId(session);
   const notifications = useMemo(() => getEffectiveNotifications(session), [session]);
   const effectiveJobs = useMemo(() => getEffectiveJobs(session), [session]);
@@ -98,6 +102,39 @@ export default function HomeProPage() {
     [myAssignedJobs],
   );
   const myJobsPreview = useMemo(() => myActiveJobs.slice(0, 3), [myActiveJobs]);
+  const headerInitials =
+    isSupabase && realProfile
+      ? realProfile.avatarInitials ?? realProfile.fullName.trim().charAt(0).toUpperCase()
+      : professional.avatar;
+  const headerName =
+    isSupabase && realProfile
+      ? realProfile.fullName.trim().split(/\s+/)[0] ?? professional.name.split(" ")[0]
+      : professional.name.split(" ")[0];
+
+  useEffect(() => {
+    if (!isSupabase) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadProfile = async () => {
+      try {
+        const profile = await getCurrentProfile();
+        if (!cancelled && profile) {
+          setRealProfile(profile);
+        }
+      } catch {
+        // Keep the current mock fallback if the real profile cannot be loaded.
+      }
+    };
+
+    void loadProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isSupabase]);
 
   return (
     <div className="flex-1 flex flex-col" data-testid="professional-home-page">
@@ -109,12 +146,10 @@ export default function HomeProPage() {
             href="/profesional/mi-perfil"
             className="flex items-center gap-3"
           >
-            <Avatar initials={professional.avatar} size={44} />
+            <Avatar initials={headerInitials} size={44} />
             <div>
               <div className="text-[12px] text-white/80">Hola,</div>
-              <div className="font-extrabold text-[15px]">
-                {professional.name.split(" ")[0]}
-              </div>
+              <div className="font-extrabold text-[15px]">{headerName}</div>
             </div>
           </Link>
           <HeaderIconButton

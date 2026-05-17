@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { StatusBar } from "@/components/layout/status-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
+import { getCurrentProfile, type ApiProfile } from "@/lib/api/profiles";
+import { isSupabaseMode } from "@/lib/supabase/config";
 import {
   getAgreement,
   getCommissionAmount,
@@ -23,7 +25,9 @@ import {
 import { formatEuro } from "@/lib/utils";
 
 export default function AdminDashboard() {
+  const [realProfile, setRealProfile] = useState<ApiProfile | null>(null);
   const session = useSession();
+  const isSupabase = isSupabaseMode();
   const effectiveJobs = useMemo(() => getEffectiveJobs(session), [session]);
   const effectiveProfessionals = useMemo(() => getEffectiveProfessionals(session), [session]);
   const effectiveDisputes = useMemo(() => getEffectiveDisputes(session), [session]);
@@ -160,6 +164,40 @@ export default function AdminDashboard() {
     },
   ];
 
+  const adminFirstName =
+    isSupabase && realProfile
+      ? realProfile.fullName.trim().split(/\s+/)[0] ?? null
+      : null;
+  const adminInitials =
+    isSupabase && realProfile
+      ? realProfile.avatarInitials ?? realProfile.fullName.trim().charAt(0).toUpperCase()
+      : null;
+
+  useEffect(() => {
+    if (!isSupabase) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadProfile = async () => {
+      try {
+        const profile = await getCurrentProfile();
+        if (!cancelled && profile) {
+          setRealProfile(profile);
+        }
+      } catch {
+        // Keep the current mock fallback if the real profile cannot be loaded.
+      }
+    };
+
+    void loadProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isSupabase]);
+
   return (
     <div className="flex-1 flex flex-col">
       <StatusBar />
@@ -167,12 +205,16 @@ export default function AdminDashboard() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="text-[11px] text-white/60 uppercase tracking-wide font-semibold">
-              Arranxos · Admin
+              {adminFirstName ? `Arranxos · Admin · ${adminFirstName}` : "Arranxos · Admin"}
             </div>
             <div className="font-extrabold text-[20px]">Panel de control</div>
           </div>
           <div className="w-10 h-10 rounded-full bg-coral-500 flex items-center justify-center">
-            <Icon name="shield" size={18} />
+            {adminInitials ? (
+              <span className="text-[13px] font-extrabold text-white">{adminInitials}</span>
+            ) : (
+              <Icon name="shield" size={18} />
+            )}
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2">
