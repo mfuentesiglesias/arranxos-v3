@@ -29,6 +29,10 @@ export interface SignUpWithPasswordInput {
   password: string;
 }
 
+export type SignUpResult =
+  | { status: "signed_in"; session: ApiAuthSession }
+  | { status: "confirmation_required"; user: ApiAuthUser };
+
 export interface AuthRequestOptions extends ServerSupabaseClientOptions {}
 
 function mapAuthUser(user: User): ApiAuthUser {
@@ -129,7 +133,7 @@ export async function signInWithPassword(
 
 export async function signUpWithPassword(
   input: SignUpWithPasswordInput,
-): Promise<ApiAuthSession> {
+): Promise<SignUpResult> {
   if (!isSupabaseMode()) {
     throw new Error(getAuthDisabledMessage("signUpWithPassword()"));
   }
@@ -148,13 +152,15 @@ export async function signUpWithPassword(
     throw error;
   }
 
-  if (!data.session) {
-    throw new Error(
-      "Supabase sign-up did not return a session. Check whether email confirmation is enabled.",
-    );
+  if (data.session) {
+    return { status: "signed_in", session: mapAuthSession(data.session) };
   }
 
-  return mapAuthSession(data.session);
+  if (data.user) {
+    return { status: "confirmation_required", user: mapAuthUser(data.user) };
+  }
+
+  throw new Error("Supabase sign-up returned neither session nor user.");
 }
 
 export async function signOut(options: AuthRequestOptions = {}): Promise<void> {

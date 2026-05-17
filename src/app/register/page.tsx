@@ -10,6 +10,8 @@ import { Icon } from "@/components/ui/icon";
 import { getSeedCatalogServices } from "@/lib/catalog";
 import { useSession } from "@/lib/store";
 import { isSupabaseMode } from "@/lib/supabase/config";
+import { getCurrentSession, signUpWithPassword } from "@/lib/api/auth";
+import { createOwnProfile } from "@/lib/api/profiles";
 import type { CatalogService } from "@/lib/types";
 
 const catalogServices = getSeedCatalogServices();
@@ -91,7 +93,7 @@ function RegisterInner() {
   };
 
   const submit = async () => {
-    if (isPro && selectedServices.length === 0) {
+    if (!isSupabase && isPro && selectedServices.length === 0) {
       setSpecialtyError(true);
       return;
     }
@@ -113,9 +115,67 @@ function RegisterInner() {
       return;
     }
 
-    setError(
-      "El registro real con Supabase todavia no esta activado. Falta habilitar el bootstrap seguro de perfil antes de abrir altas reales.",
-    );
+    const fullName = form.name.trim();
+    if (!fullName) {
+      setError("El nombre completo es obligatorio.");
+      return;
+    }
+
+    setError(null);
+    setLoading(true);
+
+    try {
+      let signedIn = false;
+
+      const existingSession = await getCurrentSession();
+      if (existingSession) {
+        signedIn = true;
+      } else {
+        const signUpResult = await signUpWithPassword({
+          email: form.email.trim(),
+          password: form.password,
+        });
+
+        if (signUpResult.status === "confirmation_required") {
+          setError(
+            "Cuenta creada. Revisa tu email para confirmarla antes de continuar.",
+          );
+          setLoading(false);
+          return;
+        }
+
+        signedIn = true;
+      }
+
+      if (signedIn) {
+        const initials = fullName
+          .split(/\s+/)
+          .filter(Boolean)
+          .slice(0, 2)
+          .map((part) => part[0]?.toUpperCase() ?? "")
+          .join("") || null;
+
+        await createOwnProfile({
+          role: isPro ? "professional" : "client",
+          fullName,
+          avatarInitials: initials,
+          locationLabel: isPro ? form.zone : null,
+          phone: form.phone.trim() || null,
+          professionalProfile: isPro
+            ? { zone: form.zone }
+            : undefined,
+        });
+
+        router.push(isPro ? "/profesional/pendiente" : "/cliente/inicio");
+      }
+    } catch (caughtError) {
+      const message =
+        caughtError instanceof Error
+          ? caughtError.message
+          : "No se pudo crear la cuenta.";
+      setError(message);
+      setLoading(false);
+    }
   };
 
   return (
@@ -202,87 +262,94 @@ function RegisterInner() {
                 onChange={(e) => upd("dni", e.target.value)}
                 placeholder="00000000A"
               />
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[13px] font-semibold text-ink-500">
-                  Especialidades
-                </label>
-                <Input
-                  value={specialtyQuery}
-                  onChange={(e) => {
-                    setSpecialtyQuery(e.target.value);
-                    if (specialtyError) {
-                      setSpecialtyError(false);
-                    }
-                  }}
-                  placeholder="Busca por servicio o categoría"
-                  note="Puedes seleccionar varias especialidades. La primera quedará como principal en esta demo."
-                />
+              {!isSupabase && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[13px] font-semibold text-ink-500">
+                    Especialidades
+                  </label>
+                  <Input
+                    value={specialtyQuery}
+                    onChange={(e) => {
+                      setSpecialtyQuery(e.target.value);
+                      if (specialtyError) {
+                        setSpecialtyError(false);
+                      }
+                    }}
+                    placeholder="Busca por servicio o categoría"
+                    note="Puedes seleccionar varias especialidades. La primera quedará como principal en esta demo."
+                  />
 
-                {selectedServices.length > 0 && (
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {selectedServices.map((service, index) => (
-                      <div
-                        key={service.id}
-                        className="inline-flex max-w-full items-center gap-2 rounded-full bg-coral-50 px-3 py-1.5 text-[12px] font-semibold text-coral-700"
-                      >
-                        <span className="truncate">
-                          {service.name}
-                          {index === 0 ? " · principal" : ""}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => removeService(service.id)}
-                          className="rounded-full bg-coral-100 px-1.5 py-0.5 text-[10px] font-bold text-coral-700"
-                          aria-label={`Quitar ${service.name}`}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="rounded-2xl border border-sand-200 bg-white overflow-hidden">
-                  {suggestedServices.length > 0 ? (
-                    <div className="divide-y divide-sand-200/70">
-                      {suggestedServices.map((service) => (
-                        <button
+                  {selectedServices.length > 0 && (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {selectedServices.map((service, index) => (
+                        <div
                           key={service.id}
-                          type="button"
-                          onClick={() => addService(service)}
-                          className="w-full px-4 py-3 text-left transition active:bg-sand-50"
+                          className="inline-flex max-w-full items-center gap-2 rounded-full bg-coral-50 px-3 py-1.5 text-[12px] font-semibold text-coral-700"
                         >
-                          <div className="font-semibold text-[13px] text-ink-800">
+                          <span className="truncate">
                             {service.name}
-                          </div>
-                          <div className="text-[11px] text-ink-400">
-                            {service.categoryName}
-                          </div>
-                        </button>
+                            {index === 0 ? " · principal" : ""}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeService(service.id)}
+                            className="rounded-full bg-coral-100 px-1.5 py-0.5 text-[10px] font-bold text-coral-700"
+                            aria-label={`Quitar ${service.name}`}
+                          >
+                            ×
+                          </button>
+                        </div>
                       ))}
                     </div>
-                  ) : specialtyQuery.trim() ? (
-                    <div className="px-4 py-3 text-[12px] leading-snug">
-                      <div className="font-semibold text-ink-700">
-                        No encontramos esa especialidad.
+                  )}
+
+                  <div className="rounded-2xl border border-sand-200 bg-white overflow-hidden">
+                    {suggestedServices.length > 0 ? (
+                      <div className="divide-y divide-sand-200/70">
+                        {suggestedServices.map((service) => (
+                          <button
+                            key={service.id}
+                            type="button"
+                            onClick={() => addService(service)}
+                            className="w-full px-4 py-3 text-left transition active:bg-sand-50"
+                          >
+                            <div className="font-semibold text-[13px] text-ink-800">
+                              {service.name}
+                            </div>
+                            <div className="text-[11px] text-ink-400">
+                              {service.categoryName}
+                            </div>
+                          </button>
+                        ))}
                       </div>
-                      <div className="text-ink-400 mt-1">
-                        Pronto podrás solicitar que admin la revise.
+                    ) : specialtyQuery.trim() ? (
+                      <div className="px-4 py-3 text-[12px] leading-snug">
+                        <div className="font-semibold text-ink-700">
+                          No encontramos esa especialidad.
+                        </div>
+                        <div className="text-ink-400 mt-1">
+                          Pronto podrás solicitar que admin la revise.
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="px-4 py-3 text-[12px] text-ink-400 leading-snug">
-                      Empieza a escribir para filtrar servicios o elige una sugerencia.
-                    </div>
+                    ) : (
+                      <div className="px-4 py-3 text-[12px] text-ink-400 leading-snug">
+                        Empieza a escribir para filtrar servicios o elige una sugerencia.
+                      </div>
+                    )}
+                  </div>
+
+                  {specialtyError && (
+                    <span className="text-[11px] text-rose-600 font-medium">
+                      Selecciona al menos una especialidad para continuar como profesional.
+                    </span>
                   )}
                 </div>
-
-                {specialtyError && (
-                  <span className="text-[11px] text-rose-600 font-medium">
-                    Selecciona al menos una especialidad para continuar como profesional.
-                  </span>
-                )}
-              </div>
+              )}
+              {isSupabase && (
+                <div className="rounded-2xl bg-sand-50 border border-sand-200 px-3.5 py-3 text-[12px] text-ink-500 leading-snug">
+                  Podrás añadir especialidades cuando conectemos el catálogo real.
+                </div>
+              )}
               <Select
                 label="Ciudad base de trabajo"
                 value={form.zone}
@@ -325,21 +392,12 @@ function RegisterInner() {
             .
           </p>
           <Button full onClick={submit} disabled={loading}>
-            {isSupabase
-              ? "Registro real pendiente"
-              : loading
+            {loading
               ? "Creando cuenta…"
               : isPro
               ? "Registrarme como profesional"
               : "Crear cuenta gratis"}
           </Button>
-          {isSupabase && (
-            <div className="rounded-2xl border border-amber-100 bg-amber-50 px-3 py-3 text-[12px] text-amber-800 leading-snug">
-              El acceso real con Supabase esta en preparacion para login, pero el alta de nuevas
-              cuentas sigue bloqueada hasta activar el bootstrap de perfil con permisos y flujo de
-              backend definitivos.
-            </div>
-          )}
           {error && isSupabase && (
             <div className="rounded-2xl border border-rose-100 bg-rose-50 px-3 py-3 text-[12px] text-rose-700">
               {error}

@@ -167,15 +167,38 @@ export async function createOwnProfile(
     throw new Error(getProfilesDisabledMessage("createOwnProfile()"));
   }
 
-  void input;
-  void options;
+  const fullName = input.fullName.trim();
+  if (!fullName) {
+    throw new Error("createOwnProfile() requires a non-empty fullName.");
+  }
 
-  // Registration bootstrap is intentionally blocked for now. Enabling it safely
-  // requires versioned SQL grants and/or a dedicated RPC so profile creation,
-  // professional creation, and service mapping happen consistently.
-  throw new Error(
-    "createOwnProfile() is not enabled yet. It requires future SQL grants/RPC bootstrap before real registration can be opened.",
+  const { error: rpcError } = await getBrowserSupabaseClient().rpc(
+    "bootstrap_own_profile",
+    {
+      p_role: input.role,
+      p_full_name: fullName,
+      p_avatar_initials: input.avatarInitials ?? null,
+      p_location_label: input.locationLabel ?? null,
+      p_phone: input.phone ?? null,
+      p_professional_slug: null,
+      p_specialty_label: input.professionalProfile?.specialtyLabel ?? null,
+      p_zone: input.professionalProfile?.zone ?? null,
+      p_radius_km: null,
+      p_bio: null,
+      p_service_ids: input.professionalProfile?.serviceIds ?? [],
+    },
   );
+
+  if (rpcError) {
+    throw rpcError;
+  }
+
+  const profile = await getCurrentProfile(options);
+  if (!profile) {
+    throw new Error("Profile bootstrap succeeded but subsequent read failed.");
+  }
+
+  return profile;
 }
 
 export async function getCurrentProfessionalStatus(
