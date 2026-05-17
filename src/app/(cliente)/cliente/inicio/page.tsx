@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StatusBar } from "@/components/layout/status-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
 import { HeaderActionSheet } from "@/components/layout/header-action-sheet";
@@ -17,6 +17,8 @@ import {
   getEffectiveNotifications,
   useSession,
 } from "@/lib/store";
+import { getCurrentProfile, type ApiProfile } from "@/lib/api/profiles";
+import { isSupabaseMode } from "@/lib/supabase/config";
 import {
   currentClient,
   professionals,
@@ -44,7 +46,9 @@ const CLIENT_PENDING_ACTION_STATUSES = [
 
 export default function HomeClientePage() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [realProfile, setRealProfile] = useState<ApiProfile | null>(null);
   const session = useSession();
+  const isSupabase = isSupabaseMode();
   const currentClientId = getCurrentClientId(session);
   const notifications = useMemo(() => getEffectiveNotifications(session), [session]);
   const effectiveJobs = useMemo(() => getEffectiveJobs(session), [session]);
@@ -84,6 +88,39 @@ export default function HomeClientePage() {
     .slice(0, 4);
   const unread = notifications.filter((n) => n.unread).length;
   const featured = categoryGroups[0].categories.slice(0, 8);
+  const headerInitials =
+    isSupabase && realProfile
+      ? realProfile.avatarInitials ?? realProfile.fullName.trim().charAt(0).toUpperCase()
+      : currentClient.avatar;
+  const headerName =
+    isSupabase && realProfile
+      ? realProfile.fullName.trim().split(/\s+/)[0] ?? currentClient.name.split(" ")[0]
+      : currentClient.name.split(" ")[0];
+
+  useEffect(() => {
+    if (!isSupabase) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadProfile = async () => {
+      try {
+        const profile = await getCurrentProfile();
+        if (!cancelled && profile) {
+          setRealProfile(profile);
+        }
+      } catch {
+        // Keep the current mock fallback if the real profile cannot be loaded.
+      }
+    };
+
+    void loadProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isSupabase]);
 
   return (
     <div className="flex-1 flex flex-col" data-testid="client-home-page">
@@ -92,12 +129,10 @@ export default function HomeClientePage() {
       <div className="px-5 pt-2 pb-4 bg-white border-b border-sand-200/70">
         <div className="flex items-center justify-between">
           <Link href="/cliente/perfil" className="flex items-center gap-3">
-            <Avatar initials={currentClient.avatar} size={42} />
+            <Avatar initials={headerInitials} size={42} />
             <div>
               <div className="text-[12px] text-ink-400">Hola,</div>
-              <div className="font-bold text-[15px] text-ink-900">
-                {currentClient.name.split(" ")[0]}
-              </div>
+              <div className="font-bold text-[15px] text-ink-900">{headerName}</div>
             </div>
           </Link>
           <HeaderIconButton
