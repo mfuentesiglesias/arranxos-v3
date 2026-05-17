@@ -186,7 +186,7 @@ begin
 
   select jr.job_id
   into v_request_job_id
-  from public.job_requests
+  from public.job_requests as jr
   where id = p_request_id;
 
   if not found then
