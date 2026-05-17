@@ -9,6 +9,7 @@ import { ScreenBody } from "@/components/layout/screen-body";
 import { Icon } from "@/components/ui/icon";
 import { getSeedCatalogServices } from "@/lib/catalog";
 import { useSession } from "@/lib/store";
+import { isSupabaseMode } from "@/lib/supabase/config";
 import type { CatalogService } from "@/lib/types";
 
 const catalogServices = getSeedCatalogServices();
@@ -25,6 +26,7 @@ function RegisterInner() {
   const params = useSearchParams();
   const setRole = useSession((s) => s.setRole);
   const setProStatus = useSession((s) => s.setProStatus);
+  const isSupabase = isSupabaseMode();
   const [isPro, setIsPro] = useState(params?.get("role") === "professional");
   const [form, setForm] = useState({
     name: "",
@@ -41,6 +43,7 @@ function RegisterInner() {
   const [selectedServices, setSelectedServices] = useState<CatalogService[]>([]);
   const [specialtyError, setSpecialtyError] = useState(false);
   const [legalPanel, setLegalPanel] = useState<"terms" | "privacy" | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const query = normalizeSearchText(specialtyQuery.trim());
   const suggestedServices = catalogServices
@@ -87,24 +90,32 @@ function RegisterInner() {
     );
   };
 
-  const submit = () => {
+  const submit = async () => {
     if (isPro && selectedServices.length === 0) {
       setSpecialtyError(true);
       return;
     }
 
-    setLoading(true);
-    setTimeout(() => {
-      if (isPro) {
-        setRole("professional");
-        setProStatus("pending");
-        router.push("/profesional/pendiente");
-      } else {
-        setRole("client");
-        setProStatus("approved");
-        router.push("/cliente/inicio");
-      }
-    }, 700);
+    if (!isSupabase) {
+      setError(null);
+      setLoading(true);
+      setTimeout(() => {
+        if (isPro) {
+          setRole("professional");
+          setProStatus("pending");
+          router.push("/profesional/pendiente");
+        } else {
+          setRole("client");
+          setProStatus("approved");
+          router.push("/cliente/inicio");
+        }
+      }, 700);
+      return;
+    }
+
+    setError(
+      "El registro real con Supabase todavia no esta activado. Falta habilitar el bootstrap seguro de perfil antes de abrir altas reales.",
+    );
   };
 
   return (
@@ -171,9 +182,18 @@ function RegisterInner() {
               <div className="rounded-2xl bg-amber-50 border border-amber-100 px-3.5 py-3 text-[12px] text-amber-700 font-semibold flex gap-2">
                 <span>ℹ️</span>
                 <span>
-                  En producción tu cuenta pasaría a <strong>revisión</strong>. En
-                  esta demo no se revisa documentación ni se envían emails reales.
-                  Puedes usar los accesos demo para probar roles.
+                  {isSupabase ? (
+                    <>
+                      Tu cuenta profesional quedará en <strong>revisión</strong> tras el
+                      alta. Hasta aprobación no podrás operar como profesional activo.
+                    </>
+                  ) : (
+                    <>
+                      En producción tu cuenta pasaría a <strong>revisión</strong>. En
+                      esta demo no se revisa documentación ni se envían emails reales.
+                      Puedes usar los accesos demo para probar roles.
+                    </>
+                  )}
                 </span>
               </div>
               <Input
@@ -305,12 +325,26 @@ function RegisterInner() {
             .
           </p>
           <Button full onClick={submit} disabled={loading}>
-            {loading
+            {isSupabase
+              ? "Registro real pendiente"
+              : loading
               ? "Creando cuenta…"
               : isPro
               ? "Registrarme como profesional"
               : "Crear cuenta gratis"}
           </Button>
+          {isSupabase && (
+            <div className="rounded-2xl border border-amber-100 bg-amber-50 px-3 py-3 text-[12px] text-amber-800 leading-snug">
+              El acceso real con Supabase esta en preparacion para login, pero el alta de nuevas
+              cuentas sigue bloqueada hasta activar el bootstrap de perfil con permisos y flujo de
+              backend definitivos.
+            </div>
+          )}
+          {error && isSupabase && (
+            <div className="rounded-2xl border border-rose-100 bg-rose-50 px-3 py-3 text-[12px] text-rose-700">
+              {error}
+            </div>
+          )}
         </div>
       </ScreenBody>
       {legalPanel && (
@@ -328,7 +362,13 @@ function RegisterInner() {
           >
             <div className="mb-2 flex items-center justify-between gap-2">
               <div className="font-extrabold text-[16px] text-ink-900">
-                {legalPanel === "terms" ? "Términos demo" : "Privacidad demo"}
+                {legalPanel === "terms"
+                  ? isSupabase
+                    ? "Términos informativos"
+                    : "Términos demo"
+                  : isSupabase
+                  ? "Privacidad informativa"
+                  : "Privacidad demo"}
               </div>
               <button
                 type="button"
@@ -341,12 +381,17 @@ function RegisterInner() {
               </button>
             </div>
             <div className="rounded-2xl bg-sand-50 px-3 py-2.5 text-[11.5px] text-ink-500 leading-snug">
-              Este contenido es informativo para la demo de Arranxos y no
-              sustituye documentación legal definitiva.
+              {isSupabase
+                ? "Este contenido es informativo y no sustituye documentación legal definitiva."
+                : "Este contenido es informativo para la demo de Arranxos y no sustituye documentación legal definitiva."}
             </div>
             <div className="mt-3 text-[12px] text-ink-600 leading-snug">
               {legalPanel === "terms"
-                ? "Uso demo: registro y flujos simulados sin pagos reales. En producción se publicarán condiciones legales completas, límites de responsabilidad y reglas operativas."
+                ? isSupabase
+                  ? "Registro informativo: el alta usa autenticación y perfil real. En producción se publicarán condiciones legales completas, límites de responsabilidad y reglas operativas."
+                  : "Uso demo: registro y flujos simulados sin pagos reales. En producción se publicarán condiciones legales completas, límites de responsabilidad y reglas operativas."
+                : isSupabase
+                ? "Privacidad: el alta usa autenticación y perfil real sobre Supabase. En producción aplicará una política legal completa."
                 : "Privacidad demo: no se solicitan datos de pago reales en este entorno y la información se guarda localmente en el navegador para pruebas. En producción aplicará una política legal completa."}
             </div>
           </div>

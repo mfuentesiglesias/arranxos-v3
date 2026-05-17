@@ -9,24 +9,74 @@ import { Input } from "@/components/ui/input";
 import { Divider } from "@/components/ui/divider";
 import { Icon } from "@/components/ui/icon";
 import { ScreenBody } from "@/components/layout/screen-body";
+import { signInWithPassword } from "@/lib/api/auth";
+import { getCurrentProfile } from "@/lib/api/profiles";
 import { clearPersistedDemoSession } from "@/lib/demo-session";
 import { useSession } from "@/lib/store";
+import { getDataMode, isSupabaseMode } from "@/lib/supabase/config";
 
 export default function LoginPage() {
   const router = useRouter();
   const enterDemoAccess = useSession((s) => s.enterDemoAccess);
+  const isSupabase = isSupabaseMode();
   const [email, setEmail] = useState("antia.bouzas@gmail.com");
   const [pass, setPass] = useState("········");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showRecoveryDemo, setShowRecoveryDemo] = useState(false);
 
-  const doLogin = () => {
+  const doLogin = async () => {
+    if (!isSupabase) {
+      setError(null);
+      setLoading(true);
+      setTimeout(() => {
+        enterDemoAccess("client");
+        router.push("/cliente/inicio");
+      }, 700);
+      return;
+    }
+
+    setError(null);
     setLoading(true);
-    setTimeout(() => {
-      enterDemoAccess("client");
+
+    try {
+      await signInWithPassword({
+        email: email.trim(),
+        password: pass,
+      });
+
+      const profile = await getCurrentProfile();
+      if (!profile) {
+        throw new Error("No se encontró tu perfil en Arranxos.");
+      }
+
+      if (profile.role === "admin") {
+        router.push("/admin");
+        return;
+      }
+
+      if (profile.role === "professional") {
+        if (profile.professionalStatus === "approved") {
+          router.push("/profesional/inicio");
+          return;
+        }
+
+        if (profile.professionalStatus === "blocked") {
+          router.push("/profesional/bloqueado");
+          return;
+        }
+
+        router.push("/profesional/pendiente");
+        return;
+      }
+
       router.push("/cliente/inicio");
-    }, 700);
+    } catch (caughtError) {
+      const message = caughtError instanceof Error ? caughtError.message : "No se pudo iniciar sesión.";
+      setError(message);
+      setLoading(false);
+    }
   };
 
   const demoAccesses = [
@@ -96,122 +146,138 @@ export default function LoginPage() {
               placeholder="Tu contraseña"
             />
           </div>
-          <button
-            type="button"
-            className="text-[13px] text-coral-600 font-semibold text-left mb-3"
-            onClick={() => setShowRecoveryDemo((current) => !current)}
-            data-testid="forgot-password-trigger"
-          >
-            ¿Olvidaste la contraseña?
-          </button>
-          {showRecoveryDemo && (
-            <div
-              className="mb-5 w-full rounded-2xl border border-sand-200 bg-sand-50 px-3 py-3"
-              data-testid="forgot-password-demo-panel"
-            >
-              <div className="text-[12.5px] font-bold text-ink-700">Recuperación demo</div>
-              <div className="mt-1 text-[11.5px] text-ink-500 leading-snug">
-                En producción se enviaría un email de recuperación.
-              </div>
-              <div className="mt-1 text-[11.5px] text-ink-500 leading-snug">
-                En esta demo no se envían emails reales.
-              </div>
-              <div className="mt-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setShowRecoveryDemo(false)}
-                  testId="forgot-password-demo-close"
-                >
-                  Cerrar
-                </Button>
-              </div>
-            </div>
-          )}
-          <Button full onClick={doLogin} disabled={loading}>
-            {loading ? "Entrando…" : "Iniciar sesión"}
-          </Button>
-          <div className="mt-5">
-            <Divider label="o accede como demo" />
-            <div className="grid grid-cols-2 gap-2 mt-3">
-              {demoAccesses.map((demo) => (
-                <button
-                  key={demo.key}
-                  type="button"
-                  data-testid={
-                    demo.key === "client"
-                      ? "demo-client"
-                      : demo.key === "professional_pending"
-                      ? "demo-pro-pending"
-                      : demo.key === "professional_approved"
-                      ? "demo-pro-approved"
-                      : "demo-admin"
-                  }
-                  onClick={() => {
-                    enterDemoAccess(demo.key);
-
-                    if (demo.key === "admin") {
-                      window.location.assign(demo.target);
-                      return;
-                    }
-
-                    router.push(demo.target);
-                  }}
-                  className="rounded-2xl border-[1.5px] border-sand-200 bg-white px-3 py-3 text-left active:scale-[0.98]"
-                >
-                  <div className="text-[16px] mb-1">{demo.icon}</div>
-                  <div className="text-[12.5px] font-bold text-ink-700">{demo.label}</div>
-                  <div className="text-[11px] text-ink-400 leading-snug mt-0.5">
-                    {demo.description}
-                  </div>
-                </button>
-              ))}
-            </div>
-            <div className="mt-3 flex flex-col items-center gap-2">
+          {!isSupabase && (
+            <>
               <button
                 type="button"
-                data-testid="demo-reset-button"
-                onClick={() => setShowResetConfirm((current) => !current)}
-                className="text-[12px] font-semibold text-ink-400 underline-offset-2 hover:text-ink-600 hover:underline"
+                className="text-[13px] text-coral-600 font-semibold text-left mb-3"
+                onClick={() => setShowRecoveryDemo((current) => !current)}
+                data-testid="forgot-password-trigger"
               >
-                Reset demo
+                ¿Olvidaste la contraseña?
               </button>
-              {showResetConfirm && (
-                <div className="w-full rounded-2xl border border-sand-200 bg-sand-50 px-3 py-3 text-left">
-                  <div className="text-[12px] font-semibold text-ink-700">
-                    Limpia la sesion demo persistida y vuelve al estado inicial.
+              {showRecoveryDemo && (
+                <div
+                  className="mb-5 w-full rounded-2xl border border-sand-200 bg-sand-50 px-3 py-3"
+                  data-testid="forgot-password-demo-panel"
+                >
+                  <div className="text-[12.5px] font-bold text-ink-700">Recuperación demo</div>
+                  <div className="mt-1 text-[11.5px] text-ink-500 leading-snug">
+                    En producción se enviaría un email de recuperación.
                   </div>
-                  <div className="mt-2 flex gap-2">
+                  <div className="mt-1 text-[11.5px] text-ink-500 leading-snug">
+                    En esta demo no se envían emails reales.
+                  </div>
+                  <div className="mt-2">
                     <Button
-                      full
                       size="sm"
                       variant="outline"
-                      onClick={() => setShowResetConfirm(false)}
+                      onClick={() => setShowRecoveryDemo(false)}
+                      testId="forgot-password-demo-close"
                     >
-                      Cancelar
-                    </Button>
-                    <Button
-                      full
-                      size="sm"
-                      testId="demo-reset-confirm"
-                      onClick={() => {
-                        clearPersistedDemoSession();
-                        window.location.href = "/welcome";
-                      }}
-                    >
-                      Confirmar reset
+                      Cerrar
                     </Button>
                   </div>
                 </div>
               )}
+            </>
+          )}
+          <Button full onClick={doLogin} disabled={loading}>
+            {loading ? "Entrando…" : "Iniciar sesión"}
+          </Button>
+          {error && isSupabase && (
+            <div className="mt-3 rounded-2xl border border-rose-100 bg-rose-50 px-3 py-3 text-[12px] text-rose-700">
+              {error}
             </div>
-          </div>
+          )}
+          {!isSupabase && (
+            <div className="mt-5">
+              <Divider label="o accede como demo" />
+              <div className="grid grid-cols-2 gap-2 mt-3">
+                {demoAccesses.map((demo) => (
+                  <button
+                    key={demo.key}
+                    type="button"
+                    data-testid={
+                      demo.key === "client"
+                        ? "demo-client"
+                        : demo.key === "professional_pending"
+                        ? "demo-pro-pending"
+                        : demo.key === "professional_approved"
+                        ? "demo-pro-approved"
+                        : "demo-admin"
+                    }
+                    onClick={() => {
+                      enterDemoAccess(demo.key);
+
+                      if (demo.key === "admin") {
+                        window.location.assign(demo.target);
+                        return;
+                      }
+
+                      router.push(demo.target);
+                    }}
+                    className="rounded-2xl border-[1.5px] border-sand-200 bg-white px-3 py-3 text-left active:scale-[0.98]"
+                  >
+                    <div className="text-[16px] mb-1">{demo.icon}</div>
+                    <div className="text-[12.5px] font-bold text-ink-700">{demo.label}</div>
+                    <div className="text-[11px] text-ink-400 leading-snug mt-0.5">
+                      {demo.description}
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <div className="mt-3 flex flex-col items-center gap-2">
+                <button
+                  type="button"
+                  data-testid="demo-reset-button"
+                  onClick={() => setShowResetConfirm((current) => !current)}
+                  className="text-[12px] font-semibold text-ink-400 underline-offset-2 hover:text-ink-600 hover:underline"
+                >
+                  Reset demo
+                </button>
+                {showResetConfirm && (
+                  <div className="w-full rounded-2xl border border-sand-200 bg-sand-50 px-3 py-3 text-left">
+                    <div className="text-[12px] font-semibold text-ink-700">
+                      Limpia la sesion demo persistida y vuelve al estado inicial.
+                    </div>
+                    <div className="mt-2 flex gap-2">
+                      <Button
+                        full
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setShowResetConfirm(false)}
+                      >
+                        Cancelar
+                      </Button>
+                      <Button
+                        full
+                        size="sm"
+                        testId="demo-reset-confirm"
+                        onClick={() => {
+                          clearPersistedDemoSession();
+                          window.location.href = "/welcome";
+                        }}
+                      >
+                        Confirmar reset
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           <div className="mt-auto pt-5 text-center text-[13px] text-ink-400">
             ¿No tienes cuenta?{" "}
             <Link href="/register?role=client" className="text-coral-600 font-bold">
               Regístrate gratis
             </Link>
           </div>
+          {isSupabase && (
+            <div className="mt-3 text-center text-[11px] text-ink-400">
+              Modo de datos activo: {getDataMode()}.
+            </div>
+          )}
         </div>
       </ScreenBody>
     </div>

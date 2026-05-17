@@ -8,10 +8,12 @@ import {
 } from "@/lib/supabase/server";
 
 export type ApiProfileRole = "client" | "professional" | "admin";
+export type ApiProfessionalStatus = "pending" | "approved" | "blocked";
 
 export interface ApiProfile {
   id: string;
   role: ApiProfileRole;
+  professionalStatus: ApiProfessionalStatus | null;
   fullName: string;
   avatarInitials: string | null;
   locationLabel: string | null;
@@ -26,6 +28,12 @@ export interface CreateOwnProfileInput {
   avatarInitials?: string | null;
   locationLabel?: string | null;
   phone?: string | null;
+  professionalProfile?: {
+    specialtyLabel?: string | null;
+    zone?: string | null;
+    serviceIds?: string[];
+    primaryServiceId?: string | null;
+  };
 }
 
 export interface ProfileRequestOptions extends ServerSupabaseClientOptions {}
@@ -41,6 +49,10 @@ interface ProfileRow {
   updated_at: string;
 }
 
+interface ProfessionalRow {
+  status: ApiProfessionalStatus;
+}
+
 function getProfilesDisabledMessage(feature: string): string {
   return `${feature} is unavailable while NEXT_PUBLIC_DATA_MODE=${getDataMode()}.`;
 }
@@ -49,6 +61,7 @@ function mapProfileRow(row: ProfileRow): ApiProfile {
   return {
     id: row.id,
     role: row.role,
+    professionalStatus: null,
     fullName: row.full_name,
     avatarInitials: row.avatar_initials,
     locationLabel: row.location_label,
@@ -56,6 +69,32 @@ function mapProfileRow(row: ProfileRow): ApiProfile {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+async function getProfessionalStatus(
+  profileId: string,
+  options: ProfileRequestOptions = {},
+): Promise<ApiProfessionalStatus | null> {
+  if (!isSupabaseMode()) {
+    return null;
+  }
+
+  const client =
+    typeof window !== "undefined" && !options.accessToken
+      ? getBrowserSupabaseClient()
+      : createServerSupabaseClient(options);
+
+  const { data, error } = await client
+    .from("professionals")
+    .select("status")
+    .eq("profile_id", profileId)
+    .maybeSingle<ProfessionalRow>();
+
+  if (error && !isNoRowsError(error)) {
+    throw error;
+  }
+
+  return data?.status ?? null;
 }
 
 function isNoRowsError(error: PostgrestError | null): boolean {
@@ -105,7 +144,19 @@ export async function getCurrentProfile(
     throw error;
   }
 
-  return data ? mapProfileRow(data) : null;
+  if (!data) {
+    return null;
+  }
+
+  const profile = mapProfileRow(data);
+  if (profile.role !== "professional") {
+    return profile;
+  }
+
+  return {
+    ...profile,
+    professionalStatus: await getProfessionalStatus(context.user.id, options),
+  };
 }
 
 export async function createOwnProfile(
@@ -116,32 +167,20 @@ export async function createOwnProfile(
     throw new Error(getProfilesDisabledMessage("createOwnProfile()"));
   }
 
-  const fullName = input.fullName.trim();
-  if (!fullName) {
-    throw new Error("createOwnProfile() requires a non-empty fullName.");
-  }
+  void input;
+  void options;
 
-  const context = await resolveProfileContext(options);
-  if (!context) {
-    throw new Error("Authentication required to create a profile.");
-  }
+  // Registration bootstrap is intentionally blocked for now. Enabling it safely
+  // requires versioned SQL grants and/or a dedicated RPC so profile creation,
+  // professional creation, and service mapping happen consistently.
+  throw new Error(
+    "createOwnProfile() is not enabled yet. It requires future SQL grants/RPC bootstrap before real registration can be opened.",
+  );
+}
 
-  const { data, error } = await context.client
-    .from("profiles")
-    .insert({
-      id: context.user.id,
-      role: input.role,
-      full_name: fullName,
-      avatar_initials: input.avatarInitials ?? null,
-      location_label: input.locationLabel ?? null,
-      phone: input.phone ?? null,
-    })
-    .select("id, role, full_name, avatar_initials, location_label, phone, created_at, updated_at")
-    .single<ProfileRow>();
-
-  if (error) {
-    throw error;
-  }
-
-  return mapProfileRow(data);
+export async function getCurrentProfessionalStatus(
+  options: ProfileRequestOptions = {},
+): Promise<ApiProfessionalStatus | null> {
+  const profile = await getCurrentProfile(options);
+  return profile?.role === "professional" ? profile.professionalStatus : null;
 }

@@ -24,6 +24,11 @@ export interface SignInWithPasswordInput {
   password: string;
 }
 
+export interface SignUpWithPasswordInput {
+  email: string;
+  password: string;
+}
+
 export interface AuthRequestOptions extends ServerSupabaseClientOptions {}
 
 function mapAuthUser(user: User): ApiAuthUser {
@@ -117,6 +122,36 @@ export async function signInWithPassword(
 
   if (!data.session) {
     throw new Error("Supabase sign-in did not return a session.");
+  }
+
+  return mapAuthSession(data.session);
+}
+
+export async function signUpWithPassword(
+  input: SignUpWithPasswordInput,
+): Promise<ApiAuthSession> {
+  if (!isSupabaseMode()) {
+    throw new Error(getAuthDisabledMessage("signUpWithPassword()"));
+  }
+
+  const client =
+    typeof window !== "undefined"
+      ? getBrowserSupabaseClient()
+      : createServerSupabaseClient();
+
+  const { data, error } = await client.auth.signUp({
+    email: input.email,
+    password: input.password,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data.session) {
+    throw new Error(
+      "Supabase sign-up did not return a session. Check whether email confirmation is enabled.",
+    );
   }
 
   return mapAuthSession(data.session);
