@@ -8,6 +8,11 @@ import { JobCard } from "@/components/jobs/job-card";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { MapView } from "@/components/map/map-view";
+import {
+  getPublishedJobsForProfessional,
+  type ApiProfessionalPublishedJob,
+} from "@/lib/api/jobs";
+import { getCurrentProfile } from "@/lib/api/profiles";
 import { professionals } from "@/lib/data";
 import {
   buildEffectiveProfessionalForCatalog,
@@ -24,6 +29,7 @@ import {
   getProfessionalCatalogProfile,
   useSession,
 } from "@/lib/store";
+import { isSupabaseMode } from "@/lib/supabase/config";
 import type { Job } from "@/lib/types";
 
 const KM_OPTIONS = [5, 10, 25, 50, 100] as const;
@@ -47,6 +53,7 @@ type DistanceClassification = {
 function Inner() {
   const params = useSearchParams();
   const myOnly = params?.get("mine") === "1";
+  const isSupabase = isSupabaseMode();
   const session = useSession();
   const currentProfessionalId = getCurrentProfessionalId(session);
   const approvedCatalogServices = getEffectiveApprovedCatalogServices(session);
@@ -89,6 +96,10 @@ function Inner() {
   const [draftMaxKm, setDraftMaxKm] = useState<number>(defaultRadiusKm);
   const [selectedMapJobId, setSelectedMapJobId] = useState<string | null>(null);
   const [highlightedJobId, setHighlightedJobId] = useState<string | null>(null);
+  const [realJobs, setRealJobs] = useState<ApiProfessionalPublishedJob[]>([]);
+  const [realJobsLoading, setRealJobsLoading] = useState(false);
+  const [realJobsError, setRealJobsError] = useState<string | null>(null);
+  const [isRealProfessionalApproved, setIsRealProfessionalApproved] = useState(false);
   const jobRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -99,6 +110,54 @@ function Inner() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!isSupabase) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadRealJobs = async () => {
+      setRealJobsLoading(true);
+      setRealJobsError(null);
+
+      try {
+        const profile = await getCurrentProfile();
+
+        if (!profile || profile.role !== "professional" || profile.professionalStatus !== "approved") {
+          if (!cancelled) {
+            setIsRealProfessionalApproved(false);
+            setRealJobs([]);
+            setRealJobsLoading(false);
+          }
+          return;
+        }
+
+        const publishedJobs = await getPublishedJobsForProfessional();
+
+        if (!cancelled) {
+          setIsRealProfessionalApproved(true);
+          setRealJobs(publishedJobs);
+          setRealJobsLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setRealJobs([]);
+          setRealJobsError(
+            "No pudimos cargar los trabajos reales ahora mismo. Vuelve a intentarlo más tarde.",
+          );
+          setRealJobsLoading(false);
+        }
+      }
+    };
+
+    void loadRealJobs();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isSupabase]);
 
   const openFilters = () => {
     setDraftOpportunityFilter(opportunityFilter);
@@ -232,6 +291,107 @@ function Inner() {
       setHighlightedJobId((current) => (current === jobId ? null : current));
     }, 2600);
   };
+
+  if (isSupabase) {
+    return (
+      <div className="flex-1 flex flex-col">
+        <StatusBar />
+        <div className="px-5 pt-2 pb-3 bg-white border-b border-sand-200/70">
+          <div className="flex items-center justify-between mb-3">
+            <h1 className="font-extrabold text-[20px] text-ink-900 tracking-tight">
+              Oportunidades
+            </h1>
+          </div>
+          <div className="rounded-2xl border border-sky-100 bg-sky-50 px-3.5 py-3 text-[12px] text-sky-800 leading-snug">
+            Lectura real de trabajos publicados. Solicitudes y filtros avanzados siguen sin conectar en esta vista.
+          </div>
+        </div>
+
+        <ScreenBody className="px-4 pt-4 pb-6">
+          {!isRealProfessionalApproved && !realJobsLoading && !realJobsError && (
+            <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4 text-[12px] text-amber-700 leading-snug">
+              Solo un profesional aprobado puede ver oportunidades reales.
+            </div>
+          )}
+
+          {realJobsError && (
+            <div className="rounded-2xl border border-rose-100 bg-rose-50 px-4 py-4 text-[12px] text-rose-700 leading-snug">
+              {realJobsError}
+            </div>
+          )}
+
+          {realJobsLoading && (
+            <div className="rounded-2xl border border-sand-200/70 bg-white px-4 py-6 text-[12px] text-ink-500 text-center">
+              Cargando trabajos reales…
+            </div>
+          )}
+
+          {isRealProfessionalApproved && !realJobsLoading && !realJobsError && (
+            <div className="flex flex-col gap-2.5">
+              {realJobs.length > 0 ? (
+                realJobs.map((job) => (
+                  <div
+                    key={job.id}
+                    className="rounded-2xl border border-sand-200/70 bg-white px-[18px] py-[17px]"
+                  >
+                    <div className="mb-1.5 flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1 text-[15px] font-bold leading-tight text-ink-800">
+                        {job.title}
+                      </div>
+                      <span className="rounded-full bg-sand-100 px-2.5 py-1 text-[10.5px] font-bold text-ink-500">
+                        Publicado
+                      </span>
+                    </div>
+
+                    <div className="mb-2 flex items-center gap-1.5 text-[12px] text-ink-400">
+                      <Icon name="pin" size={12} stroke={2} />
+                      <span className="truncate">{job.approxLocation ?? "Ubicación aproximada no disponible"}</span>
+                      <span className="ml-auto whitespace-nowrap text-ink-400">
+                        {formatPublishedJobDate(job.createdAt)}
+                      </span>
+                    </div>
+
+                    {(job.categoryName || job.serviceName) && (
+                      <div className="mb-2 flex flex-wrap gap-1.5">
+                        {job.categoryName && (
+                          <span className="inline-flex rounded-full bg-sand-100 px-2.5 py-1 text-[10.5px] font-bold text-ink-500">
+                            {job.categoryName}
+                          </span>
+                        )}
+                        {job.serviceName && (
+                          <span className="inline-flex rounded-full bg-teal-50 px-2.5 py-1 text-[10.5px] font-bold text-teal-700">
+                            {job.serviceName}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    <p className="mb-3 whitespace-pre-wrap text-[13px] text-ink-600 leading-relaxed">
+                      {job.description}
+                    </p>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-[13px] font-bold text-coral-600">
+                        {formatPublishedJobPrice(job.priceMin, job.priceMax)}
+                      </span>
+                      <span className="text-[11px] font-medium text-ink-400">orientativo</span>
+                      <span className="ml-auto text-[12px] text-ink-400">
+                        {job.invitedCount} invitacion{job.invitedCount === 1 ? "" : "es"}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-2xl border border-sand-200/70 bg-white px-4 py-6 text-[12px] text-ink-500 text-center leading-snug">
+                  No hay trabajos publicados reales disponibles para tu perfil ahora mismo.
+                </div>
+              )}
+            </div>
+          )}
+        </ScreenBody>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col">
@@ -709,4 +869,33 @@ function haversineDistanceKm(lat1: number, lng1: number, lat2: number, lng2: num
 
 function formatDistanceKm(distanceKm: number) {
   return distanceKm < 10 ? distanceKm.toFixed(1) : Math.round(distanceKm).toString();
+}
+
+function formatPublishedJobDate(createdAt: string) {
+  const date = new Date(createdAt);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Publicado recientemente";
+  }
+
+  return date.toLocaleDateString("es-ES", {
+    day: "2-digit",
+    month: "short",
+  });
+}
+
+function formatPublishedJobPrice(priceMin: number | null, priceMax: number | null) {
+  if (typeof priceMin === "number" && typeof priceMax === "number") {
+    return `${priceMin}€–${priceMax}€`;
+  }
+
+  if (typeof priceMin === "number") {
+    return `Desde ${priceMin}€`;
+  }
+
+  if (typeof priceMax === "number") {
+    return `Hasta ${priceMax}€`;
+  }
+
+  return "A negociar";
 }
