@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { StatusBar } from "@/components/layout/status-bar";
@@ -8,6 +8,7 @@ import { Input, Select } from "@/components/ui/input";
 import { ScreenBody } from "@/components/layout/screen-body";
 import { Icon } from "@/components/ui/icon";
 import { getSeedCatalogServices } from "@/lib/catalog";
+import { getRealCatalogServices } from "@/lib/api/catalog";
 import { useSession } from "@/lib/store";
 import { isSupabaseMode } from "@/lib/supabase/config";
 import { getCurrentSession, signUpWithPassword } from "@/lib/api/auth";
@@ -43,12 +44,47 @@ function RegisterInner() {
   const [loading, setLoading] = useState(false);
   const [specialtyQuery, setSpecialtyQuery] = useState("");
   const [selectedServices, setSelectedServices] = useState<CatalogService[]>([]);
+  const [realCatalogServices, setRealCatalogServices] = useState<CatalogService[]>([]);
   const [specialtyError, setSpecialtyError] = useState(false);
   const [legalPanel, setLegalPanel] = useState<"terms" | "privacy" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [realCatalogError, setRealCatalogError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isSupabase) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadRealServices = async () => {
+      try {
+        const services = await getRealCatalogServices();
+        if (!cancelled) {
+          setRealCatalogServices(services);
+          setRealCatalogError(null);
+        }
+      } catch {
+        if (!cancelled) {
+          setRealCatalogServices([]);
+          setRealCatalogError(
+            "No pudimos cargar el catálogo real ahora mismo. Podrás completar servicios más adelante.",
+          );
+        }
+      }
+    };
+
+    void loadRealServices();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isSupabase]);
+
+  const availableServices = isSupabase ? realCatalogServices : catalogServices;
 
   const query = normalizeSearchText(specialtyQuery.trim());
-  const suggestedServices = catalogServices
+  const suggestedServices = availableServices
     .filter(
       (service) =>
         !selectedServices.some((selected) => selected.id === service.id),
@@ -99,9 +135,9 @@ function RegisterInner() {
     }
 
     if (!isSupabase) {
-      setError(null);
-      setLoading(true);
-      setTimeout(() => {
+        setError(null);
+        setLoading(true);
+        setTimeout(() => {
         if (isPro) {
           setRole("professional");
           setProStatus("pending");
@@ -162,7 +198,10 @@ function RegisterInner() {
           locationLabel: isPro ? form.zone : null,
           phone: form.phone.trim() || null,
           professionalProfile: isPro
-            ? { zone: form.zone }
+            ? {
+                zone: form.zone,
+                serviceIds: selectedServices.map((service) => service.id),
+              }
             : undefined,
         });
 
@@ -346,8 +385,84 @@ function RegisterInner() {
                 </div>
               )}
               {isSupabase && (
-                <div className="rounded-2xl bg-sand-50 border border-sand-200 px-3.5 py-3 text-[12px] text-ink-500 leading-snug">
-                  Podrás añadir especialidades cuando conectemos el catálogo real.
+                <div className="flex flex-col gap-2.5">
+                  <div className="rounded-2xl bg-sand-50 border border-sand-200 px-3.5 py-3 text-[12px] text-ink-500 leading-snug">
+                    Selecciona servicios reales del catálogo activo. Si no eliges ninguno, podrás completar tu perfil más adelante.
+                  </div>
+                  {realCatalogError && (
+                    <div className="rounded-2xl border border-amber-100 bg-amber-50 px-3.5 py-3 text-[12px] text-amber-700 leading-snug">
+                      {realCatalogError}
+                    </div>
+                  )}
+                  {selectedServices.length > 0 && (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {selectedServices.map((service, index) => (
+                        <div
+                          key={service.id}
+                          className="inline-flex max-w-full items-center gap-2 rounded-full bg-coral-50 px-3 py-1.5 text-[12px] font-semibold text-coral-700"
+                        >
+                          <span className="truncate">
+                            {service.name}
+                            {index === 0 ? " · principal" : ""}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeService(service.id)}
+                            className="rounded-full bg-coral-100 px-1.5 py-0.5 text-[10px] font-bold text-coral-700"
+                            aria-label={`Quitar ${service.name}`}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {realCatalogServices.length > 0 ? (
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[13px] font-semibold text-ink-500">
+                        Servicios reales del catálogo
+                      </label>
+                      <Input
+                        value={specialtyQuery}
+                        onChange={(e) => setSpecialtyQuery(e.target.value)}
+                        placeholder="Busca por servicio o categoría"
+                        note="Puedes seleccionar varios servicios reales. El primero quedará como principal al crear tu perfil."
+                      />
+                      <div className="rounded-2xl border border-sand-200 bg-white overflow-hidden">
+                        {suggestedServices.length > 0 ? (
+                          <div className="divide-y divide-sand-200/70">
+                            {suggestedServices.map((service) => (
+                              <button
+                                key={service.id}
+                                type="button"
+                                onClick={() => addService(service)}
+                                className="w-full px-4 py-3 text-left transition active:bg-sand-50"
+                              >
+                                <div className="font-semibold text-[13px] text-ink-800">
+                                  {service.name}
+                                </div>
+                                <div className="text-[11px] text-ink-400">
+                                  {service.categoryName}
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        ) : specialtyQuery.trim() ? (
+                          <div className="px-4 py-3 text-[12px] text-ink-400 leading-snug">
+                            No hay servicios reales que coincidan con esa búsqueda.
+                          </div>
+                        ) : (
+                          <div className="px-4 py-3 text-[12px] text-ink-400 leading-snug">
+                            Empieza a escribir para filtrar servicios reales o elige una sugerencia.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : !realCatalogError ? (
+                    <div className="rounded-2xl border border-sand-200 bg-sand-50 px-3.5 py-3 text-[12px] text-ink-500 leading-snug">
+                      Aún no hay servicios activos en el catálogo real. Podrás completar tu perfil más adelante.
+                    </div>
+                  ) : null}
                 </div>
               )}
               <Select
