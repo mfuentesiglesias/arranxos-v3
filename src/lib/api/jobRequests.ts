@@ -10,6 +10,15 @@ export interface ApiJobRequest {
   createdAt: string;
 }
 
+export interface ApiClientJobRequest {
+  id: string;
+  jobId: string;
+  professionalId: string;
+  message: string | null;
+  status: "pending" | "accepted" | "rejected" | "closed" | "cancelled";
+  createdAt: string;
+}
+
 interface JobRequestRow {
   id: string;
   job_id: string;
@@ -58,6 +67,40 @@ function mapJobRequestRow(row: JobRequestRow): ApiJobRequest {
     message: row.message,
     createdAt: row.created_at,
   };
+}
+
+function mapClientJobRequestRow(row: JobRequestRow): ApiClientJobRequest {
+  return {
+    id: row.id,
+    jobId: row.job_id,
+    professionalId: row.professional_id,
+    message: row.message,
+    status: row.status as ApiClientJobRequest["status"],
+    createdAt: row.created_at,
+  };
+}
+
+export async function getJobRequestsForClientJob(
+  jobId: string,
+): Promise<ApiClientJobRequest[]> {
+  if (!isSupabaseMode()) {
+    return [];
+  }
+
+  const client = getBrowserSupabaseClient();
+
+  const { data, error } = await client
+    .from("job_requests")
+    .select("id, job_id, professional_id, message, status, created_at")
+    .eq("job_id", jobId)
+    .order("created_at", { ascending: false })
+    .returns<JobRequestRow[]>();
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map(mapClientJobRequestRow);
 }
 
 export async function createJobRequest(
