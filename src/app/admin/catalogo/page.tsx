@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
@@ -22,6 +22,8 @@ import {
   getEffectiveCatalogRequests,
   useSession,
 } from "@/lib/store";
+import { getRealCatalogCategories, getRealCatalogServices } from "@/lib/api/catalog";
+import { isSupabaseMode } from "@/lib/supabase/config";
 import type { CatalogCategory, CatalogService } from "@/lib/types";
 
 type SourceFilter = "all" | "seed" | "admin_approved";
@@ -30,8 +32,41 @@ export default function AdminCatalogoPage() {
   const approvedCategories = useSession(getEffectiveApprovedCatalogCategories);
   const approvedServices = useSession(getEffectiveApprovedCatalogServices);
   const catalogRequests = useSession(getEffectiveCatalogRequests);
+  const isSupabase = isSupabaseMode();
+  const [realCategories, setRealCategories] = useState<CatalogCategory[]>([]);
+  const [realServices, setRealServices] = useState<CatalogService[]>([]);
   const [query, setQuery] = useState("");
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
+
+  useEffect(() => {
+    if (!isSupabase) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const [cats, svcs] = await Promise.all([
+          getRealCatalogCategories(),
+          getRealCatalogServices(),
+        ]);
+
+        if (!cancelled) {
+          setRealCategories(cats);
+          setRealServices(svcs);
+        }
+      } catch {
+        // Keep empty on error — the UI will show "no results" fallback.
+      }
+    };
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isSupabase]);
 
   const seedCategories = useMemo(() => getSeedCatalogCategories(), []);
   const seedServices = useMemo(() => getSeedCatalogServices(), []);
@@ -58,8 +93,11 @@ export default function AdminCatalogoPage() {
   ).length;
   const normalizedQuery = normalizeCatalogText(query);
 
-  const groupedCategories = effectiveCategories.filter((category) => {
-    const categoryServices = getCatalogServicesByCategory(category.id, effectiveServices);
+  const displayCategories = isSupabase ? realCategories : effectiveCategories;
+  const displayServices = isSupabase ? realServices : effectiveServices;
+
+  const groupedCategories = displayCategories.filter((category) => {
+    const categoryServices = getCatalogServicesByCategory(category.id, displayServices);
     const sourceMatches =
       sourceFilter === "all" ||
       category.source === sourceFilter ||
@@ -75,17 +113,26 @@ export default function AdminCatalogoPage() {
   return (
     <div className="flex-1 flex flex-col bg-sand-50">
       <StatusBar />
-      <TopBar title="Catálogo" subtitle="Categorías y servicios efectivos" />
+      <TopBar title="Catálogo" subtitle={isSupabase ? "Categorías y servicios reales" : "Categorías y servicios efectivos"} />
       <ScreenBody className="px-4 pt-3 pb-6">
         <div data-testid="admin-catalog-page" className="flex flex-col gap-3">
         <Card className="mb-3 bg-sky-50 border-sky-100" testId="admin-catalog-summary">
           <div className="grid grid-cols-2 gap-3 text-[12px]">
-            <SummaryMetric label="Categorías efectivas" value={effectiveCategories.length} />
-            <SummaryMetric label="Servicios efectivos" value={effectiveServices.length} />
-            <SummaryMetric label="Categorías seed" value={seedCategories.length} />
-            <SummaryMetric label="Categorías admin" value={approvedCategories.length} />
-            <SummaryMetric label="Servicios seed" value={seedServices.length} />
-            <SummaryMetric label="Servicios admin" value={approvedServices.length} />
+            {isSupabase ? (
+              <>
+                <SummaryMetric label="Categorías reales" value={realCategories.length} />
+                <SummaryMetric label="Servicios reales" value={realServices.length} />
+              </>
+            ) : (
+              <>
+                <SummaryMetric label="Categorías efectivas" value={effectiveCategories.length} />
+                <SummaryMetric label="Servicios efectivos" value={effectiveServices.length} />
+                <SummaryMetric label="Categorías seed" value={seedCategories.length} />
+                <SummaryMetric label="Categorías admin" value={approvedCategories.length} />
+                <SummaryMetric label="Servicios seed" value={seedServices.length} />
+                <SummaryMetric label="Servicios admin" value={approvedServices.length} />
+              </>
+            )}
           </div>
           <Link
             href="/admin/solicitudes-catalogo"
@@ -139,7 +186,7 @@ export default function AdminCatalogoPage() {
 
         <div className="flex flex-col gap-2">
           {groupedCategories.map((category) => {
-            const services = getCatalogServicesByCategory(category.id, effectiveServices).filter(
+            const services = getCatalogServicesByCategory(category.id, displayServices).filter(
               (service) =>
                 sourceFilter === "all" || service.source === sourceFilter || category.source === sourceFilter,
             );
