@@ -379,6 +379,12 @@ function Inner() {
                         {job.invitedCount} invitacion{job.invitedCount === 1 ? "" : "es"}
                       </span>
                     </div>
+
+                    <div className="mt-3 pt-3 border-t border-sand-200/70">
+                      <Button href={`/profesional/trabajos/${job.id}`} variant="outline" size="sm">
+                        Ver detalle
+                      </Button>
+                    </div>
                   </div>
                 ))
               ) : (

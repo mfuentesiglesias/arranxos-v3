@@ -40,6 +40,18 @@ interface JobRow {
   created_at: string;
 }
 
+async function getCatalogNameMaps() {
+  const [categories, services] = await Promise.all([
+    getRealCatalogCategories(),
+    getRealCatalogServices(),
+  ]);
+
+  return {
+    categoryNameById: new Map(categories.map((category) => [category.id, category.name])),
+    serviceNameById: new Map(services.map((service) => [service.id, service.name])),
+  };
+}
+
 function mapJobRowToDomain(
   row: JobRow,
   categoryNameById: Map<string, string>,
@@ -72,14 +84,7 @@ export async function getPublishedJobsForProfessional(): Promise<ApiProfessional
   }
 
   const client = getBrowserSupabaseClient();
-
-  const [categories, services] = await Promise.all([
-    getRealCatalogCategories(),
-    getRealCatalogServices(),
-  ]);
-
-  const categoryNameById = new Map(categories.map((category) => [category.id, category.name]));
-  const serviceNameById = new Map(services.map((service) => [service.id, service.name]));
+  const { categoryNameById, serviceNameById } = await getCatalogNameMaps();
 
   const { data, error } = await client
     .from("jobs")
@@ -95,4 +100,34 @@ export async function getPublishedJobsForProfessional(): Promise<ApiProfessional
   }
 
   return (data ?? []).map((row) => mapJobRowToDomain(row, categoryNameById, serviceNameById));
+}
+
+export async function getPublishedJobForProfessional(
+  jobId: string,
+): Promise<ApiProfessionalPublishedJob | null> {
+  if (!isSupabaseMode()) {
+    return null;
+  }
+
+  const client = getBrowserSupabaseClient();
+  const { categoryNameById, serviceNameById } = await getCatalogNameMaps();
+
+  const { data, error } = await client
+    .from("jobs")
+    .select(
+      "id, client_id, category_id, service_id, title, description, status, price_min, price_max, approx_location, approx_lat, approx_lng, approx_radius_m, invited_count, created_at",
+    )
+    .eq("id", jobId)
+    .eq("status", "published")
+    .maybeSingle<JobRow>();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  return mapJobRowToDomain(data, categoryNameById, serviceNameById);
 }

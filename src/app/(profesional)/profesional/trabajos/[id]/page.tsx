@@ -8,10 +8,13 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
-import { Input } from "@/components/ui/input";
+import { Input, Textarea } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/badge";
 import { JobStatusTimeline } from "@/components/jobs/job-status-timeline";
 import { MapView } from "@/components/map/map-view";
+import { createJobRequest } from "@/lib/api/jobRequests";
+import { getPublishedJobForProfessional, type ApiProfessionalPublishedJob } from "@/lib/api/jobs";
+import { getCurrentProfile } from "@/lib/api/profiles";
 import { jobs } from "@/lib/data";
 import {
   getActiveNegotiation,
@@ -32,6 +35,7 @@ import {
   getNegotiationByJobId,
   useSession,
 } from "@/lib/store";
+import { isSupabaseMode } from "@/lib/supabase/config";
 import type { JobStatus } from "@/lib/types";
 import { formatEuro, daysBetween } from "@/lib/utils";
 
@@ -40,6 +44,7 @@ interface Props {
 }
 
 function Inner({ id }: { id: string }) {
+  const isSupabase = isSupabaseMode();
   const session = useSession();
   const currentProfessionalId = getCurrentProfessionalId(session);
   const adminConfig = useSession(getEffectiveAdminConfig);
@@ -61,6 +66,14 @@ function Inner({ id }: { id: string }) {
   const [proposalAmount, setProposalAmount] = useState(
     String(activeNegotiation?.lastAmount ?? Math.round((job.priceMin + job.priceMax) / 2)),
   );
+  const [realJob, setRealJob] = useState<ApiProfessionalPublishedJob | null>(null);
+  const [realJobLoading, setRealJobLoading] = useState(false);
+  const [realJobError, setRealJobError] = useState<string | null>(null);
+  const [isRealProfessionalApproved, setIsRealProfessionalApproved] = useState(false);
+  const [requestMessage, setRequestMessage] = useState("");
+  const [requestSending, setRequestSending] = useState(false);
+  const [requestState, setRequestState] = useState<"idle" | "sent" | "duplicate">("idle");
+  const [requestError, setRequestError] = useState<string | null>(null);
 
   const isMine = job.assignedProId === currentProfessionalId;
   const canSeeLocation = canSeeExactLocation({
@@ -113,6 +126,240 @@ function Inner({ id }: { id: string }) {
       autoReleaseCompletedJob(id);
     }
   }, [autoReleaseCompletedJob, canAutoRelease, id]);
+
+  useEffect(() => {
+    if (!isSupabase) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadRealJob = async () => {
+      setRealJobLoading(true);
+      setRealJobError(null);
+      setRequestError(null);
+      setRequestState("idle");
+
+      try {
+        const profile = await getCurrentProfile();
+
+        if (!profile) {
+          if (!cancelled) {
+            setIsRealProfessionalApproved(false);
+            setRealJob(null);
+            setRealJobLoading(false);
+            setRealJobError("Tu sesión no tiene un perfil profesional válido.");
+          }
+          return;
+        }
+
+        if (profile.role !== "professional" || profile.professionalStatus !== "approved") {
+          if (!cancelled) {
+            setIsRealProfessionalApproved(false);
+            setRealJob(null);
+            setRealJobLoading(false);
+          }
+          return;
+        }
+
+        const publishedJob = await getPublishedJobForProfessional(id);
+
+        if (!cancelled) {
+          setIsRealProfessionalApproved(true);
+          setRealJob(publishedJob);
+          setRealJobLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setIsRealProfessionalApproved(false);
+          setRealJob(null);
+          setRealJobLoading(false);
+          setRealJobError("No pudimos cargar este trabajo real ahora mismo.");
+        }
+      }
+    };
+
+    void loadRealJob();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, isSupabase]);
+
+  const sendRealRequest = async () => {
+    if (!realJob || requestSending || requestState !== "idle") {
+      return;
+    }
+
+    setRequestSending(true);
+    setRequestError(null);
+
+    try {
+      await createJobRequest(realJob.id, requestMessage);
+      setRequestState("sent");
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No pudimos enviar la solicitud. Inténtalo de nuevo.";
+
+      if (message === "Ya has solicitado este trabajo.") {
+        setRequestState("duplicate");
+      } else {
+        setRequestError(message);
+      }
+    } finally {
+      setRequestSending(false);
+    }
+  };
+
+  if (isSupabase) {
+    return (
+      <div className="flex-1 flex flex-col bg-sand-50">
+        <StatusBar />
+        <TopBar title={realJob?.title ?? "Detalle del trabajo"} subtitle="Oportunidad real" />
+
+        <ScreenBody className="px-4 pt-3 pb-6">
+          {!isRealProfessionalApproved && !realJobLoading && !realJobError && (
+            <Card className="mb-3 bg-amber-50/70 border-amber-100">
+              <div className="font-bold text-[13px] text-amber-800 mb-1">
+                Acceso restringido
+              </div>
+              <div className="text-[11.5px] text-amber-700 leading-snug">
+                Solo profesionales aprobados pueden solicitar trabajos reales.
+              </div>
+            </Card>
+          )}
+
+          {realJobError && (
+            <Card className="mb-3 bg-rose-50/70 border-rose-100">
+              <div className="font-bold text-[13px] text-rose-700 mb-1">No disponible</div>
+              <div className="text-[11.5px] text-rose-700/80 leading-snug">{realJobError}</div>
+            </Card>
+          )}
+
+          {realJobLoading && (
+            <Card className="mb-3">
+              <div className="text-[12px] text-ink-500 text-center py-4">Cargando trabajo real…</div>
+            </Card>
+          )}
+
+          {isRealProfessionalApproved && !realJobLoading && !realJobError && !realJob && (
+            <Card className="mb-3 bg-amber-50/70 border-amber-100">
+              <div className="font-bold text-[13px] text-amber-800 mb-1">Trabajo no disponible</div>
+              <div className="text-[11.5px] text-amber-700 leading-snug">
+                Este trabajo ya no está disponible para nuevas solicitudes.
+              </div>
+            </Card>
+          )}
+
+          {realJob && (
+            <>
+              <Card className="mb-3">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="font-extrabold text-[16px] text-ink-900 leading-tight">
+                    {realJob.title}
+                  </div>
+                  <StatusBadge status={"published" as JobStatus} />
+                </div>
+                <div className="text-[12px] text-ink-400 mb-3">
+                  {formatPublishedJobDate(realJob.createdAt)}
+                </div>
+                <p className="text-[13px] text-ink-600 leading-relaxed mb-3 whitespace-pre-wrap">
+                  {realJob.description}
+                </p>
+                {(realJob.categoryName || realJob.serviceName) && (
+                  <div className="mb-3 flex flex-wrap gap-1.5">
+                    {realJob.categoryName && (
+                      <span className="inline-flex rounded-full bg-sand-100 px-2.5 py-1 text-[10.5px] font-bold text-ink-500">
+                        {realJob.categoryName}
+                      </span>
+                    )}
+                    {realJob.serviceName && (
+                      <span className="inline-flex rounded-full bg-teal-50 px-2.5 py-1 text-[10.5px] font-bold text-teal-700">
+                        {realJob.serviceName}
+                      </span>
+                    )}
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2 text-[12px] text-ink-500 border-t border-sand-200/70 pt-3">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Icon name="pin" size={12} stroke={2} />
+                    {realJob.approxLocation ?? "Ubicación aproximada no disponible"}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 ml-auto text-coral-600 font-bold">
+                    <Icon name="euro" size={12} stroke={2} />
+                    {formatPublishedJobPrice(realJob.priceMin, realJob.priceMax)}
+                  </span>
+                </div>
+              </Card>
+
+              <Card className="mb-3 bg-sky-50/60 border-sky-100">
+                <div className="text-[11.5px] text-sky-800 leading-snug">
+                  Dirección exacta y chat solo tras aceptación.
+                </div>
+                <div className="mt-2 text-[11.5px] text-sky-700/80 leading-snug">
+                  El precio mostrado es orientativo. El precio final se acordará dentro de Arranxos.
+                </div>
+              </Card>
+
+              {requestState === "sent" && (
+                <Card className="mb-3 bg-teal-50 border-teal-100">
+                  <div className="font-bold text-[13px] text-teal-700 mb-1">Solicitud enviada</div>
+                  <div className="text-[11.5px] text-teal-700/80 leading-snug">
+                    El cliente podrá revisar tu solicitud en cuanto acceda al trabajo.
+                  </div>
+                </Card>
+              )}
+
+              {requestState === "duplicate" && (
+                <Card className="mb-3 bg-amber-50 border-amber-100">
+                  <div className="font-bold text-[13px] text-amber-800 mb-1">Solicitud ya registrada</div>
+                  <div className="text-[11.5px] text-amber-700 leading-snug">
+                    Ya has solicitado este trabajo.
+                  </div>
+                </Card>
+              )}
+
+              {requestError && (
+                <Card className="mb-3 bg-rose-50 border-rose-100">
+                  <div className="font-bold text-[13px] text-rose-700 mb-1">No pudimos enviar la solicitud</div>
+                  <div className="text-[11.5px] text-rose-700/80 leading-snug">{requestError}</div>
+                </Card>
+              )}
+
+              <Card className="mb-3">
+                <div className="font-bold text-[13.5px] text-ink-800 mb-2">Mensaje opcional</div>
+                <Textarea
+                  label="Mensaje para el cliente"
+                  value={requestMessage}
+                  onChange={(event) => setRequestMessage(event.target.value)}
+                  placeholder="Preséntate brevemente y explica por qué encajas para este trabajo."
+                  rows={5}
+                  disabled={requestState !== "idle" || requestSending}
+                />
+                <div className="mt-3">
+                  <Button
+                    full
+                    onClick={sendRealRequest}
+                    disabled={!realJob || requestSending || requestState !== "idle"}
+                  >
+                    {requestSending
+                      ? "Enviando…"
+                      : requestState === "sent"
+                      ? "Solicitud enviada"
+                      : requestState === "duplicate"
+                      ? "Ya solicitado"
+                      : "Enviar solicitud"}
+                  </Button>
+                </div>
+              </Card>
+            </>
+          )}
+        </ScreenBody>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col bg-sand-50">
@@ -494,4 +741,33 @@ function ProJobActions({
 export default function Page({ params }: Props) {
   const { id } = use(params);
   return <Inner id={id} />;
+}
+
+function formatPublishedJobDate(createdAt: string) {
+  const date = new Date(createdAt);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Publicado recientemente";
+  }
+
+  return date.toLocaleDateString("es-ES", {
+    day: "2-digit",
+    month: "short",
+  });
+}
+
+function formatPublishedJobPrice(priceMin: number | null, priceMax: number | null) {
+  if (typeof priceMin === "number" && typeof priceMax === "number") {
+    return `${priceMin}€–${priceMax}€`;
+  }
+
+  if (typeof priceMin === "number") {
+    return `Desde ${priceMin}€`;
+  }
+
+  if (typeof priceMax === "number") {
+    return `Hasta ${priceMax}€`;
+  }
+
+  return "A negociar";
 }
