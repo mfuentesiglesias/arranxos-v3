@@ -7,6 +7,11 @@ import { Icon } from "@/components/ui/icon";
 import { Avatar } from "@/components/ui/avatar";
 import { MessageBubble } from "@/components/chat/message-bubble";
 import { AntiLeakAlert } from "@/components/chat/anti-leak-alert";
+import {
+  getChatThread,
+  sendChatMessage as sendRealChatMessage,
+  type ApiChatThread,
+} from "@/lib/api/chat";
 import { jobs, professionals, chatMessages } from "@/lib/data";
 import {
   canAccessChat,
@@ -31,6 +36,7 @@ import {
 } from "@/lib/store";
 import type { AdminConfig, ChatMessage } from "@/lib/types";
 import { StatusBadge } from "@/components/ui/badge";
+import { isSupabaseMode } from "@/lib/supabase/config";
 import { formatEuro } from "@/lib/utils";
 
 interface Props {
@@ -43,6 +49,275 @@ function isLeakAllowed(type: ChatMessage["flagReason"] | "phone" | "email" | "ur
   if (type === "email") return adminConfig.antiLeakRules.emails;
   if (type === "url") return adminConfig.antiLeakRules.urls;
   return adminConfig.antiLeakRules.whatsapp;
+}
+
+function SupabaseInner({ jobId }: { jobId: string }) {
+  const [thread, setThread] = useState<ApiChatThread | null>(null);
+  const [loadingThread, setLoadingThread] = useState(true);
+  const [threadError, setThreadError] = useState<string | null>(null);
+  const [input, setInput] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [sendNotice, setSendNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadThread() {
+      setLoadingThread(true);
+      setThreadError(null);
+
+      try {
+        const nextThread = await getChatThread(jobId);
+
+        if (!isCancelled) {
+          setThread(nextThread);
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          setThread(null);
+          setThreadError(
+            error instanceof Error && error.message
+              ? error.message
+              : "No pudimos cargar el chat real.",
+          );
+        }
+      } finally {
+        if (!isCancelled) {
+          setLoadingThread(false);
+        }
+      }
+    }
+
+    void loadThread();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [jobId]);
+
+  const role = thread?.currentRole === "professional" ? "pro" : "client";
+  const backHref =
+    thread?.currentRole === "professional"
+      ? `/profesional/trabajos/${jobId}`
+      : thread?.currentRole === "admin"
+        ? "/admin/chats"
+        : `/cliente/trabajos/${jobId}`;
+  const canSendRealMessage =
+    thread?.status === "ready" && Boolean(thread.chat) && thread.currentRole !== "admin";
+
+  const send = async () => {
+    const chatId = thread?.chat?.id;
+    const text = input.trim();
+
+    if (!chatId || !text || sendingMessage) {
+      return;
+    }
+
+    setSendError(null);
+    setSendNotice(null);
+    setSendingMessage(true);
+
+    try {
+      const createdMessage = await sendRealChatMessage(chatId, text);
+
+      setThread((currentThread) => {
+        if (!currentThread || currentThread.status !== "ready" || !currentThread.chat) {
+          return currentThread;
+        }
+
+        return {
+          ...currentThread,
+          statusMessage: "",
+          chat: {
+            ...currentThread.chat,
+            lastMessageAt: createdMessage.timestamp,
+          },
+          messages: [...currentThread.messages, createdMessage],
+        };
+      });
+
+      setInput("");
+      setSendNotice(
+        createdMessage.flagged
+          ? "Protegimos posibles datos de contacto en este mensaje antes de guardarlo."
+          : null,
+      );
+    } catch (error) {
+      setSendError(
+        error instanceof Error && error.message
+          ? error.message
+          : "No pudimos enviar el mensaje. Inténtalo de nuevo.",
+      );
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  if (loadingThread) {
+    return (
+      <div className="flex-1 min-h-0 flex flex-col bg-sand-50">
+        <StatusBar />
+        <div className="bg-white border-b border-sand-200/70 px-4 pt-2 pb-3 flex items-center gap-3">
+          <Link
+            href={`/cliente/trabajos/${jobId}`}
+            className="w-9 h-9 rounded-full bg-sand-100 inline-flex items-center justify-center text-ink-700"
+          >
+            <Icon name="back" size={18} stroke={2.2} />
+          </Link>
+          <div className="font-bold text-[14px] text-ink-800">Cargando chat real</div>
+        </div>
+        <ScreenBody className="px-4 pt-4 pb-6">
+          <div className="rounded-2xl border border-sand-200/70 bg-white p-4 text-[13px] text-ink-600 leading-relaxed">
+            Estamos cargando el chat real de este trabajo.
+          </div>
+        </ScreenBody>
+      </div>
+    );
+  }
+
+  if (threadError) {
+    return (
+      <div className="flex-1 min-h-0 flex flex-col bg-sand-50">
+        <StatusBar />
+        <div className="bg-white border-b border-sand-200/70 px-4 pt-2 pb-3 flex items-center gap-3">
+          <Link
+            href={`/cliente/trabajos/${jobId}`}
+            className="w-9 h-9 rounded-full bg-sand-100 inline-flex items-center justify-center text-ink-700"
+          >
+            <Icon name="back" size={18} stroke={2.2} />
+          </Link>
+          <div className="font-bold text-[14px] text-ink-800">Chat no disponible</div>
+        </div>
+        <ScreenBody className="px-4 pt-4 pb-6">
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-[13px] text-rose-700 leading-relaxed">
+            {threadError}
+          </div>
+        </ScreenBody>
+      </div>
+    );
+  }
+
+  if (!thread || thread.status !== "ready") {
+    return (
+      <div className="flex-1 min-h-0 flex flex-col bg-sand-50">
+        <StatusBar />
+        <div className="bg-white border-b border-sand-200/70 px-4 pt-2 pb-3 flex items-center gap-3">
+          <Link
+            href={backHref}
+            className="w-9 h-9 rounded-full bg-sand-100 inline-flex items-center justify-center text-ink-700"
+          >
+            <Icon name="back" size={18} stroke={2.2} />
+          </Link>
+          <div className="font-bold text-[14px] text-ink-800">Chat no disponible</div>
+        </div>
+        <ScreenBody className="px-4 pt-4 pb-6">
+          <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-[13px] text-amber-700 leading-relaxed">
+            {thread?.statusMessage ?? "No tienes acceso a este chat o todavía no está disponible."}
+          </div>
+        </ScreenBody>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 min-h-0 flex flex-col bg-sand-50">
+      <StatusBar />
+      <div className="bg-white border-b border-sand-200/70 px-4 pt-2 pb-3 flex items-center gap-3">
+        <Link
+          href={backHref}
+          className="w-9 h-9 rounded-full bg-sand-100 inline-flex items-center justify-center text-ink-700"
+        >
+          <Icon name="back" size={18} stroke={2.2} />
+        </Link>
+        <Avatar initials={thread.currentRole === "professional" ? "CL" : "PA"} size={38} />
+        <div className="flex-1 min-w-0">
+          <div className="font-bold text-[14px] text-ink-800 truncate">
+            {thread.headerTitle}
+          </div>
+          <div className="text-[11px] text-ink-400 truncate">{thread.headerSubtitle}</div>
+        </div>
+        {thread.job && <StatusBadge status={thread.job.status} />}
+      </div>
+
+      <ScreenBody className="px-4 pt-4 pb-2 flex flex-col">
+        {thread.job && (
+          <Link
+            href={backHref}
+            className="rounded-2xl border border-sand-200/70 bg-white px-3 py-2.5 mb-3 flex items-center gap-3"
+          >
+            <div className="w-9 h-9 rounded-lg bg-sand-100 flex items-center justify-center">
+              <Icon name="briefcase" size={16} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-bold text-[12.5px] text-ink-800 truncate">
+                {thread.job.title}
+              </div>
+              <div className="text-[11px] text-ink-400">
+                {thread.job.priceMin !== null && thread.job.priceMax !== null
+                  ? `${formatEuro(thread.job.priceMin)}-${formatEuro(thread.job.priceMax)}`
+                  : "Rango por definir"}
+              </div>
+            </div>
+            <Icon name="forward" size={14} className="text-ink-400" />
+          </Link>
+        )}
+
+        {sendError && (
+          <div className="mb-3 rounded-2xl border border-rose-200 bg-rose-50 px-3.5 py-3 text-[12.5px] text-rose-700">
+            {sendError}
+          </div>
+        )}
+
+        {sendNotice && (
+          <div className="mb-3 rounded-2xl border border-amber-100 bg-amber-50 px-3.5 py-3 text-[12.5px] text-amber-700">
+            {sendNotice}
+          </div>
+        )}
+
+        {thread.messages.length === 0 ? (
+          <div className="rounded-2xl border border-sand-200/70 bg-white p-4 text-[13px] text-ink-600 leading-relaxed">
+            {thread.statusMessage || "Todavía no hay mensajes en este chat."}
+          </div>
+        ) : (
+          <div className="flex-1 min-h-0 flex flex-col">
+            {thread.messages.map((message) => (
+              <MessageBubble key={message.id} msg={message} selfRole={role} />
+            ))}
+          </div>
+        )}
+      </ScreenBody>
+
+      {thread.currentRole === "admin" ? (
+        <div className="app-bottom-bar-compact px-4 pt-2 pb-3 bg-white border-t border-sand-200/70 text-[12px] text-ink-500">
+          Vista de solo lectura para admin en esta fase.
+        </div>
+      ) : (
+        <div className="app-bottom-bar-compact px-3 pt-2 pb-3 bg-white border-t border-sand-200/70">
+          <div className="flex items-end gap-2">
+            <div className="flex-1 flex items-center gap-1 bg-sand-100 rounded-3xl px-3 py-2">
+              <textarea
+                rows={1}
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                placeholder="Escribe un mensaje…"
+                className="flex-1 bg-transparent outline-none text-[14px] text-ink-800 resize-none max-h-24"
+                disabled={!canSendRealMessage || sendingMessage}
+              />
+            </div>
+            <button
+              onClick={() => void send()}
+              disabled={!canSendRealMessage || !input.trim() || sendingMessage}
+              data-testid="chat-send-message"
+              className="w-10 h-10 rounded-full bg-coral-500 text-white flex items-center justify-center flex-shrink-0 disabled:opacity-40"
+            >
+              <Icon name="send" size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function Inner({ jobId }: { jobId: string }) {
@@ -416,5 +691,10 @@ function Inner({ jobId }: { jobId: string }) {
 
 export default function Page({ params }: Props) {
   const { jobId } = use(params);
+
+  if (isSupabaseMode()) {
+    return <SupabaseInner jobId={jobId} />;
+  }
+
   return <Inner jobId={jobId} />;
 }
