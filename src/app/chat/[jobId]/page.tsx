@@ -8,6 +8,13 @@ import { Avatar } from "@/components/ui/avatar";
 import { MessageBubble } from "@/components/chat/message-bubble";
 import { AntiLeakAlert } from "@/components/chat/anti-leak-alert";
 import {
+  acceptAgreementNegotiation,
+  createAgreementProposal,
+  getJobAgreementContext,
+  type ApiJobAgreementContext,
+  type ApiJobNegotiationEvent,
+} from "@/lib/api/agreements";
+import {
   getChatThread,
   sendChatMessage as sendRealChatMessage,
   type ApiChatThread,
@@ -52,15 +59,60 @@ function isLeakAllowed(type: ChatMessage["flagReason"] | "phone" | "email" | "ur
   return adminConfig.antiLeakRules.whatsapp;
 }
 
+function formatAgreementEventTime(value: string): string {
+  const parsedDate = new Date(value);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("es-ES", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(parsedDate);
+}
+
+function getAgreementEventLabel(event: ApiJobNegotiationEvent): string {
+  const actor = event.byRole === "client" ? "Cliente" : "Profesional";
+
+  if (event.eventType === "accepted") {
+    return `${actor} aceptó la oferta`;
+  }
+
+  if (event.eventType === "counteroffer") {
+    return `${actor} envió una contraoferta`;
+  }
+
+  if (event.eventType === "cancelled") {
+    return `${actor} canceló la negociación`;
+  }
+
+  return `${actor} propuso presupuesto`;
+}
+
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  pending: "Pendiente de pago",
+  protected: "Pago protegido",
+  released: "Pago liberado",
+  cancelled: "Cancelado",
+  refunded: "Reembolsado",
+};
+
 function SupabaseInner({ jobId }: { jobId: string }) {
   const [thread, setThread] = useState<ApiChatThread | null>(null);
+  const [agreementContext, setAgreementContext] = useState<ApiJobAgreementContext | null>(null);
   const [loadingThread, setLoadingThread] = useState(true);
   const [threadError, setThreadError] = useState<string | null>(null);
   const [profileRole, setProfileRole] = useState<ApiProfileRole | null>(null);
   const [input, setInput] = useState("");
+  const [proposalAmount, setProposalAmount] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [submittingProposal, setSubmittingProposal] = useState(false);
+  const [acceptingOffer, setAcceptingOffer] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sendNotice, setSendNotice] = useState<string | null>(null);
+  const [agreementActionError, setAgreementActionError] = useState<string | null>(null);
+  const [agreementActionNotice, setAgreementActionNotice] = useState<string | null>(null);
   const [supabaseReloadKey, setSupabaseReloadKey] = useState(0);
 
   useEffect(() => {
@@ -77,14 +129,19 @@ function SupabaseInner({ jobId }: { jobId: string }) {
           setProfileRole(currentProfile?.role ?? null);
         }
 
-        const nextThread = await getChatThread(jobId);
+        const [nextThread, nextAgreementContext] = await Promise.all([
+          getChatThread(jobId),
+          getJobAgreementContext(jobId),
+        ]);
 
         if (!isCancelled) {
           setThread(nextThread);
+          setAgreementContext(nextAgreementContext);
         }
       } catch (error) {
         if (!isCancelled) {
           setThread(null);
+          setAgreementContext(null);
           setThreadError(
             error instanceof Error && error.message
               ? error.message
@@ -105,6 +162,36 @@ function SupabaseInner({ jobId }: { jobId: string }) {
     };
   }, [jobId, supabaseReloadKey]);
 
+  useEffect(() => {
+    if (agreementContext?.status !== "ready") {
+      return;
+    }
+
+    if (agreementContext.negotiation?.lastAmount) {
+      setProposalAmount(String(agreementContext.negotiation.lastAmount));
+      return;
+    }
+
+    if (
+      agreementContext.job?.priceMin !== null &&
+      agreementContext.job?.priceMin !== undefined &&
+      agreementContext.job?.priceMax !== null &&
+      agreementContext.job?.priceMax !== undefined
+    ) {
+      setProposalAmount(
+        String(Math.round((agreementContext.job.priceMin + agreementContext.job.priceMax) / 2)),
+      );
+      return;
+    }
+
+    setProposalAmount("");
+  }, [
+    agreementContext?.status,
+    agreementContext?.negotiation?.lastAmount,
+    agreementContext?.job?.priceMin,
+    agreementContext?.job?.priceMax,
+  ]);
+
   const role = profileRole === "professional" ? "pro" : "client";
   const backHref =
     profileRole === "professional"
@@ -114,6 +201,39 @@ function SupabaseInner({ jobId }: { jobId: string }) {
         : `/cliente/trabajos/${jobId}`;
   const canSendRealMessage =
     thread?.status === "ready" && Boolean(thread.chat) && profileRole !== "admin";
+  const currentNegotiation = agreementContext?.status === "ready" ? agreementContext.negotiation : null;
+  const currentAgreement = agreementContext?.status === "ready" ? agreementContext.agreement : null;
+  const canProposeAgreement =
+    agreementContext?.status === "ready" &&
+    !currentAgreement &&
+    (profileRole === "client" || profileRole === "professional") &&
+    (agreementContext.job?.status === "in_progress" ||
+      agreementContext.job?.status === "agreement_pending");
+  const currentParticipantRole =
+    profileRole === "professional"
+      ? "professional"
+      : profileRole === "client"
+        ? "client"
+        : null;
+  const currentRoleAccepted =
+    currentParticipantRole === "client"
+      ? currentNegotiation?.clientAccepted
+      : currentParticipantRole === "professional"
+        ? currentNegotiation?.professionalAccepted
+        : false;
+  const canAcceptCurrentOffer = Boolean(
+    currentNegotiation &&
+      currentNegotiation.status === "active" &&
+      currentParticipantRole &&
+      currentNegotiation.proposedByRole &&
+      currentNegotiation.proposedByRole !== currentParticipantRole &&
+      !currentRoleAccepted,
+  );
+  const parsedProposalAmount = Number(proposalAmount);
+  const isProposalAmountValid =
+    Number.isFinite(parsedProposalAmount) &&
+    Number.isInteger(parsedProposalAmount) &&
+    parsedProposalAmount > 0;
 
   const send = async () => {
     const chatId = thread?.chat?.id;
@@ -160,6 +280,64 @@ function SupabaseInner({ jobId }: { jobId: string }) {
       );
     } finally {
       setSendingMessage(false);
+    }
+  };
+
+  const submitAgreementProposal = async () => {
+    const amount = Number(proposalAmount);
+
+    if (!canProposeAgreement || !Number.isFinite(amount) || amount <= 0 || submittingProposal) {
+      return;
+    }
+
+    setAgreementActionError(null);
+    setAgreementActionNotice(null);
+    setSubmittingProposal(true);
+
+    try {
+      await createAgreementProposal(jobId, amount);
+      setAgreementActionNotice(
+        currentNegotiation
+          ? "Contraoferta enviada. La negociación se ha actualizado."
+          : "Presupuesto enviado. El trabajo pasa a negociación.",
+      );
+      setSupabaseReloadKey((currentValue) => currentValue + 1);
+    } catch (error) {
+      setAgreementActionError(
+        error instanceof Error && error.message
+          ? error.message
+          : "No pudimos registrar la propuesta. Inténtalo de nuevo.",
+      );
+    } finally {
+      setSubmittingProposal(false);
+    }
+  };
+
+  const acceptCurrentOffer = async () => {
+    if (!currentNegotiation?.id || !canAcceptCurrentOffer || acceptingOffer) {
+      return;
+    }
+
+    setAgreementActionError(null);
+    setAgreementActionNotice(null);
+    setAcceptingOffer(true);
+
+    try {
+      const result = await acceptAgreementNegotiation(currentNegotiation.id);
+      setAgreementActionNotice(
+        result.agreementId
+          ? "Acuerdo alcanzado. El presupuesto final ha quedado registrado."
+          : "Tu aceptación ha quedado registrada. Falta la confirmación de la otra parte.",
+      );
+      setSupabaseReloadKey((currentValue) => currentValue + 1);
+    } catch (error) {
+      setAgreementActionError(
+        error instanceof Error && error.message
+          ? error.message
+          : "No pudimos aceptar el presupuesto. Inténtalo de nuevo.",
+      );
+    } finally {
+      setAcceptingOffer(false);
     }
   };
 
@@ -277,6 +455,120 @@ function SupabaseInner({ jobId }: { jobId: string }) {
             </div>
             <Icon name="forward" size={14} className="text-ink-400" />
           </Link>
+        )}
+
+        {agreementActionError && (
+          <div className="mb-3 rounded-2xl border border-rose-200 bg-rose-50 px-3.5 py-3 text-[12.5px] text-rose-700">
+            {agreementActionError}
+          </div>
+        )}
+
+        {agreementActionNotice && (
+          <div className="mb-3 rounded-2xl border border-teal-100 bg-teal-50 px-3.5 py-3 text-[12.5px] text-teal-700">
+            {agreementActionNotice}
+          </div>
+        )}
+
+        {currentAgreement ? (
+          <div className="mb-3 rounded-2xl border border-teal-100 bg-teal-50 px-3.5 py-3">
+            <div className="font-bold text-[13px] text-teal-700">Acuerdo alcanzado</div>
+            <div className="mt-1 text-[12px] text-teal-700/80">
+              Importe final {formatEuro(currentAgreement.finalPrice)}.
+            </div>
+            <div className="mt-1 text-[12px] text-teal-700/80">
+              {PAYMENT_STATUS_LABELS[currentAgreement.paymentStatus] ?? currentAgreement.paymentStatus}
+            </div>
+          </div>
+        ) : currentNegotiation ? (
+          <div className="mb-3 rounded-2xl border border-amber-100 bg-amber-50 px-3.5 py-3">
+            <div className="font-bold text-[13px] text-amber-800">Oferta actual</div>
+            <div className="mt-1 text-[12px] text-amber-700">
+              {currentNegotiation.proposedByRole === "professional"
+                ? "El profesional envio la ultima propuesta."
+                : "El cliente envio la ultima propuesta."}
+            </div>
+            <div className="mt-2 text-[15px] font-extrabold text-amber-800">
+              {currentNegotiation.lastAmount !== null
+                ? formatEuro(currentNegotiation.lastAmount)
+                : "Sin importe"}
+            </div>
+            <div className="mt-2 text-[11.5px] text-amber-700/80">
+              Cliente: {currentNegotiation.clientAccepted ? "aceptado" : "pendiente"} · Profesional: {currentNegotiation.professionalAccepted ? "aceptado" : "pendiente"}
+            </div>
+          </div>
+        ) : agreementContext?.status === "ready" ? (
+          <div className="mb-3 rounded-2xl border border-sky-100 bg-sky-50 px-3.5 py-3 text-[12px] text-sky-800">
+            Todavía no hay presupuesto propuesto para este trabajo.
+          </div>
+        ) : null}
+
+        {agreementContext?.status === "ready" && agreementContext.events.length > 0 && (
+          <div className="mb-3 rounded-2xl border border-sand-200/70 bg-white px-3.5 py-3">
+            <div className="font-bold text-[13px] text-ink-800">Historial del presupuesto</div>
+            <div className="mt-3 flex flex-col gap-2">
+              {agreementContext.events.map((event) => (
+                <div key={event.id} className="rounded-xl border border-sand-200/70 bg-sand-50 px-3 py-2">
+                  <div className="text-[12px] font-semibold text-ink-800">
+                    {getAgreementEventLabel(event)}
+                    {event.amount !== null ? ` · ${formatEuro(event.amount)}` : ""}
+                  </div>
+                  <div className="mt-1 text-[11px] text-ink-400">
+                    {formatAgreementEventTime(event.createdAt)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {canProposeAgreement && (
+          <div className="mb-3 rounded-2xl border border-sand-200/70 bg-white p-3.5">
+            <div className="font-bold text-[13px] text-ink-800">
+              {currentNegotiation ? "Enviar contraoferta" : "Enviar presupuesto"}
+            </div>
+            <div className="mt-3 flex flex-col gap-2">
+              <label className="text-[12px] font-semibold text-ink-500">Importe propuesto (EUR)</label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={proposalAmount}
+                onChange={(event) => setProposalAmount(event.target.value)}
+                className="input-base"
+                placeholder="Introduce el importe"
+                disabled={submittingProposal || acceptingOffer}
+              />
+              {proposalAmount.trim() !== "" && !isProposalAmountValid && (
+                <div className="text-[11px] text-rose-600">
+                  Introduce un importe entero positivo en euros.
+                </div>
+              )}
+            </div>
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => void submitAgreementProposal()}
+                disabled={!isProposalAmountValid || submittingProposal || acceptingOffer}
+                className="rounded-full bg-coral-500 px-4 py-3 text-[13px] font-bold text-white disabled:opacity-40"
+              >
+                {submittingProposal
+                  ? "Guardando..."
+                  : currentNegotiation
+                    ? "Enviar contraoferta"
+                    : "Enviar presupuesto"}
+              </button>
+              {canAcceptCurrentOffer && (
+                <button
+                  type="button"
+                  onClick={() => void acceptCurrentOffer()}
+                  disabled={acceptingOffer || submittingProposal}
+                  className="rounded-full border-[1.5px] border-sand-200 bg-white px-4 py-3 text-[13px] font-bold text-ink-700 disabled:opacity-40"
+                >
+                  {acceptingOffer ? "Aceptando..." : "Aceptar oferta"}
+                </button>
+              )}
+            </div>
+          </div>
         )}
 
         {sendError && (
