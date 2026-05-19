@@ -1,5 +1,5 @@
 "use client";
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
@@ -9,12 +9,78 @@ import { Avatar } from "@/components/ui/avatar";
 import { RatingStars } from "@/components/pros/rating-stars";
 import { VerifiedDot } from "@/components/pros/verified-dot";
 import { Icon } from "@/components/ui/icon";
+import {
+  getClientJobRequestsWithProfessionalInfo,
+  type ApiClientJobRequestWithProfessionalInfo,
+} from "@/lib/api/jobRequests";
+import { getCurrentProfile } from "@/lib/api/profiles";
 import { jobs, professionals } from "@/lib/data";
 import { getAcceptedJobRequestForJob, getEffectiveJobById, useSession } from "@/lib/store";
+import { isSupabaseMode } from "@/lib/supabase/config";
 import type { JobRequest } from "@/lib/types";
 
 interface Props {
   params: Promise<{ id: string }>;
+}
+
+const REQUEST_STATUS_LABELS: Record<
+  ApiClientJobRequestWithProfessionalInfo["requestStatus"],
+  string
+> = {
+  pending: "Pendiente",
+  accepted: "Aceptada",
+  rejected: "Rechazada",
+  closed: "Cerrada",
+  cancelled: "Cancelada",
+};
+
+const PROFESSIONAL_STATUS_LABELS: Record<
+  ApiClientJobRequestWithProfessionalInfo["professionalStatus"],
+  string
+> = {
+  pending: "Pendiente",
+  approved: "Aprobado",
+  blocked: "Bloqueado",
+};
+
+const VERIFICATION_STATUS_LABELS: Record<
+  ApiClientJobRequestWithProfessionalInfo["professionalVerificationStatus"],
+  string
+> = {
+  not_verified: "Sin verificar",
+  pending: "Verificacion pendiente",
+  verified: "Verificado",
+  rejected: "Verificacion rechazada",
+};
+
+function formatRequestCreatedAt(value: string): string {
+  const parsedDate = new Date(value);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("es-ES", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(parsedDate);
+}
+
+function getProfessionalAvatarInitials(
+  request: ApiClientJobRequestWithProfessionalInfo,
+): string {
+  if (request.professionalAvatarInitials) {
+    return request.professionalAvatarInitials;
+  }
+
+  const fallback = request.professionalDisplayName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+
+  return fallback || "PR";
 }
 
 export default function Page({ params }: Props) {
@@ -27,12 +93,18 @@ export default function Page({ params }: Props) {
     professional: (typeof professionals)[number];
     jobRequest: JobRequest;
   };
+  const isSupabase = isSupabaseMode();
   const session = useSession();
   const effectiveResolvedJob = getEffectiveJobById(session, id);
   const acceptedJobRequest = getAcceptedJobRequestForJob(session, id);
   const jobRequests = useSession((s) => s.jobRequests);
   const job = effectiveResolvedJob ?? jobs.find((j) => j.id === id) ?? jobs[0];
   const [sort, setSort] = useState<"relevant" | "rating" | "price">("relevant");
+  const [supabaseRequests, setSupabaseRequests] = useState<
+    ApiClientJobRequestWithProfessionalInfo[]
+  >([]);
+  const [supabaseError, setSupabaseError] = useState<string | null>(null);
+  const [isLoadingSupabaseRequests, setIsLoadingSupabaseRequests] = useState(false);
   const effectiveJobRequests = (jobRequests ?? []).filter(
     (jobRequest) => jobRequest.jobId === id,
   );
@@ -61,6 +133,165 @@ export default function Page({ params }: Props) {
     }
     return 0;
   });
+
+  useEffect(() => {
+    if (!isSupabase) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    async function loadSupabaseRequests() {
+      setIsLoadingSupabaseRequests(true);
+      setSupabaseError(null);
+
+      try {
+        const currentProfile = await getCurrentProfile();
+
+        if (!currentProfile || currentProfile.role !== "client") {
+          throw new Error("No puedes ver las solicitudes de este trabajo.");
+        }
+
+        const requests = await getClientJobRequestsWithProfessionalInfo(id);
+
+        if (!isCancelled) {
+          setSupabaseRequests(requests);
+        }
+      } catch (error) {
+        const message =
+          error instanceof Error && error.message
+            ? error.message
+            : "No pudimos cargar las solicitudes de este trabajo.";
+
+        if (!isCancelled) {
+          setSupabaseRequests([]);
+          setSupabaseError(message);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingSupabaseRequests(false);
+        }
+      }
+    }
+
+    void loadSupabaseRequests();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [id, isSupabase]);
+
+  if (isSupabase) {
+    return (
+      <div className="flex-1 flex flex-col bg-sand-50">
+        <StatusBar />
+        <TopBar
+          title={`Solicitudes${isLoadingSupabaseRequests ? "" : ` (${supabaseRequests.length})`}`}
+          subtitle="Solicitudes reales recibidas"
+        />
+        <ScreenBody className="px-4 pt-3 pb-6">
+          <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-[12px] leading-relaxed text-amber-900">
+            Aceptar solicitudes se conectara en el siguiente paso.
+          </div>
+
+          {supabaseError ? (
+            <Card>
+              <div className="text-[13px] font-semibold text-rose-700">{supabaseError}</div>
+              <div className="mt-1 text-[12px] text-ink-500">
+                Esta vista esta en solo lectura y no muestra acciones operativas reales.
+              </div>
+            </Card>
+          ) : isLoadingSupabaseRequests ? (
+            <Card>
+              <div className="text-[13px] font-semibold text-ink-800">
+                Cargando solicitudes reales...
+              </div>
+              <div className="mt-1 text-[12px] text-ink-500">
+                Estamos consultando la informacion publica minima de los profesionales.
+              </div>
+            </Card>
+          ) : supabaseRequests.length === 0 ? (
+            <Card>
+              <div className="text-[13px] font-semibold text-ink-800">
+                Aun no has recibido solicitudes reales.
+              </div>
+              <div className="mt-1 text-[12px] text-ink-500">
+                Cuando lleguen nuevas solicitudes para este trabajo, apareceran aqui.
+              </div>
+            </Card>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {supabaseRequests.map((request) => (
+                <Card key={request.requestId}>
+                  <div className="flex items-start gap-3">
+                    <div className="relative flex-shrink-0">
+                      <Avatar initials={getProfessionalAvatarInitials(request)} size={48} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-[14.5px] text-ink-800 truncate">
+                        {request.professionalDisplayName}
+                      </div>
+                      <div className="text-[12px] text-ink-500 mb-2">
+                        {request.professionalSpecialtyLabel ?? "Especialidad no indicada"} · {" "}
+                        {request.professionalZone ?? "Zona no indicada"}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 mb-3">
+                        <div className="rounded-xl border border-sand-200/80 bg-sand-50 px-2.5 py-2">
+                          <div className="text-[10.5px] uppercase tracking-wide text-ink-400">
+                            Estado profesional
+                          </div>
+                          <div className="text-[12px] font-bold text-ink-800">
+                            {PROFESSIONAL_STATUS_LABELS[request.professionalStatus]}
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-sand-200/80 bg-sand-50 px-2.5 py-2">
+                          <div className="text-[10.5px] uppercase tracking-wide text-ink-400">
+                            Verificacion
+                          </div>
+                          <div className="text-[12px] font-bold text-ink-800">
+                            {VERIFICATION_STATUS_LABELS[request.professionalVerificationStatus]}
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-sand-200/80 bg-sand-50 px-2.5 py-2">
+                          <div className="text-[10.5px] uppercase tracking-wide text-ink-400">
+                            Perfil publico
+                          </div>
+                          <div className="text-[12px] font-bold text-ink-800">
+                            {request.professionalPublicProfileEnabled ? "Activo" : "Desactivado"}
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-sand-200/80 bg-sand-50 px-2.5 py-2">
+                          <div className="text-[10.5px] uppercase tracking-wide text-ink-400">
+                            Estado solicitud
+                          </div>
+                          <div className="text-[12px] font-bold text-ink-800">
+                            {REQUEST_STATUS_LABELS[request.requestStatus]}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-[12px] text-ink-600 bg-sand-50 rounded-lg p-2.5 border border-sand-200/70 mb-2 leading-relaxed">
+                        “{request.requestMessage ?? "Sin mensaje adicional del profesional."}”
+                      </div>
+
+                      <div className="mb-3 text-[11.5px] text-ink-500">
+                        Recibida el {formatRequestCreatedAt(request.requestCreatedAt)}
+                      </div>
+
+                      <div className="rounded-xl border border-sand-200 bg-sand-50 px-3 py-2 text-[12px] font-semibold text-ink-500">
+                        Solo lectura en Supabase. Aceptar solicitudes se conectara en el siguiente paso.
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </ScreenBody>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col bg-sand-50">
