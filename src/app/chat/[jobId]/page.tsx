@@ -12,6 +12,7 @@ import {
   sendChatMessage as sendRealChatMessage,
   type ApiChatThread,
 } from "@/lib/api/chat";
+import { getCurrentProfile, type ApiProfileRole } from "@/lib/api/profiles";
 import { jobs, professionals, chatMessages } from "@/lib/data";
 import {
   canAccessChat,
@@ -55,10 +56,12 @@ function SupabaseInner({ jobId }: { jobId: string }) {
   const [thread, setThread] = useState<ApiChatThread | null>(null);
   const [loadingThread, setLoadingThread] = useState(true);
   const [threadError, setThreadError] = useState<string | null>(null);
+  const [profileRole, setProfileRole] = useState<ApiProfileRole | null>(null);
   const [input, setInput] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sendNotice, setSendNotice] = useState<string | null>(null);
+  const [supabaseReloadKey, setSupabaseReloadKey] = useState(0);
 
   useEffect(() => {
     let isCancelled = false;
@@ -68,6 +71,12 @@ function SupabaseInner({ jobId }: { jobId: string }) {
       setThreadError(null);
 
       try {
+        const currentProfile = await getCurrentProfile();
+
+        if (!isCancelled) {
+          setProfileRole(currentProfile?.role ?? null);
+        }
+
         const nextThread = await getChatThread(jobId);
 
         if (!isCancelled) {
@@ -94,17 +103,17 @@ function SupabaseInner({ jobId }: { jobId: string }) {
     return () => {
       isCancelled = true;
     };
-  }, [jobId]);
+  }, [jobId, supabaseReloadKey]);
 
-  const role = thread?.currentRole === "professional" ? "pro" : "client";
+  const role = profileRole === "professional" ? "pro" : "client";
   const backHref =
-    thread?.currentRole === "professional"
+    profileRole === "professional"
       ? `/profesional/trabajos/${jobId}`
-      : thread?.currentRole === "admin"
+      : profileRole === "admin"
         ? "/admin/chats"
         : `/cliente/trabajos/${jobId}`;
   const canSendRealMessage =
-    thread?.status === "ready" && Boolean(thread.chat) && thread.currentRole !== "admin";
+    thread?.status === "ready" && Boolean(thread.chat) && profileRole !== "admin";
 
   const send = async () => {
     const chatId = thread?.chat?.id;
@@ -160,7 +169,7 @@ function SupabaseInner({ jobId }: { jobId: string }) {
         <StatusBar />
         <div className="bg-white border-b border-sand-200/70 px-4 pt-2 pb-3 flex items-center gap-3">
           <Link
-            href={`/cliente/trabajos/${jobId}`}
+            href={backHref}
             className="w-9 h-9 rounded-full bg-sand-100 inline-flex items-center justify-center text-ink-700"
           >
             <Icon name="back" size={18} stroke={2.2} />
@@ -182,7 +191,7 @@ function SupabaseInner({ jobId }: { jobId: string }) {
         <StatusBar />
         <div className="bg-white border-b border-sand-200/70 px-4 pt-2 pb-3 flex items-center gap-3">
           <Link
-            href={`/cliente/trabajos/${jobId}`}
+            href={backHref}
             className="w-9 h-9 rounded-full bg-sand-100 inline-flex items-center justify-center text-ink-700"
           >
             <Icon name="back" size={18} stroke={2.2} />
@@ -230,7 +239,7 @@ function SupabaseInner({ jobId }: { jobId: string }) {
         >
           <Icon name="back" size={18} stroke={2.2} />
         </Link>
-        <Avatar initials={thread.currentRole === "professional" ? "CL" : "PA"} size={38} />
+        <Avatar initials={profileRole === "professional" ? "CL" : "PA"} size={38} />
         <div className="flex-1 min-w-0">
           <div className="font-bold text-[14px] text-ink-800 truncate">
             {thread.headerTitle}
@@ -238,6 +247,13 @@ function SupabaseInner({ jobId }: { jobId: string }) {
           <div className="text-[11px] text-ink-400 truncate">{thread.headerSubtitle}</div>
         </div>
         {thread.job && <StatusBadge status={thread.job.status} />}
+        <button
+          type="button"
+          onClick={() => setSupabaseReloadKey((k) => k + 1)}
+          className="text-[11px] font-semibold text-coral-600 flex-shrink-0"
+        >
+          Actualizar
+        </button>
       </div>
 
       <ScreenBody className="px-4 pt-4 pb-2 flex flex-col">
@@ -288,7 +304,7 @@ function SupabaseInner({ jobId }: { jobId: string }) {
         )}
       </ScreenBody>
 
-      {thread.currentRole === "admin" ? (
+      {profileRole === "admin" ? (
         <div className="app-bottom-bar-compact px-4 pt-2 pb-3 bg-white border-t border-sand-200/70 text-[12px] text-ink-500">
           Vista de solo lectura para admin en esta fase.
         </div>
