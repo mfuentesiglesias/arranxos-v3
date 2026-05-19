@@ -35,6 +35,12 @@ export interface ApiClientJobRequestWithProfessionalInfo {
   professionalPublicProfileEnabled: boolean;
 }
 
+export interface ApiAcceptJobRequestResult {
+  jobId: string;
+  professionalId: string;
+  chatId: string;
+}
+
 interface JobRequestRow {
   id: string;
   job_id: string;
@@ -58,6 +64,12 @@ interface ClientJobRequestWithProfessionalInfoRow {
   professional_status: "pending" | "approved" | "blocked";
   professional_verification_status: "not_verified" | "pending" | "verified" | "rejected";
   professional_public_profile_enabled: boolean;
+}
+
+interface AcceptJobRequestRow {
+  result_job_id: string;
+  result_professional_id: string;
+  result_chat_id: string;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -125,6 +137,56 @@ function normalizeGetClientJobRequestsWithProfessionalInfoError(error: unknown):
   return new Error("No pudimos cargar las solicitudes de este trabajo. Inténtalo de nuevo.");
 }
 
+function normalizeAcceptJobRequestError(error: unknown): Error {
+  const message = getErrorMessage(error).toLowerCase();
+
+  if (
+    message.includes("only the client owner") ||
+    message.includes("only the client owner can accept a job request") ||
+    message.includes("authentication required") ||
+    message.includes("current user does not have a profile") ||
+    message.includes("permission denied")
+  ) {
+    return new Error("No puedes aceptar solicitudes de este trabajo.");
+  }
+
+  if (
+    message.includes("could not be created or loaded") ||
+    message.includes("existing chat")
+  ) {
+    return new Error(
+      "Hay un problema con el chat existente de este trabajo. Revisa los datos de prueba.",
+    );
+  }
+
+  if (
+    message.includes("professional profile for request") ||
+    message.includes("no longer approved")
+  ) {
+    return new Error("Este profesional ya no está disponible para ser aceptado.");
+  }
+
+  if (message.includes("is not pending")) {
+    return new Error("Esta solicitud ya no está pendiente.");
+  }
+
+  if (
+    message.includes("not in published status") ||
+    message.includes("already has an assigned professional")
+  ) {
+    return new Error("Este trabajo ya no admite aceptar solicitudes.");
+  }
+
+  if (
+    message.includes("job request") &&
+    message.includes("does not exist")
+  ) {
+    return new Error("Esta solicitud ya no existe o ya no está disponible.");
+  }
+
+  return new Error("No pudimos aceptar la solicitud. Inténtalo de nuevo.");
+}
+
 function mapJobRequestRow(row: JobRequestRow): ApiJobRequest {
   return {
     id: row.id,
@@ -164,6 +226,14 @@ function mapClientJobRequestWithProfessionalInfoRow(
     professionalStatus: row.professional_status,
     professionalVerificationStatus: row.professional_verification_status,
     professionalPublicProfileEnabled: row.professional_public_profile_enabled,
+  };
+}
+
+function mapAcceptJobRequestRow(row: AcceptJobRequestRow): ApiAcceptJobRequestResult {
+  return {
+    jobId: row.result_job_id,
+    professionalId: row.result_professional_id,
+    chatId: row.result_chat_id,
   };
 }
 
@@ -213,6 +283,34 @@ export async function getClientJobRequestsWithProfessionalInfo(
   return ((data as ClientJobRequestWithProfessionalInfoRow[] | null) ?? []).map(
     mapClientJobRequestWithProfessionalInfoRow,
   );
+}
+
+export async function acceptJobRequest(
+  requestId: string,
+): Promise<ApiAcceptJobRequestResult> {
+  if (!isSupabaseMode()) {
+    throw new Error("acceptJobRequest() is unavailable while NEXT_PUBLIC_DATA_MODE=mock.");
+  }
+
+  const client = getBrowserSupabaseClient();
+
+  const { data, error } = await client.rpc("accept_job_request", {
+    p_request_id: requestId,
+  });
+
+  if (error) {
+    throw normalizeAcceptJobRequestError(error);
+  }
+
+  const result = Array.isArray(data)
+    ? (data[0] as AcceptJobRequestRow | undefined)
+    : ((data as AcceptJobRequestRow | null) ?? undefined);
+
+  if (!result) {
+    throw new Error("No pudimos aceptar la solicitud. Inténtalo de nuevo.");
+  }
+
+  return mapAcceptJobRequestRow(result);
 }
 
 export async function createJobRequest(

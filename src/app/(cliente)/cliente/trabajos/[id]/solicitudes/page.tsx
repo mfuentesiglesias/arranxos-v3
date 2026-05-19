@@ -10,6 +10,7 @@ import { RatingStars } from "@/components/pros/rating-stars";
 import { VerifiedDot } from "@/components/pros/verified-dot";
 import { Icon } from "@/components/ui/icon";
 import {
+  acceptJobRequest,
   getClientJobRequestsWithProfessionalInfo,
   type ApiClientJobRequestWithProfessionalInfo,
 } from "@/lib/api/jobRequests";
@@ -105,6 +106,10 @@ export default function Page({ params }: Props) {
   >([]);
   const [supabaseError, setSupabaseError] = useState<string | null>(null);
   const [isLoadingSupabaseRequests, setIsLoadingSupabaseRequests] = useState(false);
+  const [acceptingRequestId, setAcceptingRequestId] = useState<string | null>(null);
+  const [acceptError, setAcceptError] = useState<string | null>(null);
+  const [acceptSuccess, setAcceptSuccess] = useState<string | null>(null);
+  const [supabaseReloadKey, setSupabaseReloadKey] = useState(0);
   const effectiveJobRequests = (jobRequests ?? []).filter(
     (jobRequest) => jobRequest.jobId === id,
   );
@@ -179,7 +184,54 @@ export default function Page({ params }: Props) {
     return () => {
       isCancelled = true;
     };
-  }, [id, isSupabase]);
+  }, [id, isSupabase, supabaseReloadKey]);
+
+  const handleAcceptSupabaseRequest = async (
+    request: ApiClientJobRequestWithProfessionalInfo,
+  ) => {
+    if (request.requestStatus !== "pending" || acceptingRequestId) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Al aceptar se creará el chat y se revelará la dirección exacta solo al profesional aceptado. ¿Quieres continuar?",
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setAcceptError(null);
+    setAcceptSuccess(null);
+    setAcceptingRequestId(request.requestId);
+
+    try {
+      await acceptJobRequest(request.requestId);
+      setSupabaseRequests((currentRequests) =>
+        currentRequests.map((currentRequest) => {
+          if (currentRequest.requestId === request.requestId) {
+            return { ...currentRequest, requestStatus: "accepted" };
+          }
+
+          if (currentRequest.requestStatus === "pending") {
+            return { ...currentRequest, requestStatus: "closed" };
+          }
+
+          return currentRequest;
+        }),
+      );
+      setAcceptSuccess(`Solicitud aceptada para ${request.professionalDisplayName}.`);
+      setSupabaseReloadKey((currentValue) => currentValue + 1);
+    } catch (error) {
+      setAcceptError(
+        error instanceof Error && error.message
+          ? error.message
+          : "No pudimos aceptar la solicitud. Inténtalo de nuevo.",
+      );
+    } finally {
+      setAcceptingRequestId(null);
+    }
+  };
 
   if (isSupabase) {
     return (
@@ -191,14 +243,26 @@ export default function Page({ params }: Props) {
         />
         <ScreenBody className="px-4 pt-3 pb-6">
           <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-[12px] leading-relaxed text-amber-900">
-            Aceptar solicitudes se conectara en el siguiente paso.
+            Al aceptar se creará el chat y se revelará la dirección exacta solo al profesional aceptado.
           </div>
+
+          {acceptSuccess ? (
+            <div className="mb-3 rounded-2xl border border-teal-200 bg-teal-50 px-3.5 py-3 text-[12px] leading-relaxed text-teal-800">
+              {acceptSuccess}
+            </div>
+          ) : null}
+
+          {acceptError ? (
+            <div className="mb-3 rounded-2xl border border-rose-200 bg-rose-50 px-3.5 py-3 text-[12px] leading-relaxed text-rose-800">
+              {acceptError}
+            </div>
+          ) : null}
 
           {supabaseError ? (
             <Card>
               <div className="text-[13px] font-semibold text-rose-700">{supabaseError}</div>
               <div className="mt-1 text-[12px] text-ink-500">
-                Esta vista esta en solo lectura y no muestra acciones operativas reales.
+                Revisa tu sesion o el estado actual del trabajo antes de volver a intentarlo.
               </div>
             </Card>
           ) : isLoadingSupabaseRequests ? (
@@ -279,9 +343,26 @@ export default function Page({ params }: Props) {
                         Recibida el {formatRequestCreatedAt(request.requestCreatedAt)}
                       </div>
 
-                      <div className="rounded-xl border border-sand-200 bg-sand-50 px-3 py-2 text-[12px] font-semibold text-ink-500">
-                        Solo lectura en Supabase. Aceptar solicitudes se conectara en el siguiente paso.
-                      </div>
+                      {request.requestStatus === "pending" ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleAcceptSupabaseRequest(request)}
+                          disabled={Boolean(acceptingRequestId)}
+                          className={`w-full rounded-xl px-3 py-2 text-[12px] font-bold transition-colors ${
+                            acceptingRequestId
+                              ? "bg-sand-100 text-ink-400 cursor-not-allowed"
+                              : "bg-coral-500 text-white shadow-coral"
+                          }`}
+                        >
+                          {acceptingRequestId === request.requestId
+                            ? "Aceptando..."
+                            : "Aceptar solicitud"}
+                        </button>
+                      ) : (
+                        <div className="rounded-xl border border-sand-200 bg-sand-50 px-3 py-2 text-[12px] font-semibold text-ink-500">
+                          Estado actual: {REQUEST_STATUS_LABELS[request.requestStatus]}.
+                        </div>
+                      )}
                     </div>
                   </div>
                 </Card>
