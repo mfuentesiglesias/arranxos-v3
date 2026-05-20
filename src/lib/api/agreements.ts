@@ -73,6 +73,14 @@ export interface ApiAcceptAgreementNegotiationResult {
   jobStatus: JobStatus;
 }
 
+export interface ApiFundProtectedPaymentResult {
+  jobId: string;
+  agreementId: string;
+  paymentStatus: ApiAgreementPaymentStatus;
+  jobStatus: JobStatus;
+  paidAt: string;
+}
+
 interface JobAgreementRow {
   id: string;
   status: JobStatus;
@@ -124,6 +132,14 @@ interface AcceptAgreementRow {
   result_job_id: string;
   result_negotiation_status: ApiNegotiationStatus;
   result_job_status: JobStatus;
+}
+
+interface FundProtectedPaymentRow {
+  result_job_id: string;
+  result_agreement_id: string;
+  result_payment_status: ApiAgreementPaymentStatus;
+  result_job_status: JobStatus;
+  result_paid_at: string;
 }
 
 function isNoRowsError(error: PostgrestError | null): boolean {
@@ -207,6 +223,16 @@ function mapAcceptAgreementRow(row: AcceptAgreementRow): ApiAcceptAgreementNegot
     jobId: row.result_job_id,
     negotiationStatus: row.result_negotiation_status,
     jobStatus: row.result_job_status,
+  };
+}
+
+function mapFundProtectedPaymentRow(row: FundProtectedPaymentRow): ApiFundProtectedPaymentResult {
+  return {
+    jobId: row.result_job_id,
+    agreementId: row.result_agreement_id,
+    paymentStatus: row.result_payment_status,
+    jobStatus: row.result_job_status,
+    paidAt: row.result_paid_at,
   };
 }
 
@@ -299,6 +325,41 @@ function normalizeAcceptAgreementNegotiationError(error: unknown): Error {
   }
 
   return new Error("No pudimos aceptar el presupuesto. Inténtalo de nuevo.");
+}
+
+function normalizeFundProtectedPaymentError(error: unknown): Error {
+  const message = getErrorMessage(error).toLowerCase();
+
+  if (
+    message.includes("authentication required") ||
+    message.includes("current user does not have a profile") ||
+    message.includes("only the client owner can fund protected payment") ||
+    message.includes("permission denied")
+  ) {
+    return new Error("No puedes proteger el pago de este trabajo.");
+  }
+
+  if (message.includes("does not exist")) {
+    return new Error("Este trabajo o su acuerdo ya no están disponibles.");
+  }
+
+  if (message.includes("is not in agreed status")) {
+    return new Error("Este trabajo ya no está listo para proteger el pago.");
+  }
+
+  if (message.includes("is not fully accepted")) {
+    return new Error("El acuerdo todavía no está completamente aceptado.");
+  }
+
+  if (message.includes("is already protected")) {
+    return new Error("Este acuerdo ya tiene el pago protegido.");
+  }
+
+  if (message.includes("is not pending payment")) {
+    return new Error("Este acuerdo ya no admite proteger el pago.");
+  }
+
+  return new Error("No pudimos proteger el pago. Inténtalo de nuevo.");
 }
 
 export async function getJobAgreementContext(jobId: string): Promise<ApiJobAgreementContext> {
@@ -473,5 +534,33 @@ export async function acceptAgreementNegotiation(
   }
 
   return mapAcceptAgreementRow(result);
+}
+
+export async function fundProtectedPayment(
+  jobId: string,
+): Promise<ApiFundProtectedPaymentResult> {
+  if (!isSupabaseMode()) {
+    throw new Error("fundProtectedPayment() is unavailable while NEXT_PUBLIC_DATA_MODE=mock.");
+  }
+
+  const client = getBrowserSupabaseClient();
+
+  const { data, error } = await client.rpc("fund_protected_payment", {
+    p_job_id: jobId,
+  });
+
+  if (error) {
+    throw normalizeFundProtectedPaymentError(error);
+  }
+
+  const result = Array.isArray(data)
+    ? (data[0] as FundProtectedPaymentRow | undefined)
+    : ((data as FundProtectedPaymentRow | null) ?? undefined);
+
+  if (!result) {
+    throw new Error("No pudimos proteger el pago. Inténtalo de nuevo.");
+  }
+
+  return mapFundProtectedPaymentRow(result);
 }
 

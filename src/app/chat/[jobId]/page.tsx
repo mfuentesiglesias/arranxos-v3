@@ -10,6 +10,7 @@ import { AntiLeakAlert } from "@/components/chat/anti-leak-alert";
 import {
   acceptAgreementNegotiation,
   createAgreementProposal,
+  fundProtectedPayment,
   getJobAgreementContext,
   type ApiJobAgreementContext,
   type ApiJobNegotiationEvent,
@@ -109,6 +110,7 @@ function SupabaseInner({ jobId }: { jobId: string }) {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [submittingProposal, setSubmittingProposal] = useState(false);
   const [acceptingOffer, setAcceptingOffer] = useState(false);
+  const [fundingPayment, setFundingPayment] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sendNotice, setSendNotice] = useState<string | null>(null);
   const [agreementActionError, setAgreementActionError] = useState<string | null>(null);
@@ -201,6 +203,7 @@ function SupabaseInner({ jobId }: { jobId: string }) {
         : `/cliente/trabajos/${jobId}`;
   const canSendRealMessage =
     thread?.status === "ready" && Boolean(thread.chat) && profileRole !== "admin";
+  const currentJob = agreementContext?.status === "ready" ? agreementContext.job : null;
   const currentNegotiation = agreementContext?.status === "ready" ? agreementContext.negotiation : null;
   const currentAgreement = agreementContext?.status === "ready" ? agreementContext.agreement : null;
   const canProposeAgreement =
@@ -228,6 +231,19 @@ function SupabaseInner({ jobId }: { jobId: string }) {
       currentNegotiation.proposedByRole &&
       currentNegotiation.proposedByRole !== currentParticipantRole &&
       !currentRoleAccepted,
+  );
+  const canFundProtectedPayment = Boolean(
+    profileRole === "client" &&
+      currentJob?.status === "agreed" &&
+      currentAgreement &&
+      currentAgreement.acceptedByClient &&
+      currentAgreement.acceptedByProfessional &&
+      currentAgreement.paymentStatus === "pending",
+  );
+  const isAwaitingProtectedPayment = Boolean(
+    currentJob?.status === "agreed" &&
+      currentAgreement &&
+      currentAgreement.paymentStatus === "pending",
   );
   const parsedProposalAmount = Number(proposalAmount);
   const isProposalAmountValid =
@@ -338,6 +354,30 @@ function SupabaseInner({ jobId }: { jobId: string }) {
       );
     } finally {
       setAcceptingOffer(false);
+    }
+  };
+
+  const protectPayment = async () => {
+    if (!canFundProtectedPayment || fundingPayment) {
+      return;
+    }
+
+    setAgreementActionError(null);
+    setAgreementActionNotice(null);
+    setFundingPayment(true);
+
+    try {
+      await fundProtectedPayment(jobId);
+      setAgreementActionNotice("Pago protegido. Los fondos han quedado retenidos en esta fase fake.");
+      setSupabaseReloadKey((currentValue) => currentValue + 1);
+    } catch (error) {
+      setAgreementActionError(
+        error instanceof Error && error.message
+          ? error.message
+          : "No pudimos proteger el pago. Inténtalo de nuevo.",
+      );
+    } finally {
+      setFundingPayment(false);
     }
   };
 
@@ -478,6 +518,18 @@ function SupabaseInner({ jobId }: { jobId: string }) {
             <div className="mt-1 text-[12px] text-teal-700/80">
               {PAYMENT_STATUS_LABELS[currentAgreement.paymentStatus] ?? currentAgreement.paymentStatus}
             </div>
+            {canFundProtectedPayment && (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={() => void protectPayment()}
+                  disabled={fundingPayment}
+                  className="rounded-full bg-coral-500 px-4 py-3 text-[13px] font-bold text-white disabled:opacity-40"
+                >
+                  {fundingPayment ? "Protegiendo pago..." : "Pagar y proteger"}
+                </button>
+              </div>
+            )}
           </div>
         ) : currentNegotiation ? (
           <div className="mb-3 rounded-2xl border border-amber-100 bg-amber-50 px-3.5 py-3">
@@ -501,6 +553,12 @@ function SupabaseInner({ jobId }: { jobId: string }) {
             Todavía no hay presupuesto propuesto para este trabajo.
           </div>
         ) : null}
+
+        {profileRole === "professional" && isAwaitingProtectedPayment && (
+          <div className="mb-3 rounded-2xl border border-amber-100 bg-amber-50 px-3.5 py-3 text-[12px] text-amber-800">
+            Esperando pago protegido del cliente.
+          </div>
+        )}
 
         {agreementContext?.status === "ready" && agreementContext.events.length > 0 && (
           <div className="mb-3 rounded-2xl border border-sand-200/70 bg-white px-3.5 py-3">
