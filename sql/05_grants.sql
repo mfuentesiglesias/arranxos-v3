@@ -65,3 +65,4 @@ grant execute on function public.mark_job_completed(uuid) to authenticated;
 grant execute on function public.confirm_job_completion(uuid) to authenticated;
 grant execute on function public.open_dispute(uuid, text, text, jsonb) to authenticated;
 grant execute on function public.resolve_dispute(uuid, text, text) to authenticated;
+grant execute on function public.auto_release_due_jobs() to authenticated;

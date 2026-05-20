@@ -17,6 +17,7 @@ export interface ApiAgreementContextJob {
   assignedProfessionalId: string | null;
   priceMin: number | null;
   priceMax: number | null;
+  completionDeadline: string | null;
 }
 
 export interface ApiJobNegotiation {
@@ -54,6 +55,7 @@ export interface ApiAgreement {
   acceptedByClient: boolean;
   acceptedByProfessional: boolean;
   createdAt: string;
+  releasedAt: string | null;
 }
 
 export interface ApiJobAgreementContext {
@@ -96,12 +98,21 @@ export interface ApiConfirmJobCompletionResult {
   releasedAt: string;
 }
 
+export interface ApiAutoReleaseDueJobResult {
+  jobId: string;
+  agreementId: string;
+  paymentStatus: ApiAgreementPaymentStatus;
+  jobStatus: JobStatus;
+  releasedAt: string;
+}
+
 interface JobAgreementRow {
   id: string;
   status: JobStatus;
   assigned_professional_id: string | null;
   price_min: number | null;
   price_max: number | null;
+  completion_deadline: string | null;
 }
 
 interface JobNegotiationRow {
@@ -139,6 +150,7 @@ interface AgreementRow {
   accepted_by_client: boolean;
   accepted_by_professional: boolean;
   created_at: string;
+  released_at: string | null;
 }
 
 interface AcceptAgreementRow {
@@ -165,6 +177,14 @@ interface MarkJobCompletedRow {
 }
 
 interface ConfirmJobCompletionRow {
+  result_job_id: string;
+  result_agreement_id: string;
+  result_payment_status: ApiAgreementPaymentStatus;
+  result_job_status: JobStatus;
+  result_released_at: string;
+}
+
+interface AutoReleaseDueJobRow {
   result_job_id: string;
   result_agreement_id: string;
   result_payment_status: ApiAgreementPaymentStatus;
@@ -200,6 +220,7 @@ function mapJobAgreementRow(row: JobAgreementRow): ApiAgreementContextJob {
     assignedProfessionalId: row.assigned_professional_id,
     priceMin: row.price_min,
     priceMax: row.price_max,
+    completionDeadline: row.completion_deadline,
   };
 }
 
@@ -243,6 +264,7 @@ function mapAgreementRow(row: AgreementRow): ApiAgreement {
     acceptedByClient: row.accepted_by_client,
     acceptedByProfessional: row.accepted_by_professional,
     createdAt: row.created_at,
+    releasedAt: row.released_at,
   };
 }
 
@@ -276,6 +298,16 @@ function mapMarkJobCompletedRow(row: MarkJobCompletedRow): ApiMarkJobCompletedRe
 }
 
 function mapConfirmJobCompletionRow(row: ConfirmJobCompletionRow): ApiConfirmJobCompletionResult {
+  return {
+    jobId: row.result_job_id,
+    agreementId: row.result_agreement_id,
+    paymentStatus: row.result_payment_status,
+    jobStatus: row.result_job_status,
+    releasedAt: row.result_released_at,
+  };
+}
+
+function mapAutoReleaseDueJobRow(row: AutoReleaseDueJobRow): ApiAutoReleaseDueJobResult {
   return {
     jobId: row.result_job_id,
     agreementId: row.result_agreement_id,
@@ -489,6 +521,24 @@ function normalizeConfirmJobCompletionError(error: unknown): Error {
   return new Error("No pudimos confirmar la finalización. Inténtalo de nuevo.");
 }
 
+function normalizeAutoReleaseDueJobsError(error: unknown): Error {
+  const message = getErrorMessage(error).toLowerCase();
+
+  if (
+    message.includes("authentication required") ||
+    message.includes("current user does not have a profile") ||
+    message.includes("permission denied")
+  ) {
+    return new Error("Necesitas iniciar sesión para ejecutar el auto-release real.");
+  }
+
+  if (message.includes("only admins can auto-release due jobs")) {
+    return new Error("Solo un admin puede ejecutar el auto-release real.");
+  }
+
+  return new Error("No pudimos ejecutar el auto-release real. Inténtalo de nuevo.");
+}
+
 export async function getJobAgreementContext(jobId: string): Promise<ApiJobAgreementContext> {
   if (!isSupabaseMode()) {
     return {
@@ -519,7 +569,7 @@ export async function getJobAgreementContext(jobId: string): Promise<ApiJobAgree
   const [jobResponse, negotiationResponse, agreementResponse] = await Promise.all([
     client
       .from("jobs")
-      .select("id, status, assigned_professional_id, price_min, price_max")
+      .select("id, status, assigned_professional_id, price_min, price_max, completion_deadline")
       .eq("id", jobId)
       .maybeSingle<JobAgreementRow>(),
     client
@@ -535,7 +585,7 @@ export async function getJobAgreementContext(jobId: string): Promise<ApiJobAgree
     client
       .from("agreements")
       .select(
-        "id, job_id, professional_id, final_price, commission_pct, payment_status, price_guaranteed, accepted_by_client, accepted_by_professional, created_at",
+        "id, job_id, professional_id, final_price, commission_pct, payment_status, price_guaranteed, accepted_by_client, accepted_by_professional, created_at, released_at",
       )
       .eq("job_id", jobId)
       .maybeSingle<AgreementRow>(),
@@ -745,5 +795,27 @@ export async function confirmJobCompletion(
   }
 
   return mapConfirmJobCompletionRow(result);
+}
+
+export async function autoReleaseDueJobs(): Promise<ApiAutoReleaseDueJobResult[]> {
+  if (!isSupabaseMode()) {
+    throw new Error("autoReleaseDueJobs() is unavailable while NEXT_PUBLIC_DATA_MODE=mock.");
+  }
+
+  const client = getBrowserSupabaseClient();
+
+  const { data, error } = await client.rpc("auto_release_due_jobs");
+
+  if (error) {
+    throw normalizeAutoReleaseDueJobsError(error);
+  }
+
+  const rows = Array.isArray(data)
+    ? (data as AutoReleaseDueJobRow[])
+    : data
+      ? ([data] as AutoReleaseDueJobRow[])
+      : [];
+
+  return rows.map(mapAutoReleaseDueJobRow);
 }
 

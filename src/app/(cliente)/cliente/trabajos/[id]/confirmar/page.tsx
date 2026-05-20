@@ -212,6 +212,12 @@ function SupabaseInner({ id }: { id: string }) {
           </div>
         </Card>
 
+        {currentJob?.completionDeadline && (
+          <Card className="mb-3 bg-sand-100/80 border-sand-200 text-[12px] text-ink-700 leading-snug">
+            Fecha límite de confirmación: {new Date(currentJob.completionDeadline).toLocaleString("es-ES")}
+          </Card>
+        )}
+
         <Card className="bg-amber-50/60 border-amber-100 text-[12px] text-amber-700 leading-snug">
           Esta fase no realiza ninguna transferencia real. Solo actualiza el acuerdo a released mediante RPC.
         </Card>

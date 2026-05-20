@@ -158,7 +158,7 @@ function SupabaseInner({ id }: { id: string }) {
   return (
     <div className="flex-1 flex flex-col bg-sand-50">
       <StatusBar />
-      <TopBar title="Marcar como terminado" subtitle="Fase 1 · Sin auto-release ni Stripe" />
+      <TopBar title="Marcar como terminado" subtitle="Fase 1 · Auto-release fake sin Stripe" />
       <ScreenBody className="px-4 pt-3 pb-6">
         {loading && (
           <Card className="mb-3 text-[12px] text-ink-600 leading-snug">
@@ -201,6 +201,12 @@ function SupabaseInner({ id }: { id: string }) {
             </span>
           </div>
         </Card>
+
+        {currentJob?.completionDeadline && currentJob.status === "completed_pending_confirmation" && (
+          <Card className="mb-3 bg-sand-100/80 border-sand-200 text-[12px] text-ink-700 leading-snug">
+            Fecha límite de confirmación: {new Date(currentJob.completionDeadline).toLocaleString("es-ES")}
+          </Card>
+        )}
 
         <Card className="mb-3">
           <div className="font-bold text-[13.5px] text-ink-800 mb-3">Resumen real</div>
