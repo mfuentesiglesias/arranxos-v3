@@ -9,9 +9,11 @@ import { MessageBubble } from "@/components/chat/message-bubble";
 import { AntiLeakAlert } from "@/components/chat/anti-leak-alert";
 import {
   acceptAgreementNegotiation,
+  confirmJobCompletion,
   createAgreementProposal,
   fundProtectedPayment,
   getJobAgreementContext,
+  markJobCompleted,
   type ApiJobAgreementContext,
   type ApiJobNegotiationEvent,
 } from "@/lib/api/agreements";
@@ -111,6 +113,8 @@ function SupabaseInner({ jobId }: { jobId: string }) {
   const [submittingProposal, setSubmittingProposal] = useState(false);
   const [acceptingOffer, setAcceptingOffer] = useState(false);
   const [fundingPayment, setFundingPayment] = useState(false);
+  const [markingCompleted, setMarkingCompleted] = useState(false);
+  const [confirmingCompletion, setConfirmingCompletion] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sendNotice, setSendNotice] = useState<string | null>(null);
   const [agreementActionError, setAgreementActionError] = useState<string | null>(null);
@@ -245,6 +249,29 @@ function SupabaseInner({ jobId }: { jobId: string }) {
       currentAgreement &&
       currentAgreement.paymentStatus === "pending",
   );
+  const canMarkCompleted = Boolean(
+    profileRole === "professional" &&
+      currentJob?.status === "escrow_funded" &&
+      currentAgreement &&
+      currentAgreement.paymentStatus === "protected",
+  );
+  const canConfirmCompletion = Boolean(
+    profileRole === "client" &&
+      currentJob?.status === "completed_pending_confirmation" &&
+      currentAgreement &&
+      currentAgreement.paymentStatus === "protected",
+  );
+  const isAwaitingClientConfirmation = Boolean(
+    profileRole === "professional" &&
+      currentJob?.status === "completed_pending_confirmation" &&
+      currentAgreement &&
+      currentAgreement.paymentStatus === "protected",
+  );
+  const isCompletedAndReleased = Boolean(
+    currentJob?.status === "completed" &&
+      currentAgreement &&
+      currentAgreement.paymentStatus === "released",
+  );
   const parsedProposalAmount = Number(proposalAmount);
   const isProposalAmountValid =
     Number.isFinite(parsedProposalAmount) &&
@@ -378,6 +405,54 @@ function SupabaseInner({ jobId }: { jobId: string }) {
       );
     } finally {
       setFundingPayment(false);
+    }
+  };
+
+  const completeJob = async () => {
+    if (!canMarkCompleted || markingCompleted) {
+      return;
+    }
+
+    setAgreementActionError(null);
+    setAgreementActionNotice(null);
+    setMarkingCompleted(true);
+
+    try {
+      await markJobCompleted(jobId);
+      setAgreementActionNotice("Trabajo marcado como terminado. Esperando confirmación del cliente.");
+      setSupabaseReloadKey((currentValue) => currentValue + 1);
+    } catch (error) {
+      setAgreementActionError(
+        error instanceof Error && error.message
+          ? error.message
+          : "No pudimos marcar el trabajo como terminado. Inténtalo de nuevo.",
+      );
+    } finally {
+      setMarkingCompleted(false);
+    }
+  };
+
+  const releasePayment = async () => {
+    if (!canConfirmCompletion || confirmingCompletion) {
+      return;
+    }
+
+    setAgreementActionError(null);
+    setAgreementActionNotice(null);
+    setConfirmingCompletion(true);
+
+    try {
+      await confirmJobCompletion(jobId);
+      setAgreementActionNotice("Trabajo completado. El pago ha quedado liberado en esta fase fake.");
+      setSupabaseReloadKey((currentValue) => currentValue + 1);
+    } catch (error) {
+      setAgreementActionError(
+        error instanceof Error && error.message
+          ? error.message
+          : "No pudimos confirmar la finalización. Inténtalo de nuevo.",
+      );
+    } finally {
+      setConfirmingCompletion(false);
     }
   };
 
@@ -530,6 +605,37 @@ function SupabaseInner({ jobId }: { jobId: string }) {
                 </button>
               </div>
             )}
+            {canMarkCompleted && (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={() => void completeJob()}
+                  disabled={markingCompleted}
+                  className="rounded-full bg-coral-500 px-4 py-3 text-[13px] font-bold text-white disabled:opacity-40"
+                >
+                  {markingCompleted ? "Marcando terminado..." : "Marcar trabajo terminado"}
+                </button>
+              </div>
+            )}
+            {canConfirmCompletion && (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={() => void releasePayment()}
+                  disabled={confirmingCompletion}
+                  className="rounded-full bg-coral-500 px-4 py-3 text-[13px] font-bold text-white disabled:opacity-40"
+                >
+                  {confirmingCompletion
+                    ? "Liberando pago..."
+                    : "Confirmar finalización y liberar pago"}
+                </button>
+              </div>
+            )}
+            {isCompletedAndReleased && (
+              <div className="mt-3 text-[12px] font-semibold text-teal-700">
+                Trabajo completado · pago liberado.
+              </div>
+            )}
           </div>
         ) : currentNegotiation ? (
           <div className="mb-3 rounded-2xl border border-amber-100 bg-amber-50 px-3.5 py-3">
@@ -557,6 +663,12 @@ function SupabaseInner({ jobId }: { jobId: string }) {
         {profileRole === "professional" && isAwaitingProtectedPayment && (
           <div className="mb-3 rounded-2xl border border-amber-100 bg-amber-50 px-3.5 py-3 text-[12px] text-amber-800">
             Esperando pago protegido del cliente.
+          </div>
+        )}
+
+        {isAwaitingClientConfirmation && (
+          <div className="mb-3 rounded-2xl border border-violet-100 bg-violet-50 px-3.5 py-3 text-[12px] text-violet-800">
+            Esperando confirmación del cliente.
           </div>
         )}
 

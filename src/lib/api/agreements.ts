@@ -81,6 +81,21 @@ export interface ApiFundProtectedPaymentResult {
   paidAt: string;
 }
 
+export interface ApiMarkJobCompletedResult {
+  jobId: string;
+  agreementId: string;
+  paymentStatus: ApiAgreementPaymentStatus;
+  jobStatus: JobStatus;
+}
+
+export interface ApiConfirmJobCompletionResult {
+  jobId: string;
+  agreementId: string;
+  paymentStatus: ApiAgreementPaymentStatus;
+  jobStatus: JobStatus;
+  releasedAt: string;
+}
+
 interface JobAgreementRow {
   id: string;
   status: JobStatus;
@@ -140,6 +155,21 @@ interface FundProtectedPaymentRow {
   result_payment_status: ApiAgreementPaymentStatus;
   result_job_status: JobStatus;
   result_paid_at: string;
+}
+
+interface MarkJobCompletedRow {
+  result_job_id: string;
+  result_agreement_id: string;
+  result_payment_status: ApiAgreementPaymentStatus;
+  result_job_status: JobStatus;
+}
+
+interface ConfirmJobCompletionRow {
+  result_job_id: string;
+  result_agreement_id: string;
+  result_payment_status: ApiAgreementPaymentStatus;
+  result_job_status: JobStatus;
+  result_released_at: string;
 }
 
 function isNoRowsError(error: PostgrestError | null): boolean {
@@ -233,6 +263,25 @@ function mapFundProtectedPaymentRow(row: FundProtectedPaymentRow): ApiFundProtec
     paymentStatus: row.result_payment_status,
     jobStatus: row.result_job_status,
     paidAt: row.result_paid_at,
+  };
+}
+
+function mapMarkJobCompletedRow(row: MarkJobCompletedRow): ApiMarkJobCompletedResult {
+  return {
+    jobId: row.result_job_id,
+    agreementId: row.result_agreement_id,
+    paymentStatus: row.result_payment_status,
+    jobStatus: row.result_job_status,
+  };
+}
+
+function mapConfirmJobCompletionRow(row: ConfirmJobCompletionRow): ApiConfirmJobCompletionResult {
+  return {
+    jobId: row.result_job_id,
+    agreementId: row.result_agreement_id,
+    paymentStatus: row.result_payment_status,
+    jobStatus: row.result_job_status,
+    releasedAt: row.result_released_at,
   };
 }
 
@@ -360,6 +409,84 @@ function normalizeFundProtectedPaymentError(error: unknown): Error {
   }
 
   return new Error("No pudimos proteger el pago. Inténtalo de nuevo.");
+}
+
+function normalizeMarkJobCompletedError(error: unknown): Error {
+  const message = getErrorMessage(error).toLowerCase();
+
+  if (
+    message.includes("authentication required") ||
+    message.includes("current user does not have a profile") ||
+    message.includes("only the assigned professional can mark") ||
+    message.includes("permission denied")
+  ) {
+    return new Error("No puedes marcar este trabajo como terminado.");
+  }
+
+  if (message.includes("approved and active")) {
+    return new Error("La cuenta profesional ya no puede cerrar este trabajo.");
+  }
+
+  if (message.includes("does not exist")) {
+    return new Error("Este trabajo o su acuerdo ya no están disponibles.");
+  }
+
+  if (message.includes("is not in escrow_funded status")) {
+    return new Error("Este trabajo todavía no puede marcarse como terminado.");
+  }
+
+  if (message.includes("does not belong to the assigned professional")) {
+    return new Error("Este acuerdo ya no corresponde al profesional asignado.");
+  }
+
+  if (message.includes("is not protected")) {
+    return new Error("El pago protegido ya no está disponible para este trabajo.");
+  }
+
+  if (message.includes("does not have a funded paid_at timestamp")) {
+    return new Error("Este acuerdo no tiene un pago protegido válido.");
+  }
+
+  if (message.includes("has already been released")) {
+    return new Error("Este acuerdo ya fue liberado.");
+  }
+
+  return new Error("No pudimos marcar el trabajo como terminado. Inténtalo de nuevo.");
+}
+
+function normalizeConfirmJobCompletionError(error: unknown): Error {
+  const message = getErrorMessage(error).toLowerCase();
+
+  if (
+    message.includes("authentication required") ||
+    message.includes("current user does not have a profile") ||
+    message.includes("only the client owner can confirm completion") ||
+    message.includes("permission denied")
+  ) {
+    return new Error("No puedes confirmar la finalización de este trabajo.");
+  }
+
+  if (message.includes("does not exist")) {
+    return new Error("Este trabajo o su acuerdo ya no están disponibles.");
+  }
+
+  if (message.includes("is not in completed_pending_confirmation status")) {
+    return new Error("Este trabajo ya no está pendiente de tu confirmación.");
+  }
+
+  if (message.includes("is not protected")) {
+    return new Error("El pago protegido ya no está disponible para este trabajo.");
+  }
+
+  if (message.includes("does not have a funded paid_at timestamp")) {
+    return new Error("Este acuerdo no tiene un pago protegido válido.");
+  }
+
+  if (message.includes("has already been released")) {
+    return new Error("Este acuerdo ya fue liberado.");
+  }
+
+  return new Error("No pudimos confirmar la finalización. Inténtalo de nuevo.");
 }
 
 export async function getJobAgreementContext(jobId: string): Promise<ApiJobAgreementContext> {
@@ -562,5 +689,61 @@ export async function fundProtectedPayment(
   }
 
   return mapFundProtectedPaymentRow(result);
+}
+
+export async function markJobCompleted(
+  jobId: string,
+): Promise<ApiMarkJobCompletedResult> {
+  if (!isSupabaseMode()) {
+    throw new Error("markJobCompleted() is unavailable while NEXT_PUBLIC_DATA_MODE=mock.");
+  }
+
+  const client = getBrowserSupabaseClient();
+
+  const { data, error } = await client.rpc("mark_job_completed", {
+    p_job_id: jobId,
+  });
+
+  if (error) {
+    throw normalizeMarkJobCompletedError(error);
+  }
+
+  const result = Array.isArray(data)
+    ? (data[0] as MarkJobCompletedRow | undefined)
+    : ((data as MarkJobCompletedRow | null) ?? undefined);
+
+  if (!result) {
+    throw new Error("No pudimos marcar el trabajo como terminado. Inténtalo de nuevo.");
+  }
+
+  return mapMarkJobCompletedRow(result);
+}
+
+export async function confirmJobCompletion(
+  jobId: string,
+): Promise<ApiConfirmJobCompletionResult> {
+  if (!isSupabaseMode()) {
+    throw new Error("confirmJobCompletion() is unavailable while NEXT_PUBLIC_DATA_MODE=mock.");
+  }
+
+  const client = getBrowserSupabaseClient();
+
+  const { data, error } = await client.rpc("confirm_job_completion", {
+    p_job_id: jobId,
+  });
+
+  if (error) {
+    throw normalizeConfirmJobCompletionError(error);
+  }
+
+  const result = Array.isArray(data)
+    ? (data[0] as ConfirmJobCompletionRow | undefined)
+    : ((data as ConfirmJobCompletionRow | null) ?? undefined);
+
+  if (!result) {
+    throw new Error("No pudimos confirmar la finalización. Inténtalo de nuevo.");
+  }
+
+  return mapConfirmJobCompletionRow(result);
 }
 

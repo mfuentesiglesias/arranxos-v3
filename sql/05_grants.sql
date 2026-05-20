@@ -60,3 +60,5 @@ grant execute on function public.send_chat_message(uuid, text) to authenticated;
 grant execute on function public.create_agreement(uuid, integer, boolean) to authenticated;
 grant execute on function public.accept_agreement(uuid) to authenticated;
 grant execute on function public.fund_protected_payment(uuid) to authenticated;
+grant execute on function public.mark_job_completed(uuid) to authenticated;
+grant execute on function public.confirm_job_completion(uuid) to authenticated;
