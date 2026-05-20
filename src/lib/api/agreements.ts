@@ -340,6 +340,7 @@ export async function getJobAgreementContext(jobId: string): Promise<ApiJobAgree
         "id, job_id, professional_id, status, last_amount, proposed_by_role, client_accepted, professional_accepted, created_at, updated_at",
       )
       .eq("job_id", jobId)
+      .neq("status", "cancelled")
       .order("updated_at", { ascending: false })
       .limit(1)
       .returns<JobNegotiationRow[]>(),

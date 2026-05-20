@@ -15,7 +15,7 @@ El objetivo actual es validar el flujo completo como PWA antes de conectar backe
 - Zustand/localStorage para estado mock
 - Playwright para smoke tests
 - Deploy actual en Vercel
-- Supabase todavía NO conectado en esta versión demo
+- Supabase conectado en Fase 1 para flujos reales de chat, solicitudes y acuerdos mediante RLS/RPC; pagos/Stripe todavía no conectados.
 
 ## 3. Roles
 

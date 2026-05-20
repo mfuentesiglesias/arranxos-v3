@@ -505,6 +505,14 @@ $function$;
 
 -- ---------------------------------------------------------------------------
 -- create_agreement
+-- Bug fixed:
+-- - The previous implementation could reopen or create an active negotiation for
+--   a job that already had a live agreement accepted by both sides.
+-- - pending/protected/released/refunded are blocked because they still
+--   represent a live agreement lifecycle that must not be overwritten by a new
+--   proposal.
+-- - cancelled stays out of this guard so a future controlled reopening flow can
+--   decide explicitly whether renegotiation is allowed.
 -- Phase 3A note: p_price_guaranteed is reserved for future schema support and
 -- is not persisted yet because negotiations do not currently store this flag.
 -- ---------------------------------------------------------------------------
@@ -589,6 +597,17 @@ begin
     raise exception 'Job % has an active dispute and cannot receive a new agreement proposal.', p_job_id;
   end if;
 
+  if exists (
+    select 1
+    from public.agreements as a
+    where a.job_id = v_job.id
+      and a.accepted_by_client = true
+      and a.accepted_by_professional = true
+      and a.payment_status in ('pending', 'protected', 'released', 'refunded')
+  ) then
+    raise exception 'Job already has an active agreement and cannot receive new proposals';
+  end if;
+
   select *
   into v_negotiation
   from public.job_negotiations
@@ -661,6 +680,15 @@ $function$;
 
 -- ---------------------------------------------------------------------------
 -- accept_agreement
+-- Bug fixed:
+-- - The previous implementation could let an unrelated active negotiation reach
+--   the agreement upsert and overwrite a live agreement already stored for the
+--   same job.
+-- - pending/protected/released/refunded are blocked because they still
+--   represent a live agreement lifecycle that must not be replaced by a later
+--   spurious acceptance.
+-- - cancelled stays out of this guard so a future controlled reopening flow can
+--   decide explicitly whether a replacement agreement is valid.
 -- ---------------------------------------------------------------------------
 
 create or replace function public.accept_agreement(
@@ -801,6 +829,17 @@ begin
   );
 
   if v_negotiation.client_accepted and v_negotiation.professional_accepted then
+    if exists (
+      select 1
+      from public.agreements as a
+      where a.job_id = v_negotiation.job_id
+        and a.accepted_by_client = true
+        and a.accepted_by_professional = true
+        and a.payment_status in ('pending', 'protected', 'released', 'refunded')
+    ) then
+      raise exception 'Job already has an active agreement and cannot receive new proposals';
+    end if;
+
     select commission_pct
     into v_commission_pct
     from public.admin_config
