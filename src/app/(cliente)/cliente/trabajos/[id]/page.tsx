@@ -14,6 +14,8 @@ import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
 import { StatusBadge } from "@/components/ui/badge";
 import { JobStatusTimeline } from "@/components/jobs/job-status-timeline";
+import { getJobAgreementContext, type ApiJobAgreementContext } from "@/lib/api/agreements";
+import { getMyReviewForJob, type ApiReview } from "@/lib/api/reviews";
 import { jobs, professionals } from "@/lib/data";
 import {
   getActiveNegotiation,
@@ -37,13 +39,41 @@ import {
   useSession,
 } from "@/lib/store";
 import type { JobRequest, JobStatus, Review } from "@/lib/types";
+import { isSupabaseMode } from "@/lib/supabase/config";
 import { daysBetween, formatEuro } from "@/lib/utils";
 
 interface Props {
   params: Promise<{ id: string }>;
 }
 
+interface DetailReviewSummary {
+  rating: number;
+  comment: string | null;
+  createdAt?: string | null;
+}
+
+function formatReviewDate(value?: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const parsedDate = new Date(value);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return value;
+  }
+
+  return parsedDate.toLocaleString("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function Inner({ id }: { id: string }) {
+  const isSupabase = isSupabaseMode();
   type RequestingProEntry = {
     professional: (typeof professionals)[number];
     jobRequest?: JobRequest;
@@ -86,6 +116,8 @@ function Inner({ id }: { id: string }) {
   const [counterofferAmount, setCounterofferAmount] = useState(
     String(activeNegotiation?.lastAmount ?? Math.round((job.priceMin + job.priceMax) / 2)),
   );
+  const [realAgreementContext, setRealAgreementContext] = useState<ApiJobAgreementContext | null>(null);
+  const [realReview, setRealReview] = useState<ApiReview | null>(null);
   const postPaymentActions = getPostPaymentJobActionsForClient({
     status: job.status,
     agreement: resolvedAgreement,
@@ -143,6 +175,62 @@ function Inner({ id }: { id: string }) {
       autoReleaseCompletedJob(id);
     }
   }, [autoReleaseCompletedJob, id, postPaymentActions.canAutoRelease]);
+
+  useEffect(() => {
+    if (!isSupabase) {
+      setRealAgreementContext(null);
+      setRealReview(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadRealReviewState() {
+      try {
+        const [nextAgreementContext, nextReview] = await Promise.all([
+          getJobAgreementContext(id),
+          getMyReviewForJob(id),
+        ]);
+
+        if (!cancelled) {
+          setRealAgreementContext(nextAgreementContext);
+          setRealReview(nextReview);
+        }
+      } catch {
+        if (!cancelled) {
+          setRealAgreementContext(null);
+          setRealReview(null);
+        }
+      }
+    }
+
+    void loadRealReviewState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, isSupabase]);
+
+  const realJob = realAgreementContext?.status === "ready" ? realAgreementContext.job : null;
+  const realAgreement = realAgreementContext?.status === "ready" ? realAgreementContext.agreement : null;
+  const reviewSummary: DetailReviewSummary | undefined = isSupabase
+    ? realReview
+      ? {
+          rating: realReview.rating,
+          comment: realReview.comment,
+          createdAt: realReview.createdAt,
+        }
+      : undefined
+    : existingClientReview
+      ? {
+          rating: existingClientReview.rating,
+          comment: existingClientReview.text,
+          createdAt: existingClientReview.createdAt ?? existingClientReview.date,
+        }
+      : undefined;
+  const canShowRealReviewBlock = Boolean(
+    realJob?.status === "completed" && realAgreement?.paymentStatus === "released",
+  );
 
   const acceptOffer = () => {
     if (!canAcceptOffer) return;
@@ -534,10 +622,12 @@ function Inner({ id }: { id: string }) {
           finalPrice={finalPrice}
           actions={clientActions}
           postPaymentActions={postPaymentActions}
-          existingReview={existingClientReview}
+          existingReview={reviewSummary}
           completionDeadline={job.completionDeadline}
           autoReleaseApplied={autoReleaseApplied}
           onApplyAutoReleaseDemo={applyAutoReleaseDemo}
+          isSupabase={isSupabase}
+          canShowRealReviewBlock={canShowRealReviewBlock}
         />
       </ScreenBody>
     </div>
@@ -556,6 +646,8 @@ function ActionsForStatus({
   completionDeadline,
   autoReleaseApplied,
   onApplyAutoReleaseDemo,
+  isSupabase,
+  canShowRealReviewBlock,
 }: {
   jobId: string;
   status: JobStatus;
@@ -564,10 +656,12 @@ function ActionsForStatus({
   finalPrice?: number;
   actions: ReturnType<typeof getJobActionsForClient>;
   postPaymentActions: ReturnType<typeof getPostPaymentJobActionsForClient>;
-  existingReview?: Review;
+  existingReview?: DetailReviewSummary;
   completionDeadline?: string;
   autoReleaseApplied: boolean;
   onApplyAutoReleaseDemo: () => void;
+  isSupabase: boolean;
+  canShowRealReviewBlock: boolean;
 }) {
   if (actions.includes("pay")) {
     return (
@@ -630,28 +724,41 @@ function ActionsForStatus({
               : "El cliente ya confirmó este trabajo en la demo y el acuerdo queda cerrado."} El pago protegido mock sigue visible como referencia del flujo.
           </div>
         </Card>
-        {existingReview ? (
+        {(!isSupabase || canShowRealReviewBlock) && (existingReview ? (
           <Card className="mb-3" testId="client-review-summary">
             <div className="font-bold text-[13.5px] text-ink-800 mb-1">
-              Valoración enviada
+              Valoración del trabajo
+            </div>
+            <div className="text-[12px] text-ink-600 leading-snug mb-1">
+              Ya has valorado este trabajo.
             </div>
             <div className="text-[12px] text-ink-600 leading-snug mb-1">
               {existingReview.rating} de 5 estrellas
             </div>
-            <div className="text-[11.5px] text-ink-500 leading-snug">
-              {existingReview.text}
-            </div>
+            {existingReview.comment && (
+              <div className="text-[11.5px] text-ink-500 leading-snug mb-1">
+                {existingReview.comment}
+              </div>
+            )}
+            {formatReviewDate(existingReview.createdAt) && (
+              <div className="text-[11px] text-ink-400 leading-snug">
+                {formatReviewDate(existingReview.createdAt)}
+              </div>
+            )}
           </Card>
         ) : (
           <Card className="mb-3" testId="client-review-cta-card">
             <div className="font-bold text-[13.5px] text-ink-800 mb-2">
-              ¿Cómo fue el trabajo?
+              Valoración del trabajo
+            </div>
+            <div className="text-[11.5px] text-ink-500 leading-snug mb-3">
+              Tu opinión ayuda a otros clientes a elegir profesionales de confianza.
             </div>
             <Button full href={`/cliente/trabajos/${jobId}/valorar`} testId="client-review-cta">
-              Valorar profesional
+              Valorar al profesional
             </Button>
           </Card>
-        )}
+        ))}
       </>
     );
   }

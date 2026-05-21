@@ -12,9 +12,11 @@ import { Input, Textarea } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/badge";
 import { JobStatusTimeline } from "@/components/jobs/job-status-timeline";
 import { MapView } from "@/components/map/map-view";
+import { getJobAgreementContext, type ApiJobAgreementContext } from "@/lib/api/agreements";
 import { createJobRequest } from "@/lib/api/jobRequests";
 import { getPublishedJobForProfessional, type ApiProfessionalPublishedJob } from "@/lib/api/jobs";
 import { getCurrentProfile } from "@/lib/api/profiles";
+import { getMyReviewForJob, type ApiReview } from "@/lib/api/reviews";
 import { jobs } from "@/lib/data";
 import {
   getActiveNegotiation,
@@ -43,6 +45,56 @@ interface Props {
   params: Promise<{ id: string }>;
 }
 
+function formatReviewDate(value?: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const parsedDate = new Date(value);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return value;
+  }
+
+  return parsedDate.toLocaleString("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function ReviewStatusCard({
+  jobId,
+  review,
+}: {
+  jobId: string;
+  review: ApiReview | null;
+}) {
+  return review ? (
+    <Card className="mb-3" testId="pro-review-summary">
+      <div className="font-bold text-[13.5px] text-ink-800 mb-1">Valoración del cliente</div>
+      <div className="text-[12px] text-ink-600 leading-snug mb-1">Ya has valorado este trabajo.</div>
+      <div className="text-[12px] text-ink-600 leading-snug mb-1">{review.rating} de 5 estrellas</div>
+      {review.comment && <div className="text-[11.5px] text-ink-500 leading-snug mb-1">{review.comment}</div>}
+      {formatReviewDate(review.createdAt) && (
+        <div className="text-[11px] text-ink-400 leading-snug">{formatReviewDate(review.createdAt)}</div>
+      )}
+    </Card>
+  ) : (
+    <Card className="mb-3" testId="pro-review-cta-card">
+      <div className="font-bold text-[13.5px] text-ink-800 mb-2">Valoración del cliente</div>
+      <div className="text-[11.5px] text-ink-500 leading-snug mb-3">
+        Tu opinión ayuda a mejorar la confianza dentro de Arranxos.
+      </div>
+      <Button full href={`/profesional/trabajos/${jobId}/valorar`} testId="pro-review-cta">
+        Valorar al cliente
+      </Button>
+    </Card>
+  );
+}
+
 function Inner({ id }: { id: string }) {
   const isSupabase = isSupabaseMode();
   const session = useSession();
@@ -67,6 +119,8 @@ function Inner({ id }: { id: string }) {
     String(activeNegotiation?.lastAmount ?? Math.round((job.priceMin + job.priceMax) / 2)),
   );
   const [realJob, setRealJob] = useState<ApiProfessionalPublishedJob | null>(null);
+  const [realAgreementContext, setRealAgreementContext] = useState<ApiJobAgreementContext | null>(null);
+  const [realReview, setRealReview] = useState<ApiReview | null>(null);
   const [realJobLoading, setRealJobLoading] = useState(false);
   const [realJobError, setRealJobError] = useState<string | null>(null);
   const [isRealProfessionalApproved, setIsRealProfessionalApproved] = useState(false);
@@ -141,14 +195,38 @@ function Inner({ id }: { id: string }) {
       setRequestState("idle");
 
       try {
-        const profile = await getCurrentProfile();
+        const [profile, nextAgreementContext, nextReview] = await Promise.all([
+          getCurrentProfile(),
+          getJobAgreementContext(id),
+          getMyReviewForJob(id),
+        ]);
+
+        const isHistoricalCompletedJob = Boolean(
+          profile?.role === "professional" &&
+            nextAgreementContext.status === "ready" &&
+            nextAgreementContext.job?.status === "completed" &&
+            nextAgreementContext.agreement?.paymentStatus === "released",
+        );
 
         if (!profile) {
           if (!cancelled) {
             setIsRealProfessionalApproved(false);
             setRealJob(null);
+            setRealAgreementContext(nextAgreementContext);
+            setRealReview(nextReview);
             setRealJobLoading(false);
             setRealJobError("Tu sesión no tiene un perfil profesional válido.");
+          }
+          return;
+        }
+
+        if (isHistoricalCompletedJob) {
+          if (!cancelled) {
+            setIsRealProfessionalApproved(true);
+            setRealJob(null);
+            setRealAgreementContext(nextAgreementContext);
+            setRealReview(nextReview);
+            setRealJobLoading(false);
           }
           return;
         }
@@ -157,6 +235,8 @@ function Inner({ id }: { id: string }) {
           if (!cancelled) {
             setIsRealProfessionalApproved(false);
             setRealJob(null);
+            setRealAgreementContext(nextAgreementContext);
+            setRealReview(nextReview);
             setRealJobLoading(false);
           }
           return;
@@ -167,12 +247,16 @@ function Inner({ id }: { id: string }) {
         if (!cancelled) {
           setIsRealProfessionalApproved(true);
           setRealJob(publishedJob);
+          setRealAgreementContext(nextAgreementContext);
+          setRealReview(nextReview);
           setRealJobLoading(false);
         }
       } catch {
         if (!cancelled) {
           setIsRealProfessionalApproved(false);
           setRealJob(null);
+          setRealAgreementContext(null);
+          setRealReview(null);
           setRealJobLoading(false);
           setRealJobError("No pudimos cargar este trabajo real ahora mismo.");
         }
@@ -212,6 +296,13 @@ function Inner({ id }: { id: string }) {
       setRequestSending(false);
     }
   };
+
+  const realCompletedJob = realAgreementContext?.status === "ready" ? realAgreementContext.job : null;
+  const realCompletedAgreement = realAgreementContext?.status === "ready" ? realAgreementContext.agreement : null;
+  const showRealReviewBlock = Boolean(
+    realCompletedJob?.status === "completed" &&
+      realCompletedAgreement?.paymentStatus === "released",
+  );
 
   if (isSupabase) {
     return (
@@ -303,6 +394,8 @@ function Inner({ id }: { id: string }) {
                 </div>
               </Card>
 
+              {showRealReviewBlock && <ReviewStatusCard jobId={id} review={realReview} />}
+
               {requestState === "sent" && (
                 <Card className="mb-3 bg-teal-50 border-teal-100">
                   <div className="font-bold text-[13px] text-teal-700 mb-1">Solicitud enviada</div>
@@ -354,6 +447,18 @@ function Inner({ id }: { id: string }) {
                   </Button>
                 </div>
               </Card>
+            </>
+          )}
+
+          {!realJob && showRealReviewBlock && (
+            <>
+              <Card className="mb-3 bg-teal-50/40 border-teal-100" testId="pro-job-completed-state">
+                <div className="font-bold text-[13px] text-teal-700 mb-1">Trabajo completado</div>
+                <div className="text-[11.5px] text-teal-700/80 leading-snug">
+                  El cliente ya confirmó este trabajo y el acuerdo quedó cerrado en Supabase mode.
+                </div>
+              </Card>
+              <ReviewStatusCard jobId={id} review={realReview} />
             </>
           )}
         </ScreenBody>
