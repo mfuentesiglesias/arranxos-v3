@@ -38,7 +38,7 @@ import {
   getSearchTicketByJobId,
   useSession,
 } from "@/lib/store";
-import type { JobRequest, JobStatus, Review } from "@/lib/types";
+import type { JobRequest, JobStatus } from "@/lib/types";
 import { isSupabaseMode } from "@/lib/supabase/config";
 import { daysBetween, formatEuro } from "@/lib/utils";
 

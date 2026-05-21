@@ -335,7 +335,7 @@ function Inner({ id }: { id: string }) {
             </Card>
           )}
 
-          {isRealProfessionalApproved && !realJobLoading && !realJobError && !realJob && (
+          {isRealProfessionalApproved && !realJobLoading && !realJobError && !realJob && !showRealReviewBlock && (
             <Card className="mb-3 bg-amber-50/70 border-amber-100">
               <div className="font-bold text-[13px] text-amber-800 mb-1">Trabajo no disponible</div>
               <div className="text-[11.5px] text-amber-700 leading-snug">
