@@ -112,6 +112,13 @@ test("dashboard admin calcula la comisión desde agreement/finalPrice", async ({
   await expect(page.getByTestId("admin-dashboard-kpi-commission").first()).toContainText(
     "Comisión generada mock",
   );
-  const nextCommission = await readCommissionValue(page);
-  expect(nextCommission - baselineCommission).toBe(100);
+  await expect
+    .poll(
+      async () => {
+        const nextCommission = await readCommissionValue(page);
+        return nextCommission - baselineCommission;
+      },
+      { timeout: 5000 },
+    )
+    .toBe(100);
 });
