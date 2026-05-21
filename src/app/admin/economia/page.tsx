@@ -5,14 +5,17 @@ import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { StatusBadge } from "@/components/ui/badge";
+import { autoReleaseDueJobs, type ApiAutoReleaseDueJobResult } from "@/lib/api/agreements";
 import {
   getAgreement,
   getCommissionAmount,
   getEffectiveFinalPrice,
 } from "@/lib/domain/policies";
 import { getEffectiveJobs, useSession } from "@/lib/store";
+import { isSupabaseMode } from "@/lib/supabase/config";
 import type { JobStatus } from "@/lib/types";
 import { formatEuro } from "@/lib/utils";
 import { professionals } from "@/lib/data";
@@ -36,9 +39,14 @@ const ECONOMY_JOB_STATUSES: JobStatus[] = [
 ];
 
 export default function AdminEconomiaPage() {
+  const isSupabase = isSupabaseMode();
   const session = useSession();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<EconomyFilter>("all");
+  const [runningAutoRelease, setRunningAutoRelease] = useState(false);
+  const [autoReleaseError, setAutoReleaseError] = useState<string | null>(null);
+  const [autoReleaseNotice, setAutoReleaseNotice] = useState<string | null>(null);
+  const [autoReleaseResults, setAutoReleaseResults] = useState<ApiAutoReleaseDueJobResult[]>([]);
   const effectiveJobs = useMemo(() => getEffectiveJobs(session), [session]);
   const disputes = session.disputes;
   const notifications = session.notifications;
@@ -139,12 +147,86 @@ export default function AdminEconomiaPage() {
     totalNet: rows.reduce((acc, row) => acc + row.net, 0),
   };
 
+  const runAutoRelease = async () => {
+    if (!isSupabase || runningAutoRelease) {
+      return;
+    }
+
+    setRunningAutoRelease(true);
+    setAutoReleaseError(null);
+    setAutoReleaseNotice(null);
+
+    try {
+      const results = await autoReleaseDueJobs();
+      setAutoReleaseResults(results);
+
+      if (results.length === 0) {
+        setAutoReleaseNotice("No había trabajos vencidos para liberar.");
+      } else {
+        setAutoReleaseNotice(
+          `Se liberaron ${results.length} trabajo${results.length === 1 ? "" : "s"}.`,
+        );
+      }
+    } catch (error) {
+      setAutoReleaseResults([]);
+      setAutoReleaseError(
+        error instanceof Error && error.message
+          ? error.message
+          : "No pudimos ejecutar el auto-release manual. Inténtalo de nuevo.",
+      );
+    } finally {
+      setRunningAutoRelease(false);
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col bg-sand-50">
       <StatusBar />
       <TopBar title="Economía" subtitle="Visión central del flujo económico mock" />
       <ScreenBody className="px-4 pt-3 pb-6">
         <div data-testid="admin-economy-page" className="flex flex-col gap-3">
+          {isSupabase && (
+            <Card className="border-teal-100 bg-teal-50/40">
+              <div className="font-bold text-[14px] text-teal-700 mb-1">Auto-release manual</div>
+              <div className="text-[12px] text-teal-700/80 leading-snug mb-3">
+                Ejecuta la liberación de trabajos vencidos sin disputa activa.
+              </div>
+
+              {autoReleaseError && (
+                <div className="mb-3 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-[12px] text-rose-700 leading-snug">
+                  {autoReleaseError}
+                </div>
+              )}
+
+              {autoReleaseNotice && (
+                <div className="mb-3 rounded-xl border border-teal-100 bg-white px-3 py-2 text-[12px] text-teal-700 leading-snug">
+                  {autoReleaseNotice}
+                </div>
+              )}
+
+              {autoReleaseResults.length > 0 && (
+                <div className="mb-3 flex flex-col gap-2">
+                  {autoReleaseResults.map((result) => (
+                    <div
+                      key={`${result.jobId}:${result.releasedAt ?? "released"}`}
+                      className="rounded-xl border border-sand-200/70 bg-white px-3 py-2 text-[11.5px] text-ink-700"
+                    >
+                      <div className="font-bold text-[12px] text-ink-800">Trabajo {result.jobId}</div>
+                      <div>Payment status: {result.paymentStatus}</div>
+                      <div>
+                        Released at: {result.releasedAt ? new Date(result.releasedAt).toLocaleString("es-ES") : "No registrado"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <Button full onClick={() => void runAutoRelease()} disabled={runningAutoRelease}>
+                {runningAutoRelease ? "Ejecutando auto-release..." : "Ejecutar auto-release vencidos"}
+              </Button>
+            </Card>
+          )}
+
           <Card className="bg-ink-900 text-white border-ink-900" testId="admin-economy-summary">
             <div className="grid grid-cols-2 gap-3 text-[12px]">
                <SummaryMetric label="Con acuerdo (demo)" value={String(summary.withAgreement)} />
