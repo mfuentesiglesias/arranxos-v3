@@ -21,6 +21,22 @@ export interface ApiReview {
 
 export interface ApiCreateReviewResult extends ApiReview {}
 
+export interface ApiAdminReviewListItem {
+  id: string;
+  jobId: string;
+  jobTitle: string;
+  reviewerProfileId: string;
+  reviewerRole: ApiProfileRole;
+  reviewerName: string;
+  reviewerAvatarInitials: string | null;
+  targetProfileId: string;
+  targetType: ApiReviewTargetType;
+  targetName: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+}
+
 interface ReviewRow {
   id: string;
   job_id: string;
@@ -43,6 +59,17 @@ interface CreateReviewRow {
   result_rating: number;
   result_comment: string | null;
   result_created_at: string;
+}
+
+interface AdminReviewProfileRow {
+  id: string;
+  full_name: string;
+  avatar_initials: string | null;
+}
+
+interface AdminReviewJobRow {
+  id: string;
+  title: string;
 }
 
 const REVIEW_SELECT_FIELDS =
@@ -95,6 +122,14 @@ function mapCreateReviewRow(row: CreateReviewRow): ApiCreateReviewResult {
     comment: row.result_comment,
     createdAt: row.result_created_at,
   };
+}
+
+function buildProfileMap(rows: AdminReviewProfileRow[] | null): Map<string, AdminReviewProfileRow> {
+  return new Map((rows ?? []).map((row) => [row.id, row]));
+}
+
+function buildJobMap(rows: AdminReviewJobRow[] | null): Map<string, AdminReviewJobRow> {
+  return new Map((rows ?? []).map((row) => [row.id, row]));
 }
 
 function normalizeCreateReviewError(error: unknown): Error {
@@ -245,4 +280,77 @@ export async function getJobReviews(jobId: string): Promise<ApiReview[]> {
   }
 
   return (data ?? []).map(mapReviewRow);
+}
+
+export async function listAdminReviews(): Promise<ApiAdminReviewListItem[]> {
+  if (!isSupabaseMode()) {
+    return [];
+  }
+
+  const client = getBrowserSupabaseClient();
+
+  const { data: reviewRows, error: reviewError } = await client
+    .from("reviews")
+    .select(REVIEW_SELECT_FIELDS)
+    .order("created_at", { ascending: false })
+    .returns<ReviewRow[]>();
+
+  if (reviewError) {
+    throw reviewError;
+  }
+
+  const rows = reviewRows ?? [];
+
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const profileIds = [...new Set(rows.flatMap((row) => [row.reviewer_profile_id, row.target_profile_id]))];
+  const jobIds = [...new Set(rows.map((row) => row.job_id))];
+
+  const [profilesResponse, jobsResponse] = await Promise.all([
+    client
+      .from("profiles")
+      .select("id, full_name, avatar_initials")
+      .in("id", profileIds)
+      .returns<AdminReviewProfileRow[]>(),
+    client
+      .from("jobs")
+      .select("id, title")
+      .in("id", jobIds)
+      .returns<AdminReviewJobRow[]>(),
+  ]);
+
+  if (profilesResponse.error) {
+    throw profilesResponse.error;
+  }
+
+  if (jobsResponse.error) {
+    throw jobsResponse.error;
+  }
+
+  const profileMap = buildProfileMap(profilesResponse.data ?? null);
+  const jobMap = buildJobMap(jobsResponse.data ?? null);
+
+  return rows.map((row) => {
+    const reviewerProfile = profileMap.get(row.reviewer_profile_id);
+    const targetProfile = profileMap.get(row.target_profile_id);
+    const job = jobMap.get(row.job_id);
+
+    return {
+      id: row.id,
+      jobId: row.job_id,
+      jobTitle: job?.title ?? row.job_id,
+      reviewerProfileId: row.reviewer_profile_id,
+      reviewerRole: row.reviewer_role,
+      reviewerName: reviewerProfile?.full_name ?? row.reviewer_profile_id,
+      reviewerAvatarInitials: reviewerProfile?.avatar_initials ?? null,
+      targetProfileId: row.target_profile_id,
+      targetType: row.target_type,
+      targetName: targetProfile?.full_name ?? row.target_profile_id,
+      rating: row.rating,
+      comment: row.comment,
+      createdAt: row.created_at,
+    };
+  });
 }
