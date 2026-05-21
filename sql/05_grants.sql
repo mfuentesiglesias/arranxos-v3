@@ -67,3 +67,5 @@ grant execute on function public.open_dispute(uuid, text, text, jsonb) to authen
 grant execute on function public.resolve_dispute(uuid, text, text) to authenticated;
 grant execute on function public.auto_release_due_jobs() to authenticated;
 grant execute on function public.create_review(uuid, integer, text) to authenticated;
+grant execute on function public.get_admin_config() to authenticated;
+grant execute on function public.update_admin_config(integer, integer, integer, integer, integer, boolean, jsonb) to authenticated;
