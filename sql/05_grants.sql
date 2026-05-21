@@ -69,3 +69,6 @@ grant execute on function public.auto_release_due_jobs() to authenticated;
 grant execute on function public.create_review(uuid, integer, text) to authenticated;
 grant execute on function public.get_admin_config() to authenticated;
 grant execute on function public.update_admin_config(integer, integer, integer, integer, integer, boolean, jsonb) to authenticated;
+grant execute on function public.get_professional_reliability_score(uuid) to authenticated;
+grant execute on function public.recalculate_professional_reliability_score(uuid) to authenticated;
+grant execute on function public.list_admin_professional_scores() to authenticated;
