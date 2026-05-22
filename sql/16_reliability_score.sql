@@ -260,6 +260,7 @@ as $function$
 declare
   v_current_user_id uuid := auth.uid();
   v_current_role public.profile_role;
+  v_refresh record;
   v_score record;
 begin
   if v_current_user_id is null then
@@ -277,13 +278,12 @@ begin
   end if;
 
   select *
+  into v_refresh
+  from public.refresh_professional_reliability_snapshot(p_professional_id);
+
+  select *
   into v_score
   from public.get_professional_reliability_score(p_professional_id);
-
-  update public.professionals
-  set reliability_snapshot = v_score.result_snapshot,
-      updated_at = v_score.result_updated_at
-  where profile_id = p_professional_id;
 
   return query
   select

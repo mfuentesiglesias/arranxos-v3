@@ -145,6 +145,10 @@ begin
   )
   returning * into v_review;
 
+  if v_target_type = 'professional' then
+    perform public.refresh_professional_reliability_snapshot(v_target_profile_id);
+  end if;
+
   return query
   select
     v_review.id,
