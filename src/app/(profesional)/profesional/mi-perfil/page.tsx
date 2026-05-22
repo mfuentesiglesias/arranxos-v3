@@ -12,6 +12,10 @@ import { Icon } from "@/components/ui/icon";
 import { Input, Textarea } from "@/components/ui/input";
 import { RatingStars } from "@/components/pros/rating-stars";
 import { StrikeBadge } from "@/components/pros/strike-badge";
+import {
+  getProfessionalReliabilityScore,
+  type ApiProfessionalReliabilityScore,
+} from "@/lib/api/reliability";
 import { getCurrentProfile, type ApiProfile } from "@/lib/api/profiles";
 import { isSupabaseMode } from "@/lib/supabase/config";
 import {
@@ -77,6 +81,9 @@ export default function PerfilProPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<ProfilePanelId | null>(null);
   const [realProfile, setRealProfile] = useState<ApiProfile | null>(null);
+  const [realReliabilityScore, setRealReliabilityScore] = useState<ApiProfessionalReliabilityScore | null>(null);
+  const [reliabilityLoading, setReliabilityLoading] = useState(false);
+  const [reliabilityError, setReliabilityError] = useState<string | null>(null);
   const [specialtySearch, setSpecialtySearch] = useState("");
   const [catalogRequestFeedback, setCatalogRequestFeedback] = useState<string | null>(null);
   const [editSaved, setEditSaved] = useState(false);
@@ -196,6 +203,17 @@ export default function PerfilProPage() {
     isSupabase && realProfile?.locationLabel ? realProfile.locationLabel : profileDraft.location;
   const displayProfessionalStatus =
     isSupabase && realProfile?.professionalStatus ? realProfile.professionalStatus : null;
+  const hasRealInsufficientHistory = Boolean(
+    realReliabilityScore &&
+      realReliabilityScore.reviewCount === 0 &&
+      realReliabilityScore.completedJobs === 0 &&
+      realReliabilityScore.cancelledJobs === 0 &&
+      realReliabilityScore.openDisputes === 0 &&
+      realReliabilityScore.resolvedAgainstProfessional === 0 &&
+      realReliabilityScore.splitDisputes === 0 &&
+      realReliabilityScore.strikeCount === 0,
+  );
+  const displayedReliabilityScore = isSupabase && realReliabilityScore ? realReliabilityScore.score : reliabilitySummary.score;
 
   useEffect(() => {
     if (!isSupabase) {
@@ -207,8 +225,44 @@ export default function PerfilProPage() {
     const loadProfile = async () => {
       try {
         const profile = await getCurrentProfile();
-        if (!cancelled && profile) {
+        if (!cancelled) {
           setRealProfile(profile);
+        }
+
+        if (!profile || profile.role !== "professional") {
+          if (!cancelled) {
+            setRealReliabilityScore(null);
+            setReliabilityError(
+              profile ? "Esta página solo está disponible para profesionales." : "Necesitas iniciar sesión para ver tu fiabilidad real.",
+            );
+            setReliabilityLoading(false);
+          }
+          return;
+        }
+
+        if (!cancelled) {
+          setReliabilityLoading(true);
+          setReliabilityError(null);
+        }
+
+        try {
+          const reliabilityScore = await getProfessionalReliabilityScore(profile.id);
+          if (!cancelled) {
+            setRealReliabilityScore(reliabilityScore);
+          }
+        } catch (error) {
+          if (!cancelled) {
+            setRealReliabilityScore(null);
+            setReliabilityError(
+              error instanceof Error && error.message
+                ? error.message
+                : "No pudimos cargar tu fiabilidad real.",
+            );
+          }
+        } finally {
+          if (!cancelled) {
+            setReliabilityLoading(false);
+          }
         }
       } catch {
         // Keep the current mock fallback if the real profile cannot be loaded.
@@ -1031,7 +1085,7 @@ export default function PerfilProPage() {
               <div className="grid grid-cols-3 gap-2 text-center">
                 {[
                   ["Trabajos", professional.jobs],
-                  ["Fiabilidad", `${reliabilitySummary.score}/100`],
+                  ["Fiabilidad", `${displayedReliabilityScore}/100`],
                   ["Respuesta", professional.responseTime],
                 ].map(([l, v]) => (
               <div
@@ -1050,9 +1104,11 @@ export default function PerfilProPage() {
         <Card className="mb-3" testId="professional-reliability-summary">
           <div className="flex items-start justify-between gap-3 mb-2">
             <div>
-              <div className="font-bold text-[13px] text-ink-800">Fiabilidad</div>
+              <div className="font-bold text-[13px] text-ink-800">{isSupabase ? "Tu fiabilidad" : "Fiabilidad"}</div>
               <div className="mt-0.5 text-[11.5px] text-ink-400">
-                Score mock/demo derivado para profesionales.
+                {isSupabase
+                  ? "Solo lectura. Este score todavía no cambia tu visibilidad ni tus límites."
+                  : "Score mock/demo derivado para profesionales."}
               </div>
             </div>
             <div className="text-right">
@@ -1060,25 +1116,67 @@ export default function PerfilProPage() {
                 className="font-extrabold text-[22px] leading-none text-ink-900"
                 data-testid="professional-reliability-score"
               >
-                {reliabilitySummary.score}
+                {isSupabase && realReliabilityScore ? realReliabilityScore.score : reliabilitySummary.score}
               </div>
               <div
-                className={`mt-1 text-[11px] font-bold uppercase tracking-wide ${getReliabilityLabelClassName(reliabilitySummary.label)}`}
+                className={`mt-1 text-[11px] font-bold uppercase tracking-wide ${
+                  isSupabase && hasRealInsufficientHistory
+                    ? "text-ink-500"
+                    : getReliabilityLabelClassName(
+                        isSupabase && realReliabilityScore ? realReliabilityScore.label : reliabilitySummary.label,
+                      )
+                }`}
                 data-testid="professional-reliability-label"
               >
-                {getReliabilityLabelText(reliabilitySummary.label)}
+                {isSupabase && hasRealInsufficientHistory
+                  ? "Score inicial"
+                  : getReliabilityLabelText(
+                      isSupabase && realReliabilityScore ? realReliabilityScore.label : reliabilitySummary.label,
+                    )}
               </div>
             </div>
           </div>
-          <div className="text-[12px] text-ink-600 leading-snug">
-            {reliabilitySummary.reviewCount} reseñas, media de {reliabilitySummary.averageRating.toFixed(1)}, {reliabilitySummary.completedJobs} trabajos completados y {reliabilitySummary.strikes} strikes.
-          </div>
-          <div className="mt-2 text-[11.5px] text-ink-400 leading-snug">
-            Cancelados: {reliabilitySummary.cancelledJobs} · Disputas abiertas: {reliabilitySummary.openDisputes} · Resueltas contra el pro: {reliabilitySummary.resolvedAgainstPro} · Split: {reliabilitySummary.splitDisputes}
-          </div>
-          <div className="mt-2 rounded-2xl border border-sand-200/70 bg-sand-50/70 px-3 py-2 text-[11.5px] text-ink-500 leading-snug">
-            Este indicador es mock/demo y no activa bloqueos ni reglas automáticas en esta fase.
-          </div>
+          {isSupabase && reliabilityLoading && (
+            <div className="text-[12px] text-ink-600 leading-snug">
+              Estamos cargando tu score real de fiabilidad.
+            </div>
+          )}
+          {isSupabase && reliabilityError && (
+            <div className="rounded-2xl border border-rose-100 bg-rose-50 px-3 py-2 text-[11.5px] text-rose-700 leading-snug">
+              {reliabilityError}
+            </div>
+          )}
+          {isSupabase && realReliabilityScore && (
+            <>
+              {hasRealInsufficientHistory && (
+                <div className="mb-2 rounded-2xl border border-amber-100 bg-amber-50 px-3 py-2 text-[11.5px] text-amber-700 leading-snug">
+                  Sin histórico suficiente.
+                </div>
+              )}
+              <div className="text-[12px] text-ink-600 leading-snug">
+                {realReliabilityScore.reviewCount} reseñas, media de {(realReliabilityScore.averageRating ?? 0).toFixed(1)}, {realReliabilityScore.completedJobs} trabajos completados y {realReliabilityScore.strikeCount} strikes.
+              </div>
+              <div className="mt-2 text-[11.5px] text-ink-400 leading-snug">
+                Cancelados: {realReliabilityScore.cancelledJobs} · Disputas abiertas: {realReliabilityScore.openDisputes} · Resueltas contra el pro: {realReliabilityScore.resolvedAgainstProfessional} · Split: {realReliabilityScore.splitDisputes}
+              </div>
+              <div className="mt-2 rounded-2xl border border-sand-200/70 bg-sand-50/70 px-3 py-2 text-[11.5px] text-ink-500 leading-snug">
+                Riesgo actual: {getRiskStateText(realReliabilityScore.riskState)}. Este score no cambia todavía tu visibilidad ni tus límites.
+              </div>
+            </>
+          )}
+          {!isSupabase && (
+            <>
+              <div className="text-[12px] text-ink-600 leading-snug">
+                {reliabilitySummary.reviewCount} reseñas, media de {reliabilitySummary.averageRating.toFixed(1)}, {reliabilitySummary.completedJobs} trabajos completados y {reliabilitySummary.strikes} strikes.
+              </div>
+              <div className="mt-2 text-[11.5px] text-ink-400 leading-snug">
+                Cancelados: {reliabilitySummary.cancelledJobs} · Disputas abiertas: {reliabilitySummary.openDisputes} · Resueltas contra el pro: {reliabilitySummary.resolvedAgainstPro} · Split: {reliabilitySummary.splitDisputes}
+              </div>
+              <div className="mt-2 rounded-2xl border border-sand-200/70 bg-sand-50/70 px-3 py-2 text-[11.5px] text-ink-500 leading-snug">
+                Este indicador es mock/demo y no activa bloqueos ni reglas automáticas en esta fase.
+              </div>
+            </>
+          )}
         </Card>
 
         <Card className="mb-3">
@@ -1444,18 +1542,32 @@ function getPanelDescription(panelId: ProfilePanelId | null) {
   )[panelId ?? "edit"];
 }
 
-function getReliabilityLabelText(label: "alta" | "media" | "baja") {
+function getReliabilityLabelText(label: "alta" | "media" | "baja" | "buena") {
+  if (label === "buena") {
+    return "Buena";
+  }
+
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-function getReliabilityLabelClassName(label: "alta" | "media" | "baja") {
+function getReliabilityLabelClassName(label: "alta" | "media" | "baja" | "buena") {
   return (
     {
       alta: "text-teal-700",
+      buena: "text-sky-700",
       media: "text-amber-700",
       baja: "text-rose-600",
-    } satisfies Record<"alta" | "media" | "baja", string>
+    } satisfies Record<"alta" | "media" | "baja" | "buena", string>
   )[label];
+}
+
+function getRiskStateText(riskState: "low" | "medium" | "high" | "critical") {
+  return {
+    low: "Riesgo bajo",
+    medium: "Riesgo medio",
+    high: "Riesgo alto",
+    critical: "Riesgo crítico",
+  }[riskState];
 }
 
 function ChecklistRow({
