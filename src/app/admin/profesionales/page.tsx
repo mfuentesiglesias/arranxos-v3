@@ -11,7 +11,11 @@ import { RatingStars } from "@/components/pros/rating-stars";
 import { StrikeBadge } from "@/components/pros/strike-badge";
 import { Button } from "@/components/ui/button";
 import { defaultAdminConfig } from "@/lib/data";
-import { listAdminProfessionalScores, type ApiAdminProfessionalScoreListItem } from "@/lib/api/reliability";
+import {
+  listAdminProfessionalScores,
+  recalculateProfessionalReliabilityScore,
+  type ApiAdminProfessionalScoreListItem,
+} from "@/lib/api/reliability";
 import { getProfessionalReliabilitySummary } from "@/lib/reliability";
 import {
   getEffectiveJobs,
@@ -81,6 +85,9 @@ function SupabaseAdminProfesionalesPage() {
   const [professionals, setProfessionals] = useState<ApiAdminProfessionalScoreListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [recalculatingProfessionalId, setRecalculatingProfessionalId] = useState<string | null>(null);
 
   useEffect(() => {
     let isCancelled = false;
@@ -145,6 +152,40 @@ function SupabaseAdminProfesionalesPage() {
     { id: "all", label: "Todos", count: professionals.length },
   ];
 
+  const recalculateScore = async (professionalId: string) => {
+    if (recalculatingProfessionalId) {
+      return;
+    }
+
+    setActionError(null);
+    setActionNotice(null);
+    setRecalculatingProfessionalId(professionalId);
+
+    try {
+      const nextScore = await recalculateProfessionalReliabilityScore(professionalId);
+
+      setProfessionals((current) =>
+        current.map((professional) =>
+          professional.professionalId === professionalId
+            ? {
+                ...professional,
+                ...nextScore,
+              }
+            : professional,
+        ),
+      );
+      setActionNotice("Score recalculado correctamente");
+    } catch (error) {
+      setActionError(
+        error instanceof Error && error.message
+          ? error.message
+          : "No pudimos recalcular el score. Inténtalo de nuevo.",
+      );
+    } finally {
+      setRecalculatingProfessionalId(null);
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col bg-sand-50">
       <StatusBar />
@@ -166,6 +207,18 @@ function SupabaseAdminProfesionalesPage() {
         {pageError && (
           <Card className="mb-3 bg-rose-50 border-rose-100 text-[12px] text-rose-700 leading-snug">
             {pageError}
+          </Card>
+        )}
+
+        {actionError && (
+          <Card className="mb-3 bg-rose-50 border-rose-100 text-[12px] text-rose-700 leading-snug">
+            {actionError}
+          </Card>
+        )}
+
+        {actionNotice && (
+          <Card className="mb-3 bg-teal-50 border-teal-100 text-[12px] text-teal-700 leading-snug">
+            {actionNotice}
           </Card>
         )}
 
@@ -263,6 +316,19 @@ function SupabaseAdminProfesionalesPage() {
                   · Completed: {professional.completedJobs} · Cancelled: {professional.cancelledJobs}
                   · Disputas abiertas: {professional.openDisputes} · Resueltas contra el pro: {professional.resolvedAgainstProfessional}
                   · Split: {professional.splitDisputes} · Strikes: {professional.strikeCount}
+                </div>
+
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void recalculateScore(professional.professionalId)}
+                    disabled={recalculatingProfessionalId === professional.professionalId}
+                  >
+                    {recalculatingProfessionalId === professional.professionalId
+                      ? "Recalculando..."
+                      : "Recalcular score"}
+                  </Button>
                 </div>
               </Card>
             );
