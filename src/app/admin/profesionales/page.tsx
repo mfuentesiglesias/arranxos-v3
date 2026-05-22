@@ -59,6 +59,10 @@ function getRiskStateClassName(riskState: "low" | "medium" | "high" | "critical"
   }[riskState];
 }
 
+function getInitialScoreLabelText() {
+  return "Score inicial";
+}
+
 function hasInsufficientHistory(professional: ApiAdminProfessionalScoreListItem) {
   return (
     professional.reviewCount === 0 &&
@@ -233,8 +237,10 @@ function SupabaseAdminProfesionalesPage() {
                     <div className="text-[20px] font-extrabold leading-none text-ink-900" data-testid={`admin-professional-reliability-score-${professional.professionalId}`}>
                       {professional.score}
                     </div>
-                    <div className={`mt-1 text-[10.5px] font-bold uppercase tracking-wide ${getReliabilityLabelClassName(professional.label)}`} data-testid={`admin-professional-reliability-label-${professional.professionalId}`}>
-                      {getReliabilityLabelText(professional.label)}
+                    <div className={`mt-1 text-[10.5px] font-bold uppercase tracking-wide ${
+                      insufficientHistory ? "text-ink-500" : getReliabilityLabelClassName(professional.label)
+                    }`} data-testid={`admin-professional-reliability-label-${professional.professionalId}`}>
+                      {insufficientHistory ? getInitialScoreLabelText() : getReliabilityLabelText(professional.label)}
                     </div>
                   </div>
                 </div>
