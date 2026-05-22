@@ -257,6 +257,7 @@ declare
   v_job public.jobs%rowtype;
   v_agreement public.agreements%rowtype;
   v_dispute public.disputes%rowtype;
+  v_professional_id uuid;
   v_reason text := btrim(coalesce(p_reason, ''));
   v_description text := nullif(btrim(coalesce(p_description, '')), '');
 begin
@@ -341,9 +342,11 @@ begin
     from public.disputes as d
     where d.job_id = v_job.id
       and d.status in ('open', 'under_review')
-  ) then
+    ) then
     raise exception 'Job % already has an active dispute.', p_job_id;
   end if;
+
+  v_professional_id := coalesce(v_job.assigned_professional_id, v_agreement.professional_id);
 
   insert into public.disputes (
     job_id,
@@ -371,6 +374,10 @@ begin
       updated_at = now()
   where id = v_job.id
   returning * into v_job;
+
+  if v_professional_id is not null then
+    perform public.refresh_professional_reliability_snapshot(v_professional_id);
+  end if;
 
   return query
   select
