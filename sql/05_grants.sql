@@ -15,8 +15,8 @@
 --   which rows are visible or writable for authenticated callers.
 -- - Grants are intentionally limited to the minimum needed for Phase 1 reads
 --   and Phase 3A RPC execution from the authenticated role.
--- - moderation_flags remains without SELECT for authenticated because Phase 1
---   keeps moderation visibility admin-only.
+-- - moderation_flags SELECT granted to authenticated so the admin /chats page
+--   can list real flags (RLS still restricts which rows are visible).
 -- - admin_config remains without SELECT for authenticated because it is
 --   protected as admin-only and RPCs read only the specific config they need.
 
@@ -49,6 +49,7 @@ grant select on table public.disputes to authenticated;
 grant select on table public.reviews to authenticated;
 grant select on table public.catalog_requests to authenticated;
 grant select on table public.search_tickets to authenticated;
+grant select on table public.moderation_flags to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- RPC execute grants for Phase 3A
