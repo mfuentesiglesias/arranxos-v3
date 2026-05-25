@@ -148,6 +148,7 @@ declare
   v_current_role public.profile_role;
   v_job public.jobs%rowtype;
   v_agreement public.agreements%rowtype;
+  v_professional_id uuid;
   v_released_at timestamptz := now();
 begin
   if v_current_user_id is null then
@@ -204,6 +205,8 @@ begin
     raise exception 'Agreement for job % does not have a funded paid_at timestamp.', p_job_id;
   end if;
 
+  v_professional_id := coalesce(v_job.assigned_professional_id, v_agreement.professional_id);
+
   update public.agreements
   set payment_status = 'released',
       released_at = v_released_at
@@ -216,6 +219,10 @@ begin
       updated_at = v_released_at
   where id = v_job.id
   returning * into v_job;
+
+  if v_professional_id is not null then
+    perform public.refresh_professional_reliability_snapshot(v_professional_id);
+  end if;
 
   return query
   select
@@ -414,6 +421,7 @@ declare
   v_current_role public.profile_role;
   v_job public.jobs%rowtype;
   v_agreement public.agreements%rowtype;
+  v_professional_id uuid;
   v_released_at timestamptz;
   v_due_job record;
 begin
@@ -466,6 +474,12 @@ begin
         updated_at = v_released_at
     where id = v_due_job.job_id
     returning * into v_job;
+
+    v_professional_id := coalesce(v_job.assigned_professional_id, v_agreement.professional_id);
+
+    if v_professional_id is not null then
+      perform public.refresh_professional_reliability_snapshot(v_professional_id);
+    end if;
 
     return query
     select
