@@ -6,6 +6,10 @@ import { StatusBar } from "@/components/layout/status-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
+import {
+  getAdminDashboardKpis,
+  type ApiAdminDashboardKpis,
+} from "@/lib/api/adminDashboard";
 import { getCurrentProfile, type ApiProfile } from "@/lib/api/profiles";
 import { isSupabaseMode } from "@/lib/supabase/config";
 import {
@@ -26,6 +30,9 @@ import { formatEuro } from "@/lib/utils";
 
 export default function AdminDashboard() {
   const [realProfile, setRealProfile] = useState<ApiProfile | null>(null);
+  const [realKpis, setRealKpis] = useState<ApiAdminDashboardKpis | null>(null);
+  const [realKpisLoading, setRealKpisLoading] = useState(false);
+  const [realKpisError, setRealKpisError] = useState<string | null>(null);
   const session = useSession();
   const isSupabase = isSupabaseMode();
   const effectiveJobs = useMemo(() => getEffectiveJobs(session), [session]);
@@ -67,7 +74,7 @@ export default function AdminDashboard() {
   const openDisputes = effectiveDisputes.filter((d) => d.status === "open").length;
   const openTickets = effectiveSearchTickets.filter((t) => t.status === "open").length;
 
-  const kpis = [
+  const mockKpis = [
     {
       id: "commission",
       label: "Comisión generada mock",
@@ -98,45 +105,140 @@ export default function AdminDashboard() {
     },
   ] as const;
 
+  const supabaseKpis = realKpis
+    ? [
+        {
+          id: "active-jobs",
+          label: "Trabajos activos",
+          value: realKpis.jobsActive,
+          tone: "teal",
+          icon: "briefcase",
+        },
+        {
+          id: "pending-pros",
+          label: "Pros pendientes",
+          value: realKpis.professionalsPending,
+          tone: "amber",
+          icon: "users",
+        },
+        {
+          id: "pending-flags",
+          label: "Flags pendientes",
+          value: realKpis.moderationFlagsPending,
+          tone: "rose",
+          icon: "alert",
+        },
+        {
+          id: "open-disputes",
+          label: "Disputas abiertas",
+          value: realKpis.disputesOpen,
+          tone: "coral",
+          icon: "chat",
+        },
+      ] as const
+    : null;
+
+  const supabaseLoadingKpis = [
+    {
+      id: "active-jobs",
+      label: "Trabajos activos",
+      value: "--",
+      tone: "teal",
+      icon: "briefcase",
+    },
+    {
+      id: "pending-pros",
+      label: "Pros pendientes",
+      value: "--",
+      tone: "amber",
+      icon: "users",
+    },
+    {
+      id: "pending-flags",
+      label: "Flags pendientes",
+      value: "--",
+      tone: "rose",
+      icon: "alert",
+    },
+    {
+      id: "open-disputes",
+      label: "Disputas abiertas",
+      value: "--",
+      tone: "coral",
+      icon: "alert",
+    },
+  ] as const;
+
+  const kpis = isSupabase ? (supabaseKpis ?? supabaseLoadingKpis) : mockKpis;
+
   const links: { href: string; label: string; icon: string; sub: string; danger?: boolean }[] = [
-    { href: "/admin/usuarios", label: "Usuarios", icon: "users", sub: "Clientes" },
+    {
+      href: "/admin/usuarios",
+      label: "Usuarios",
+      icon: "users",
+      sub: isSupabase && realKpis
+        ? `${realKpis.clientsCount} clientes · ${realKpis.profilesCount} perfiles`
+        : isSupabase
+          ? "Cargando datos reales..."
+          : "Clientes",
+    },
     {
       href: "/admin/profesionales",
       label: "Profesionales",
       icon: "users",
-      sub: `${pendingPros} pendientes · ${blockedPros} bloqueados`,
-      danger: pendingPros > 0,
+      sub: isSupabase && realKpis
+        ? `${realKpis.professionalsPending} pendientes · ${realKpis.professionalsBlocked} bloqueados`
+        : isSupabase
+          ? "Cargando datos reales..."
+          : `${pendingPros} pendientes · ${blockedPros} bloqueados`,
+      danger: isSupabase ? Boolean(realKpis && realKpis.professionalsPending > 0) : pendingPros > 0,
     },
     {
       href: "/admin/trabajos",
       label: "Trabajos",
       icon: "briefcase",
-      sub: `${effectiveJobs.length} totales`,
+      sub: isSupabase && realKpis
+        ? `${realKpis.jobsTotal} totales · ${realKpis.jobsPublished} publicados`
+        : isSupabase
+          ? "Cargando datos reales..."
+          : `${effectiveJobs.length} totales`,
     },
     {
       href: "/admin/disputas",
       label: "Disputas",
       icon: "alert",
-      sub: `${openDisputes} abiertas`,
-      danger: openDisputes > 0,
+      sub: isSupabase && realKpis
+        ? `${realKpis.disputesOpen} abiertas · ${realKpis.disputesResolved} resueltas`
+        : isSupabase
+          ? "Cargando datos reales..."
+          : `${openDisputes} abiertas`,
+      danger: isSupabase ? Boolean(realKpis && realKpis.disputesOpen > 0) : openDisputes > 0,
     },
     {
       href: "/admin/chats",
       label: "Moderación de chats",
       icon: "chat",
-      sub: "Mensajes con strikes/leaks",
+      sub: isSupabase && realKpis
+        ? `${realKpis.moderationFlagsPending} pendientes · ${realKpis.moderationFlagsReviewed} revisadas`
+        : isSupabase
+          ? "Cargando datos reales..."
+          : "Mensajes con strikes/leaks",
     },
     {
       href: "/admin/valoraciones",
       label: "Valoraciones",
       icon: "star",
-      sub: `${effectiveReviews.length} reseñas`,
+      sub: isSupabase && realKpis
+        ? `${realKpis.reviewsCount} reseñas · ${realKpis.reviewsAverageRating.toFixed(1)} media`
+        : isSupabase
+          ? "Cargando datos reales..."
+          : `${effectiveReviews.length} reseñas`,
     },
     {
       href: "/admin/tickets-busqueda",
       label: "Tickets de búsqueda",
       icon: "search",
-      sub: `${openTickets} sin cubrir`,
+      sub: isSupabase ? "Flujo parcial / demo" : `${openTickets} sin cubrir`,
     },
     {
       href: "/admin/solicitudes-catalogo",
@@ -154,13 +256,13 @@ export default function AdminDashboard() {
       href: "/admin/economia",
       label: "Economía",
       icon: "euro",
-      sub: "Acuerdos, custodia mock, comisión y neto profesional",
+      sub: isSupabase ? "Auto-release manual real · resumen parcial" : "Acuerdos, custodia mock, comisión y neto profesional",
     },
     {
       href: "/admin/configuracion",
       label: "Configuración",
       icon: "settings",
-      sub: `Comisión ${adminConfig.commissionPct}% · auto-release ${adminConfig.autoReleaseDays}d`,
+      sub: isSupabase ? "Admin config real" : `Comisión ${adminConfig.commissionPct}% · auto-release ${adminConfig.autoReleaseDays}d`,
     },
   ];
 
@@ -192,6 +294,45 @@ export default function AdminDashboard() {
     };
 
     void loadProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isSupabase]);
+
+  useEffect(() => {
+    if (!isSupabase) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadKpis = async () => {
+      setRealKpisLoading(true);
+      setRealKpisError(null);
+
+      try {
+        const kpisResponse = await getAdminDashboardKpis();
+        if (!cancelled) {
+          setRealKpis(kpisResponse);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setRealKpis(null);
+          setRealKpisError(
+            error instanceof Error && error.message
+              ? error.message
+              : "No pudimos cargar los KPIs reales del dashboard.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setRealKpisLoading(false);
+        }
+      }
+    };
+
+    void loadKpis();
 
     return () => {
       cancelled = true;
@@ -239,6 +380,27 @@ export default function AdminDashboard() {
       </div>
 
       <ScreenBody className="px-4 pt-4 pb-6">
+        {isSupabase && (
+          <Card className="mb-3 border-teal-100 bg-teal-50/40">
+            <div className="font-bold text-[13px] text-teal-700 mb-1">Datos reales Supabase</div>
+            <div className="text-[11.5px] text-teal-700/80 leading-snug">
+              Este dashboard ya muestra KPIs reales basicos de profesionales, trabajos, moderacion, reviews y disputas. Economia, tickets y catalogo siguen parciales o demo.
+            </div>
+          </Card>
+        )}
+
+        {isSupabase && realKpisLoading && (
+          <Card className="mb-3 text-[12px] text-ink-600 leading-snug">
+            Estamos cargando los KPIs reales del dashboard.
+          </Card>
+        )}
+
+        {isSupabase && realKpisError && (
+          <Card className="mb-3 bg-rose-50 border-rose-100 text-[12px] text-rose-700 leading-snug">
+            {realKpisError}
+          </Card>
+        )}
+
         <div className="grid grid-cols-2 gap-2">
           {links.map((l) => (
             <Link key={l.href} href={l.href}>
