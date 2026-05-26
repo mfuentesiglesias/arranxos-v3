@@ -19,6 +19,7 @@ import { isSupabaseMode } from "@/lib/supabase/config";
 import {
   listModerationFlags,
   applyModerationStrike as applySupabaseModerationStrike,
+  resolveModerationFlag as resolveSupabaseModerationFlag,
   type ApiModerationFlag,
 } from "@/lib/api/chatModeration";
 import type { ModerationFlag } from "@/lib/types";
@@ -34,6 +35,7 @@ type ModerationRow = {
   redactedText?: string;
   leakTypes: ModerationFlag["leakTypes"];
   createdAtLabel: string;
+  resolvedAt?: string;
   strikeApplied: boolean;
 };
 
@@ -48,7 +50,8 @@ export default function AdminChatsPage() {
   const [realFlagsLoading, setRealFlagsLoading] = useState(false);
   const [realFlagsError, setRealFlagsError] = useState<string | null>(null);
   const [applyingStrikeId, setApplyingStrikeId] = useState<string | null>(null);
-  const [strikeError, setStrikeError] = useState<string | null>(null);
+  const [resolvingFlagId, setResolvingFlagId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const fetchRealFlags = useCallback(async () => {
     if (!isSupabaseMode()) return;
@@ -70,14 +73,27 @@ export default function AdminChatsPage() {
 
   const handleSupabaseStrike = useCallback(async (flagId: string) => {
     setApplyingStrikeId(flagId);
-    setStrikeError(null);
+    setActionError(null);
     try {
       await applySupabaseModerationStrike(flagId);
       await fetchRealFlags();
     } catch (err) {
-      setStrikeError(err instanceof Error ? err.message : "Error al aplicar el strike.");
+      setActionError(err instanceof Error ? err.message : "Error al aplicar el strike.");
     } finally {
       setApplyingStrikeId(null);
+    }
+  }, [fetchRealFlags]);
+
+  const handleResolveModerationFlag = useCallback(async (flagId: string) => {
+    setResolvingFlagId(flagId);
+    setActionError(null);
+    try {
+      await resolveSupabaseModerationFlag(flagId);
+      await fetchRealFlags();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Error al marcar el flag como revisado.");
+    } finally {
+      setResolvingFlagId(null);
     }
   }, [fetchRealFlags]);
 
@@ -98,6 +114,7 @@ export default function AdminChatsPage() {
         hour: "2-digit",
         minute: "2-digit",
       }),
+      resolvedAt: flag.resolvedAt ?? undefined,
       strikeApplied: flag.strikeApplied,
     }));
     const liveFlags = moderationFlags.map((flag) => ({
@@ -116,6 +133,7 @@ export default function AdminChatsPage() {
         hour: "2-digit",
         minute: "2-digit",
       }),
+      resolvedAt: flag.resolvedAt,
       strikeApplied: Boolean(flag.strikeApplied),
     }));
 
@@ -132,6 +150,7 @@ export default function AdminChatsPage() {
         redactedText: message.redacted,
         leakTypes: scanLeaks(message.text).map((leak) => leak.type),
         createdAtLabel: message.time,
+        resolvedAt: undefined,
         strikeApplied: false,
       }));
 
@@ -152,11 +171,11 @@ export default function AdminChatsPage() {
               </div>
             </Card>
           )}
-          {strikeError && (
+          {actionError && (
             <Card className="bg-red-50 border-red-200">
               <div className="flex items-center gap-2 text-[12px] text-red-700">
                 <Icon name="alert" size={14} />
-                <span>{strikeError}</span>
+                <span>{actionError}</span>
               </div>
             </Card>
           )}
@@ -187,6 +206,9 @@ export default function AdminChatsPage() {
                   ? effectiveProfessionals.find((entry) => entry.id === job.assignedProId)
                   : null;
               const types = Array.from(new Set(m.leakTypes));
+              const isSupabaseFlag = m.source === "supabase";
+              const isResolvedWithoutStrike = Boolean(m.resolvedAt) && !m.strikeApplied;
+              const isProcessing = applyingStrikeId === m.id || resolvingFlagId === m.id;
               const strikeDisabled = m.source === "seed" || m.senderRole === "client" || m.strikeApplied;
               return (
                 <Card key={m.id} testId={`admin-chat-flag-${m.id}`}>
@@ -228,44 +250,98 @@ export default function AdminChatsPage() {
                           ? "Seed demo"
                           : m.strikeApplied
                             ? "Strike aplicado"
-                            : "Pendiente"}
+                            : isResolvedWithoutStrike
+                              ? "Revisada"
+                             : "Pendiente"}
                       </div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Link
-                      href={`/chat/${m.jobId}`}
-                      className="text-center text-[12px] font-bold py-2 rounded-xl bg-sand-100 text-ink-700"
-                    >
-                      Ver chat
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (strikeDisabled) return;
-                        if (m.source === "supabase") {
-                          handleSupabaseStrike(m.id);
-                        } else if (m.source === "live") {
-                          applyModerationStrike(m.id);
-                        }
-                      }}
-                      disabled={strikeDisabled || applyingStrikeId === m.id}
-                      data-testid={`admin-chat-apply-strike-${m.id}`}
-                      className="text-center text-[12px] font-bold py-2 rounded-xl bg-rose-500 text-white disabled:bg-sand-200 disabled:text-ink-400"
-                    >
-                      {applyingStrikeId === m.id
-                        ? "Aplicando..."
-                        : m.senderRole === "client"
-                          ? m.source === "supabase"
-                            ? "Flag de cliente"
-                            : "Strike cliente pendiente"
+                  {isSupabaseFlag ? (
+                    <div className="flex flex-wrap gap-2">
+                      <Link
+                        href={`/chat/${m.jobId}`}
+                        className="flex-1 min-w-[110px] text-center text-[12px] font-bold py-2 rounded-xl bg-sand-100 text-ink-700"
+                      >
+                        Ver chat
+                      </Link>
+                      {m.strikeApplied ? (
+                        <button
+                          type="button"
+                          disabled
+                          className="flex-1 min-w-[110px] text-center text-[12px] font-bold py-2 rounded-xl bg-sand-200 text-ink-400"
+                        >
+                          Strike aplicado
+                        </button>
+                      ) : isResolvedWithoutStrike ? (
+                        <button
+                          type="button"
+                          disabled
+                          className="flex-1 min-w-[110px] text-center text-[12px] font-bold py-2 rounded-xl bg-sand-200 text-ink-400"
+                        >
+                          Revisada
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!isProcessing) {
+                                handleResolveModerationFlag(m.id);
+                              }
+                            }}
+                            disabled={isProcessing}
+                            data-testid={`admin-chat-resolve-flag-${m.id}`}
+                            className="flex-1 min-w-[110px] text-center text-[12px] font-bold py-2 rounded-xl bg-sand-200 text-ink-700 disabled:bg-sand-200 disabled:text-ink-400"
+                          >
+                            {resolvingFlagId === m.id ? "Marcando..." : "Marcar revisada"}
+                          </button>
+                          {m.senderRole === "professional" && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!isProcessing) {
+                                  handleSupabaseStrike(m.id);
+                                }
+                              }}
+                              disabled={isProcessing}
+                              data-testid={`admin-chat-apply-strike-${m.id}`}
+                              className="flex-1 min-w-[110px] text-center text-[12px] font-bold py-2 rounded-xl bg-rose-500 text-white disabled:bg-sand-200 disabled:text-ink-400"
+                            >
+                              {applyingStrikeId === m.id ? "Aplicando..." : "Aplicar strike"}
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <Link
+                        href={`/chat/${m.jobId}`}
+                        className="text-center text-[12px] font-bold py-2 rounded-xl bg-sand-100 text-ink-700"
+                      >
+                        Ver chat
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!strikeDisabled && m.source === "live") {
+                            applyModerationStrike(m.id);
+                          }
+                        }}
+                        disabled={strikeDisabled}
+                        data-testid={`admin-chat-apply-strike-${m.id}`}
+                        className="text-center text-[12px] font-bold py-2 rounded-xl bg-rose-500 text-white disabled:bg-sand-200 disabled:text-ink-400"
+                      >
+                        {m.senderRole === "client"
+                          ? "Strike cliente pendiente"
                           : m.strikeApplied
                             ? "Strike aplicado"
                             : m.source === "seed"
                               ? "Seed demo"
                               : "Aplicar strike"}
-                    </button>
-                  </div>
+                      </button>
+                    </div>
+                  )}
                 </Card>
               );
             })}

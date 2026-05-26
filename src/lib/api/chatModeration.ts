@@ -34,6 +34,12 @@ export interface ApiModerationStrikeResult {
   reliabilitySnapshot: Record<string, unknown> | null;
 }
 
+export interface ApiModerationResolveResult {
+  flagId: string;
+  resolvedAt: string;
+  alreadyResolved: boolean;
+}
+
 interface ModerationFlagRow {
   id: string;
   chat_message_id: string;
@@ -56,6 +62,12 @@ interface ModerationStrikeResultRow {
   result_already_applied: boolean;
   result_strike_count: number | null;
   result_reliability_snapshot: Record<string, unknown> | null;
+}
+
+interface ModerationResolveResultRow {
+  result_flag_id: string;
+  result_resolved_at: string;
+  result_already_resolved: boolean;
 }
 
 function isNoRowsError(error: PostgrestError | null): boolean {
@@ -122,6 +134,14 @@ function mapModerationStrikeResultRow(row: ModerationStrikeResultRow): ApiModera
   };
 }
 
+function mapModerationResolveResultRow(row: ModerationResolveResultRow): ApiModerationResolveResult {
+  return {
+    flagId: row.result_flag_id,
+    resolvedAt: row.result_resolved_at,
+    alreadyResolved: row.result_already_resolved,
+  };
+}
+
 function normalizeListModerationFlagsError(error: unknown): Error {
   const message = getErrorMessage(error).toLowerCase();
 
@@ -165,6 +185,27 @@ function normalizeApplyModerationStrikeError(error: unknown): Error {
   }
 
   return new Error("No pudimos aplicar el strike. Inténtalo de nuevo.");
+}
+
+function normalizeResolveModerationFlagError(error: unknown): Error {
+  const message = getErrorMessage(error).toLowerCase();
+
+  if (
+    message.includes("authentication required") ||
+    message.includes("current user does not have a profile")
+  ) {
+    return new Error("Necesitas iniciar sesión para revisar este flag.");
+  }
+
+  if (message.includes("only admins can resolve moderation flags") || message.includes("permission denied")) {
+    return new Error("Solo admins pueden marcar flags como revisadas.");
+  }
+
+  if (message.includes("does not exist")) {
+    return new Error("El flag de moderación ya no existe.");
+  }
+
+  return new Error("No pudimos marcar el flag como revisado. Inténtalo de nuevo.");
 }
 
 export async function listModerationFlags(): Promise<ApiModerationFlag[]> {
@@ -257,4 +298,29 @@ export async function applyModerationStrike(
   }
 
   return mapModerationStrikeResultRow(row);
+}
+
+export async function resolveModerationFlag(
+  flagId: string,
+): Promise<ApiModerationResolveResult> {
+  if (!isSupabaseMode()) {
+    throw new Error("resolveModerationFlag() is unavailable while NEXT_PUBLIC_DATA_MODE=mock.");
+  }
+
+  const client = getBrowserSupabaseClient();
+  const { data, error } = await client.rpc("resolve_moderation_flag", {
+    p_flag_id: flagId,
+  });
+
+  if (error) {
+    throw normalizeResolveModerationFlagError(error);
+  }
+
+  const row = getFirstRow<ModerationResolveResultRow>(data);
+
+  if (!row) {
+    throw new Error("No pudimos marcar el flag como revisado. Inténtalo de nuevo.");
+  }
+
+  return mapModerationResolveResultRow(row);
 }
