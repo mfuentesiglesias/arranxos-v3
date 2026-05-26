@@ -74,3 +74,4 @@ grant execute on function public.get_professional_reliability_score(uuid) to aut
 grant execute on function public.recalculate_professional_reliability_score(uuid) to authenticated;
 grant execute on function public.list_admin_professional_scores() to authenticated;
 grant execute on function public.apply_moderation_strike(uuid) to authenticated;
+grant execute on function public.resolve_moderation_flag(uuid) to authenticated;
