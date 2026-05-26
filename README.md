@@ -4,7 +4,7 @@
 
 Este repo es el **prototipo navegable completo** migrado a Next.js 15 + TypeScript + Tailwind + App Router. Preparado para PWA instalable.
 
-> ⚠️ **Es un prototipo frontend demo.** Todos los datos viven en mocks/localStorage (`src/lib/data.ts` + Zustand persist). No hay Supabase real, no hay backend real, no hay autenticación real y no hay pagos reales. Lee la sección "¿Qué falta para producción?" al final.
+> ⚠️ El repo mantiene **modo mock por defecto** y **modo Supabase parcial** para varios flujos reales. No hay Stripe/pagos reales todavía ni consecuencias automáticas de score/strikes. El estado exacto de la fase actual está en `docs/SUPABASE_CHECKPOINT.md`.
 
 ---
 
@@ -17,6 +17,42 @@ npm run dev
 ```
 
 Requiere Node 20+.
+
+### Estado actual
+
+- Modo por defecto: `mock`
+- Modo opcional: `supabase`
+- Checkpoint completo: `docs/SUPABASE_CHECKPOINT.md`
+
+### Arrancar en mock
+
+```bash
+npm install
+npm run dev
+```
+
+Opcionalmente en `.env.local`:
+
+```env
+NEXT_PUBLIC_DATA_MODE=mock
+```
+
+### Arrancar en Supabase
+
+En `.env.local`:
+
+```env
+NEXT_PUBLIC_DATA_MODE=supabase
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+```
+
+Luego:
+
+```bash
+npm install
+npm run dev
+```
 
 ---
 
@@ -128,20 +164,21 @@ Tailwind y la paleta están en `tailwind.config.ts`. Todas las clases de color s
 
 ---
 
-## Qué está mockeado (etiquetas `DEMO`)
+## Qué sigue mock o parcial
 
-| Área | Mock | Dónde se vería en prod |
+| Área | Estado actual | Qué faltaría en prod |
 |---|---|---|
-| Base de datos | Arrays en `src/lib/data.ts` con nota "DEMO seed — replace with Supabase queries" | Supabase PostgreSQL |
-| Auth | Ninguna; los "login demo" fijan `role` en Zustand | Supabase Auth + RLS |
-| Pagos | Pantalla "Pagar con custodia" con delay 1 s | Stripe Connect / Redsys + webhook |
-| Mapa | SVG estático con grid + ríos + ellipses (`components/map/map-view.tsx`) | MapLibre GL + PostGIS (`earthdistance`) |
-| Anti-leak en vivo | Regex cliente (`lib/anti-leak.ts`), strikes se registran local | Edge function + tabla `moderation_flags` |
-| Chat | Mensajes semilla + mensajes locales en memoria | Supabase Realtime + tabla `chat_messages` |
-| Cuestionarios | Objeto hardcoded por `categoryId` (`forms/service-questionnaire.tsx`) | Tabla `service_questions` keyed por service |
-| Config admin | `defaultAdminConfig` + edición en memoria | Tabla `admin_config` con RLS admin-only |
-| Strikes auto-block | Umbral configurable (`strikeAutoBlockThreshold: 3`) NO aplicado automáticamente | Trigger o job que revise la tabla `strikes` |
-| Persistencia sesión | Zustand + `persist` en localStorage, clave `arranxos-session` (marcada "DEMO ONLY") | Cookies httpOnly + session Supabase |
+| Base de datos | Modo `mock` por defecto con arrays en `src/lib/data.ts`; modo `supabase` parcial para varios flujos reales | Supabase como backend completo o backend propio equivalente |
+| Auth | Accesos demo siguen existiendo; los flujos reales ya dependen de perfil/rol real cuando `NEXT_PUBLIC_DATA_MODE=supabase` | Supabase Auth completo con onboarding real |
+| Pagos | Hay escrow lógico / protected payment en estados y RPCs, pero no Stripe/pagos reales | Stripe Connect / Redsys + webhooks |
+| Mapa | SVG estático y lógica demo de radio | MapLibre GL + PostGIS (`earthdistance` o similar) |
+| Anti-fuga | Mock local en la demo y anti-fuga server-side real en `send_chat_message` cuando se usa Supabase | Reglas más avanzadas, observabilidad y endurecimiento adicional |
+| Chat | En mock sigue habiendo seed/local; en Supabase ya existe chat real con `chat_messages` y RPC segura | Realtime completo y endurecimiento operativo |
+| Moderación / strikes | En mock sigue el flujo demo; en Supabase ya existen `moderation_flags`, strike real y resolución manual sin strike desde admin | Automatismos configurables si producto decide activarlos |
+| Config admin | Mock con `defaultAdminConfig` en demo y RPC real `get_admin_config` / `update_admin_config` en Supabase | Cobertura completa de parámetros operativos y auditoría |
+| Reliability score | Score mock en demo y score real con snapshot/refrescos en Supabase | Decidir si tendrá consecuencias automáticas o seguirá solo lectura |
+| Strikes auto-block | Umbral configurable visible, pero NO aplicado automáticamente | Trigger o job solo si producto decide activar bloqueo automático |
+| Persistencia sesión | Zustand + `persist` en demo; en Supabase el frontend usa cliente browser con anon key + JWT del usuario | Sesión de producción endurecida y flujo auth final |
 
 Busca `DEMO` en el código para ver todas las marcas explícitas.
 
@@ -198,7 +235,7 @@ npm run build
 npm start
 ```
 
-El proyecto es una app Next.js estándar. No usa Edge runtime, ni middlewares, ni databases.
+El proyecto es una app Next.js estándar. En modo `mock` puede correr sin backend real; en modo `supabase` usa PostgreSQL/RLS/RPCs mediante cliente browser con anon key + JWT. No usa `service_role` en frontend ni tiene Stripe/pagos reales todavía.
 
 No hay configuración validada de Cloudflare Pages en este repo ahora mismo. Si se menciona, debe considerarse futuro/pendiente.
 
@@ -237,11 +274,11 @@ import maplibregl from "maplibre-gl";
 // bind a a tiles (MapTiler, Stadia, OSM) y query Supabase con earthdistance
 ```
 
-### Anti-leak reforzado
+### Anti-leak y moderación
 
-- Mover la detección a una Edge Function (Supabase o Vercel) para evitar bypass del cliente.
-- Guardar cada intento en `moderation_flags` con cliente, mensaje, tipo. Incrementar `strikes` automáticamente.
-- Revisar umbral `strike_auto_block_threshold` en trigger `after insert on strikes`.
+- Ya existe detección server-side en `send_chat_message` cuando la app usa Supabase.
+- Ya se guardan `moderation_flags` reales y el admin puede aplicar strike o marcar la flag como revisada sin strike.
+- Pendiente: endurecer reglas/configuración avanzada, ampliar observabilidad del panel admin y decidir si algún automatismo configurable debe existir en el futuro.
 
 ### Observabilidad
 
