@@ -204,6 +204,12 @@ export default function AdminDashboard() {
           : `${effectiveJobs.length} totales`,
     },
     {
+      href: "/admin/solicitudes",
+      label: "Solicitudes",
+      icon: "briefcase",
+      sub: isSupabase ? "Solicitudes reales por trabajo" : "Listado disponible en Supabase",
+    },
+    {
       href: "/admin/disputas",
       label: "Disputas",
       icon: "alert",
