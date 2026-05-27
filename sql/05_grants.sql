@@ -75,3 +75,26 @@ grant execute on function public.recalculate_professional_reliability_score(uuid
 grant execute on function public.list_admin_professional_scores() to authenticated;
 grant execute on function public.apply_moderation_strike(uuid) to authenticated;
 grant execute on function public.resolve_moderation_flag(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Backend-only cron RPC grants
+-- ---------------------------------------------------------------------------
+
+do $$
+begin
+  if exists (
+    select 1
+    from pg_proc as p
+    inner join pg_namespace as n
+      on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname = 'auto_release_due_jobs_cron'
+      and pg_get_function_identity_arguments(p.oid) = ''
+  ) then
+    execute 'revoke all on function public.auto_release_due_jobs_cron() from public';
+    execute 'revoke all on function public.auto_release_due_jobs_cron() from anon';
+    execute 'revoke all on function public.auto_release_due_jobs_cron() from authenticated';
+    execute 'grant execute on function public.auto_release_due_jobs_cron() to service_role';
+  end if;
+end
+$$;

@@ -24,6 +24,7 @@ Requiere Node 20+.
 - Modo opcional: `supabase`
 - Admin en Supabase ya cubre KPIs basicos, usuarios, trabajos, solicitudes, economia parcial, profesionales, moderacion, valoraciones y configuracion.
 - No hay Stripe/pagos reales ni consecuencias automaticas del score o de los strikes.
+- El auto-release manual admin sigue activo; la RPC backend para cron queda preparada, pero no hay scheduler activado todavia.
 - Checkpoint completo: `docs/SUPABASE_CHECKPOINT.md`
 
 ### Arrancar en mock
@@ -172,7 +173,7 @@ Tailwind y la paleta están en `tailwind.config.ts`. Todas las clases de color s
 |---|---|---|
 | Base de datos | Modo `mock` por defecto con arrays en `src/lib/data.ts`; modo `supabase` parcial para varios flujos reales | Supabase como backend completo o backend propio equivalente |
 | Auth | Accesos demo siguen existiendo; los flujos reales ya dependen de perfil/rol real cuando `NEXT_PUBLIC_DATA_MODE=supabase` | Supabase Auth completo con onboarding real |
-| Pagos | Hay escrow lógico / protected payment en estados y RPCs, pero no Stripe/pagos reales | Stripe Connect / Redsys + webhooks |
+| Pagos | Hay escrow lógico / protected payment en estados y RPCs, pero no Stripe/pagos reales; el auto-release cron solo queda preparado en SQL | Stripe Connect / Redsys + webhooks |
 | Mapa | SVG estático y lógica demo de radio | MapLibre GL + PostGIS (`earthdistance` o similar) |
 | Anti-fuga | Mock local en la demo y anti-fuga server-side real en `send_chat_message` cuando se usa Supabase | Reglas más avanzadas, observabilidad y endurecimiento adicional |
 | Chat | En mock sigue habiendo seed/local; en Supabase ya existe chat real con `chat_messages` y RPC segura | Realtime completo y endurecimiento operativo |
@@ -238,7 +239,7 @@ npm run build
 npm start
 ```
 
-El proyecto es una app Next.js estándar. En modo `mock` puede correr sin backend real; en modo `supabase` usa PostgreSQL/RLS/RPCs mediante cliente browser con anon key + JWT. No usa `service_role` en frontend ni tiene Stripe/pagos reales todavía.
+El proyecto es una app Next.js estándar. En modo `mock` puede correr sin backend real; en modo `supabase` usa PostgreSQL/RLS/RPCs mediante cliente browser con anon key + JWT. No usa `service_role` en frontend ni tiene Stripe/pagos reales todavía. La preparación de cron 1A deja una RPC backend-only (`auto_release_due_jobs_cron()`) sin scheduler, Edge Function, Worker ni GitHub Action activados aún.
 
 No hay configuración validada de Cloudflare Pages en este repo ahora mismo. Si se menciona, debe considerarse futuro/pendiente.
 

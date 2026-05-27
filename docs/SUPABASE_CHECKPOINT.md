@@ -28,7 +28,7 @@ Arranxos mantiene dos modos de datos:
 - mapas / geospatial real
 - emails reales
 - realtime completo de chat
-- cron/ejecución automática real de auto-release
+- cron/ejecución automática real de auto-release (1A solo deja preparada la RPC backend; scheduler aún no activo)
 - listado global completo de chats admin más allá de moderación por flags
 - automatismos de bloqueo por score o strikes
 - ranking derivado del score
@@ -78,6 +78,7 @@ Arranxos mantiene dos modos de datos:
 | `/admin/trabajos` real | Completado | Listado real con `approx_location`; no usa `job_private_locations`. |
 | `/admin/solicitudes` real | Completado | Listado real de `job_requests` sin leer `message`. |
 | `/admin/economia` parcial real | Completado | Resumen lógico Supabase + auto-release manual real; sin Stripe real. |
+| Preparación cron auto-release 1A | Completado | `auto_release_due_jobs_cron()` lista para backend futuro; sin scheduler activo todavía. |
 | `/admin/valoraciones` real | Completado | Listado real de reviews. |
 | `/admin/configuracion` real | Completado | `admin_config` real vía RPC. |
 | `/admin/profesionales` real | Completado | Scores reales y recálculo manual. |
@@ -106,7 +107,8 @@ Arranxos mantiene dos modos de datos:
 | `recalculate_professional_reliability_score` | `sql/16_reliability_score.sql` | Recalcular score real manualmente desde admin. |
 | `list_admin_professional_scores` | `sql/16_reliability_score.sql` | Listado admin de scores reales. |
 | `refresh_professional_reliability_snapshot` | `sql/17_reliability_autorefresh.sql` | Helper interno que recalcula y persiste `reliability_snapshot`. |
-| `auto_release_due_jobs` | `sql/12_auto_release_rpc.sql` | Auto-release lógico y refresco de fiabilidad cuando aplica. |
+| `auto_release_due_jobs` | `sql/12_auto_release_rpc.sql` | Auto-release lógico manual admin-only usado desde `/admin/economia`. |
+| `auto_release_due_jobs_cron` | `sql/20_auto_release_cron_rpc.sql` | Variante backend-only preparada para cron futuro; sin activación todavía. |
 | `apply_moderation_strike` | `sql/18_moderation_strike_rpc.sql` | Aplicar strike manual admin-only sobre una `moderation_flag`. |
 | `resolve_moderation_flag` | `sql/19_moderation_resolve_rpc.sql` | Marcar una `moderation_flag` como revisada sin strike. |
 | `open_dispute` | `sql/11_disputes_rpc.sql` | Abrir disputa real. |
@@ -133,6 +135,7 @@ Arranxos mantiene dos modos de datos:
 - `moderation_flags` no se modifica desde frontend con writes directos normales; las operaciones sensibles van por RPC admin-only.
 - `professionals.strike_count` no queda expuesto a self-update arbitrario; el cambio real de strikes lo hace el RPC admin.
 - Los listados admin nuevos no necesitan `auth.users`, `service_role` ni `job_private_locations`.
+- `service_role` sigue sin usarse en frontend; en 1A solo queda previsto como caller backend de `auto_release_due_jobs_cron()`.
 - `profiles` puede leerse como admin, pero los listados seguros deben proyectar solo campos mínimos.
 
 ## Reglas de producto confirmadas
@@ -154,7 +157,8 @@ Arranxos mantiene dos modos de datos:
 - No se exponen emails reales desde frontend.
 - Los listados admin nuevos no leen teléfonos.
 - No se consulta `auth.users`.
-- No se usa `service_role`.
+- No se usa `service_role` en frontend.
+- `auto_release_due_jobs_cron()` queda revocada para `public`, `anon` y `authenticated`, y solo preparada para `service_role` backend.
 - No se consulta `job_private_locations` en listados admin nuevos.
 - La ubicación exacta sigue protegida; `/admin/trabajos` usa `approx_location`.
 - `/admin/solicitudes` no lee `job_requests.message` en 1A para evitar exponer texto libre sensible.
@@ -217,7 +221,7 @@ npm run dev
 
 ## Roadmap recomendado
 
-1. Consolidar cron/ejecución real de `auto_release_due_jobs`.
+1. Activar scheduler real para `auto_release_due_jobs_cron()` solo si se decide el Build 1B.
 2. Endurecer campos sensibles y, si hace falta, mover lecturas delicadas a vistas/RPCs más acotadas.
 3. Evaluar chats globales admin o detalles seguros más allá de moderación por flags.
 4. Definir consecuencias configurables del score solo si siguen siendo admin-reviewed.
