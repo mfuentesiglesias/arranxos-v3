@@ -1438,27 +1438,54 @@ $$;
 
 -- ---------------------------------------------------------------------------
 -- reviews
--- Reads are open to authenticated users. Creation remains admin/RPC controlled
--- until completed-job review rules are implemented in a dedicated RPC.
+-- Reads are limited to admins or the participants of the reviewed job.
+-- Creation remains admin/RPC controlled until completed-job review rules are
+-- implemented in a dedicated RPC.
 -- ---------------------------------------------------------------------------
 
 do $$
 begin
-  if not exists (
+  if exists (
     select 1
     from pg_policies
     where schemaname = 'public'
       and tablename = 'reviews'
       and policyname = 'reviews_select_authenticated'
   ) then
-    execute $policy$
-      create policy reviews_select_authenticated
-      on public.reviews
-      for select
-      to authenticated
-      using (true)
-    $policy$;
+    execute 'drop policy reviews_select_authenticated on public.reviews';
   end if;
+
+  if exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'reviews'
+      and policyname = 'reviews_select_participants'
+  ) then
+    execute 'drop policy reviews_select_participants on public.reviews';
+  end if;
+
+  if exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'reviews'
+      and policyname = 'reviews_select_participants_or_admin'
+  ) then
+    execute 'drop policy reviews_select_participants_or_admin on public.reviews';
+  end if;
+
+  execute $policy$
+    create policy reviews_select_participants
+    on public.reviews
+    for select
+    to authenticated
+    using (
+      public.is_admin()
+      or public.owns_job(job_id)
+      or public.is_assigned_professional_for_job(job_id)
+    )
+  $policy$;
 
   if not exists (
     select 1

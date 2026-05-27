@@ -105,7 +105,7 @@ export default function AdminChatsPage() {
       chatId: undefined,
       senderRole: flag.senderRole,
       senderId: flag.senderProfileId ?? undefined,
-      text: flag.messageContent ?? flag.blockedReason ?? "",
+      text: flag.blockedReason ?? "Contenido oculto por seguridad",
       redactedText: flag.messageRedactedContent ?? undefined,
       leakTypes: flag.leakTypes,
       createdAtLabel: new Date(flag.createdAt).toLocaleString("es-ES", {
@@ -205,6 +205,7 @@ export default function AdminChatsPage() {
                 : job?.assignedProId
                   ? effectiveProfessionals.find((entry) => entry.id === job.assignedProId)
                   : null;
+              const displayText = m.redactedText ?? m.text;
               const types = Array.from(new Set(m.leakTypes));
               const isSupabaseFlag = m.source === "supabase";
               const isResolvedWithoutStrike = Boolean(m.resolvedAt) && !m.strikeApplied;
@@ -224,7 +225,7 @@ export default function AdminChatsPage() {
                     </span>
                   </div>
                   <div className="text-[13px] text-ink-700 bg-sand-50 rounded-xl p-3 border border-sand-200/70 mb-3 leading-relaxed">
-                    “{m.redactedText ?? m.text}”
+                    “{displayText}”
                   </div>
                   <div className="flex items-center gap-3 mb-3">
                     <Avatar

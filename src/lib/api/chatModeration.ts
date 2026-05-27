@@ -52,6 +52,12 @@ interface ModerationFlagRow {
   resolved_at: string | null;
 }
 
+interface ModerationMessageRow {
+  id: string;
+  redacted_content: string | null;
+  job_id: string | null;
+}
+
 interface ModerationStrikeResultRow {
   result_flag_id: string;
   result_message_id: string;
@@ -96,7 +102,7 @@ function getFirstRow<T>(data: unknown): T | undefined {
 
 function mapModerationFlagRow(
   row: ModerationFlagRow,
-  messageMap: Map<string, { content: string; redacted_content: string | null; job_id: string | null }>,
+  messageMap: Map<string, ModerationMessageRow>,
   jobMap: Map<string, { title: string }>,
 ): ApiModerationFlag {
   const msg = messageMap.get(row.chat_message_id);
@@ -115,7 +121,7 @@ function mapModerationFlagRow(
     resolvedAt: row.resolved_at,
     jobId,
     jobTitle,
-    messageContent: msg?.content ?? null,
+    messageContent: null,
     messageRedactedContent: msg?.redacted_content ?? null,
   };
 }
@@ -215,7 +221,7 @@ export async function listModerationFlags(): Promise<ApiModerationFlag[]> {
 
   const { data, error } = await client
     .from("moderation_flags")
-    .select("*")
+    .select("id, chat_message_id, sender_profile_id, sender_role, leak_types, blocked_reason, strike_applied, created_at, resolved_at")
     .order("created_at", { ascending: false })
     .limit(50)
     .returns<ModerationFlagRow[]>();
@@ -229,23 +235,24 @@ export async function listModerationFlags(): Promise<ApiModerationFlag[]> {
   if (flags.length === 0) return [];
 
   const messageIds = [...new Set(flags.map((f) => f.chat_message_id).filter(Boolean))];
-  const messageMap = new Map<string, { content: string; redacted_content: string | null; job_id: string | null }>();
+  const messageMap = new Map<string, ModerationMessageRow>();
   const jobMap = new Map<string, { title: string }>();
 
   if (messageIds.length > 0) {
     try {
       const { data: msgs, error: msgErr } = await client
         .from("chat_messages")
-        .select("id, content, redacted_content, job_id")
-        .in("id", messageIds);
+        .select("id, redacted_content, job_id")
+        .in("id", messageIds)
+        .returns<ModerationMessageRow[]>();
 
       if (!msgErr && msgs) {
-        for (const msg of msgs as Array<{ id: string; content: string; redacted_content: string | null; job_id: string | null }>) {
+        for (const msg of msgs) {
           messageMap.set(msg.id, msg);
         }
       }
     } catch {
-      // graceful degradation: show flags without message content
+      // graceful degradation: show flags without message preview
     }
 
     const jobIds = [...new Set(

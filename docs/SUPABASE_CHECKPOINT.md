@@ -21,6 +21,7 @@ Arranxos mantiene dos modos de datos:
 - listados admin reales de usuarios, trabajos y solicitudes
 - resumen admin de economía parcial/lógico
 - dashboard admin con KPIs reales básicos
+- hardening 1A de reviews y listado admin de moderación
 
 ### Sigue mock o parcial
 
@@ -78,6 +79,7 @@ Arranxos mantiene dos modos de datos:
 | `/admin/trabajos` real | Completado | Listado real con `approx_location`; no usa `job_private_locations`. |
 | `/admin/solicitudes` real | Completado | Listado real de `job_requests` sin leer `message`. |
 | `/admin/economia` parcial real | Completado | Resumen lógico Supabase + auto-release manual real; sin Stripe real. |
+| Hardening reviews / chats 1A | Completado | Reviews ya no quedan abiertas a todo `authenticated`; `/admin/chats` evita mostrar contenido original en crudo en la lista. |
 | Preparación cron auto-release 1A | Completado | `auto_release_due_jobs_cron()` lista para backend futuro; sin scheduler activo todavía. |
 | `/admin/valoraciones` real | Completado | Listado real de reviews. |
 | `/admin/configuracion` real | Completado | `admin_config` real vía RPC. |
@@ -109,6 +111,7 @@ Arranxos mantiene dos modos de datos:
 | `refresh_professional_reliability_snapshot` | `sql/17_reliability_autorefresh.sql` | Helper interno que recalcula y persiste `reliability_snapshot`. |
 | `auto_release_due_jobs` | `sql/12_auto_release_rpc.sql` | Auto-release lógico manual admin-only usado desde `/admin/economia`. |
 | `auto_release_due_jobs_cron` | `sql/20_auto_release_cron_rpc.sql` | Variante backend-only preparada para cron futuro; sin activación todavía. |
+| `reviews_select_participants` | `sql/21_hardening_reviews_rls.sql` | Endurece la lectura de reviews para limitarla a admin o participantes del trabajo. |
 | `apply_moderation_strike` | `sql/18_moderation_strike_rpc.sql` | Aplicar strike manual admin-only sobre una `moderation_flag`. |
 | `resolve_moderation_flag` | `sql/19_moderation_resolve_rpc.sql` | Marcar una `moderation_flag` como revisada sin strike. |
 | `open_dispute` | `sql/11_disputes_rpc.sql` | Abrir disputa real. |
@@ -130,6 +133,7 @@ Arranxos mantiene dos modos de datos:
 
 - `refresh_professional_reliability_snapshot(uuid)` no tiene grant publico, `anon` ni `authenticated`.
 - `moderation_flags` tiene `GRANT SELECT` para `authenticated`, pero RLS sigue siendo admin-only.
+- `/admin/chats` ya no necesita leer `chat_messages.content` original para listar flags; usa `redacted_content` o fallback seguro.
 - `apply_moderation_strike(uuid)` y `resolve_moderation_flag(uuid)` tienen `GRANT EXECUTE` para `authenticated`, pero bloquean internamente a no-admin.
 - `chat_messages` no admite insert directo de usuarios finales por RLS; el write real va por `send_chat_message`.
 - `moderation_flags` no se modifica desde frontend con writes directos normales; las operaciones sensibles van por RPC admin-only.
@@ -137,6 +141,7 @@ Arranxos mantiene dos modos de datos:
 - Los listados admin nuevos no necesitan `auth.users`, `service_role` ni `job_private_locations`.
 - `service_role` sigue sin usarse en frontend; en 1A solo queda previsto como caller backend de `auto_release_due_jobs_cron()`.
 - `profiles` puede leerse como admin, pero los listados seguros deben proyectar solo campos mínimos.
+- `reviews` ya no queda abierta con `using (true)` para todo `authenticated`; la lectura real se limita a admin o participantes del trabajo.
 
 ## Reglas de producto confirmadas
 
@@ -149,6 +154,7 @@ Arranxos mantiene dos modos de datos:
 - No hay ranking, visibilidad, límites ni bloqueos automáticos derivados del score o de los strikes.
 - No hay Stripe / pagos reales todavía.
 - `payment_status` en admin/economía representa flujo lógico interno, no cobro Stripe real.
+- Este hardening no activa scheduler ni añade Edge Function / Worker / GitHub Action.
 - `/admin/chats` es moderación por flags reales; no es todavía un listado global completo de chats.
 - Los listados admin nuevos son de solo lectura; no añaden acciones write en usuarios, trabajos ni solicitudes.
 
