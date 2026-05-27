@@ -18,6 +18,9 @@ Arranxos mantiene dos modos de datos:
 - reliability score y su snapshot persistido
 - moderación / anti-fuga / strikes reales
 - configuración admin necesaria para anti-fuga y score
+- listados admin reales de usuarios, trabajos y solicitudes
+- resumen admin de economía parcial/lógico
+- dashboard admin con KPIs reales básicos
 
 ### Sigue mock o parcial
 
@@ -25,6 +28,8 @@ Arranxos mantiene dos modos de datos:
 - mapas / geospatial real
 - emails reales
 - realtime completo de chat
+- cron/ejecución automática real de auto-release
+- listado global completo de chats admin más allá de moderación por flags
 - automatismos de bloqueo por score o strikes
 - ranking derivado del score
 - visibilidad, límites o bloqueos automáticos por score
@@ -68,6 +73,28 @@ Arranxos mantiene dos modos de datos:
 | Auto-refresh reliability por strikes | Completado | Refresco dentro de `apply_moderation_strike`. |
 | Moderation / anti-fuga | Completado | `send_chat_message`, `moderation_flags`, strike y resolve ya integrados. |
 | `/admin/chats` real | Completado | Lista flags reales y permite acciones manuales de moderación. |
+| `/admin` KPIs reales básicos | Completado | KPIs básicos reales en modo Supabase; mock intacto. |
+| `/admin/usuarios` real | Completado | Listado básico de perfiles reales sin emails, teléfonos ni `location_label`. |
+| `/admin/trabajos` real | Completado | Listado real con `approx_location`; no usa `job_private_locations`. |
+| `/admin/solicitudes` real | Completado | Listado real de `job_requests` sin leer `message`. |
+| `/admin/economia` parcial real | Completado | Resumen lógico Supabase + auto-release manual real; sin Stripe real. |
+| `/admin/valoraciones` real | Completado | Listado real de reviews. |
+| `/admin/configuracion` real | Completado | `admin_config` real vía RPC. |
+| `/admin/profesionales` real | Completado | Scores reales y recálculo manual. |
+
+## Estado actual de pantallas admin
+
+| Pantalla | Estado | Fuente |
+|---|---|---|
+| `/admin` | real básico | KPIs reales agregados |
+| `/admin/usuarios` | real | `profiles` + `professionals` |
+| `/admin/trabajos` | real | `jobs` + `profiles` + catálogo |
+| `/admin/solicitudes` | real | `job_requests` + `jobs` + `profiles` + catálogo |
+| `/admin/economia` | parcial real | `agreements` + `jobs` + `auto_release_due_jobs()` |
+| `/admin/profesionales` | real | scores y snapshot reales |
+| `/admin/chats` | real | `moderation_flags` y acciones RPC |
+| `/admin/valoraciones` | real | `reviews` reales |
+| `/admin/configuracion` | real | `admin_config` vía RPC |
 
 ## RPCs importantes
 
@@ -105,6 +132,8 @@ Arranxos mantiene dos modos de datos:
 - `chat_messages` no admite insert directo de usuarios finales por RLS; el write real va por `send_chat_message`.
 - `moderation_flags` no se modifica desde frontend con writes directos normales; las operaciones sensibles van por RPC admin-only.
 - `professionals.strike_count` no queda expuesto a self-update arbitrario; el cambio real de strikes lo hace el RPC admin.
+- Los listados admin nuevos no necesitan `auth.users`, `service_role` ni `job_private_locations`.
+- `profiles` puede leerse como admin, pero los listados seguros deben proyectar solo campos mínimos.
 
 ## Reglas de producto confirmadas
 
@@ -116,6 +145,19 @@ Arranxos mantiene dos modos de datos:
 - El score de fiabilidad es de solo lectura; no tiene consecuencias automáticas todavía.
 - No hay ranking, visibilidad, límites ni bloqueos automáticos derivados del score o de los strikes.
 - No hay Stripe / pagos reales todavía.
+- `payment_status` en admin/economía representa flujo lógico interno, no cobro Stripe real.
+- `/admin/chats` es moderación por flags reales; no es todavía un listado global completo de chats.
+- Los listados admin nuevos son de solo lectura; no añaden acciones write en usuarios, trabajos ni solicitudes.
+
+## Privacidad y superficie expuesta
+
+- No se exponen emails reales desde frontend.
+- Los listados admin nuevos no leen teléfonos.
+- No se consulta `auth.users`.
+- No se usa `service_role`.
+- No se consulta `job_private_locations` en listados admin nuevos.
+- La ubicación exacta sigue protegida; `/admin/trabajos` usa `approx_location`.
+- `/admin/solicitudes` no lee `job_requests.message` en 1A para evitar exponer texto libre sensible.
 
 ## Estado de validaciones
 
@@ -137,7 +179,7 @@ npm run test:e2e
 
 - `npm run build`: OK
 - `npm run typecheck`: OK tras regenerar `.next`
-- `npm run test:e2e`: no reejecutado en esta actualización documental
+- `NEXT_PUBLIC_DATA_MODE=mock npm run test:e2e`: OK en el cierre de `/admin/usuarios`
 
 Notas:
 
@@ -175,9 +217,9 @@ npm run dev
 
 ## Roadmap recomendado
 
-1. Cerrar documentación/checkpoint y mantenerlo como fuente rápida de estado.
-2. Evaluar score público simplificado con mucha cautela y sin prometer consecuencias automáticas.
-3. Definir consecuencias del score solo si son configurables y siempre revisables por admin.
-4. Consolidar cron/ejecución real de `auto_release_due_jobs`.
-5. Conectar Stripe / pagos reales cuando la capa de estados y disputas esté estable.
-6. Completar KPIs reales del dashboard admin.
+1. Consolidar cron/ejecución real de `auto_release_due_jobs`.
+2. Endurecer campos sensibles y, si hace falta, mover lecturas delicadas a vistas/RPCs más acotadas.
+3. Evaluar chats globales admin o detalles seguros más allá de moderación por flags.
+4. Definir consecuencias configurables del score solo si siguen siendo admin-reviewed.
+5. Conectar Stripe / pagos reales cuando la capa lógica actual esté estable.
+6. Completar KPIs reales del dashboard admin donde todavía hay mezcla mock/parcial.

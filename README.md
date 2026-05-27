@@ -22,6 +22,8 @@ Requiere Node 20+.
 
 - Modo por defecto: `mock`
 - Modo opcional: `supabase`
+- Admin en Supabase ya cubre KPIs basicos, usuarios, trabajos, solicitudes, economia parcial, profesionales, moderacion, valoraciones y configuracion.
+- No hay Stripe/pagos reales ni consecuencias automaticas del score o de los strikes.
 - Checkpoint completo: `docs/SUPABASE_CHECKPOINT.md`
 
 ### Arrancar en mock
@@ -177,6 +179,7 @@ Tailwind y la paleta están en `tailwind.config.ts`. Todas las clases de color s
 | Moderación / strikes | En mock sigue el flujo demo; en Supabase ya existen `moderation_flags`, strike real y resolución manual sin strike desde admin | Automatismos configurables si producto decide activarlos |
 | Config admin | Mock con `defaultAdminConfig` en demo y RPC real `get_admin_config` / `update_admin_config` en Supabase | Cobertura completa de parámetros operativos y auditoría |
 | Reliability score | Score mock en demo y score real con snapshot/refrescos en Supabase | Decidir si tendrá consecuencias automáticas o seguirá solo lectura |
+| Admin | En Supabase ya hay listados reales de usuarios, trabajos y solicitudes, además de pantallas reales/parciales para economía, moderación, valoraciones, profesionales y configuración | Completar listados/global views restantes y endurecer campos sensibles |
 | Strikes auto-block | Umbral configurable visible, pero NO aplicado automáticamente | Trigger o job solo si producto decide activar bloqueo automático |
 | Persistencia sesión | Zustand + `persist` en demo; en Supabase el frontend usa cliente browser con anon key + JWT del usuario | Sesión de producción endurecida y flujo auth final |
 
