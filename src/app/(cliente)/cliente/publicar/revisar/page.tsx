@@ -7,11 +7,13 @@ import { ScreenBody } from "@/components/layout/screen-body";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
+import { AntiLeakAlert } from "@/components/chat/anti-leak-alert";
 import {
   getEffectiveCatalogCategories,
   getEffectiveCatalogServices,
   normalizeCatalogText,
 } from "@/lib/catalog";
+import { hasLeak, scanLeaks } from "@/lib/anti-leak";
 import {
   getEffectiveApprovedCatalogCategories,
   getEffectiveApprovedCatalogServices,
@@ -59,9 +61,24 @@ function RevisarInner() {
       return {};
     }
   })();
+  const reviewLeakText = [
+    title,
+    description,
+    location,
+    categoryName,
+    service,
+    ...Object.values(answers),
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const reviewLeaks = reviewLeakText ? scanLeaks(reviewLeakText) : [];
 
   const [publishing, setPublishing] = useState(false);
   const publish = () => {
+    if (hasLeak(reviewLeakText)) {
+      return;
+    }
+
     setPublishing(true);
     const createdJob = createClientJob({
       categoryId: category?.id ?? categoryId,
@@ -132,6 +149,8 @@ function RevisarInner() {
           )}
         </Card>
 
+        {reviewLeaks.length > 0 && <AntiLeakAlert leaks={reviewLeaks} />}
+
         <Card className="bg-teal-50/50 border-teal-100 mb-3">
           <div className="flex items-start gap-3">
             <div className="w-9 h-9 rounded-full bg-teal-500 text-white flex items-center justify-center flex-shrink-0">
@@ -169,7 +188,7 @@ function RevisarInner() {
       </ScreenBody>
 
       <div className="app-bottom-bar px-5 pb-5 pt-3 bg-white border-t border-sand-200/70">
-        <Button full onClick={publish} disabled={publishing}>
+        <Button full onClick={publish} disabled={publishing || reviewLeaks.length > 0}>
           {publishing ? "Publicando…" : "Publicar trabajo"}
         </Button>
       </div>

@@ -19,7 +19,7 @@ export default function LoginPage() {
   const router = useRouter();
   const enterDemoAccess = useSession((s) => s.enterDemoAccess);
   const isSupabase = isSupabaseMode();
-  const [email, setEmail] = useState("antia.bouzas@gmail.com");
+  const [email, setEmail] = useState("");
   const [pass, setPass] = useState("········");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

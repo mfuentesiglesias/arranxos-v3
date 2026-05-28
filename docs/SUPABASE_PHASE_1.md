@@ -4,7 +4,7 @@
 
 Prepare a safe, migrable Supabase foundation for Arranxos without coupling the app to Supabase internals.
 
-Phase 1 focuses on repository structure, database planning, and integration rules - not production deployment.
+Phase 1 started as repository structure, database planning, and integration rules. The repo has since advanced into a partial real Supabase integration while still avoiding production payments and a full backend lock-in.
 
 ## Included Scope
 
@@ -16,7 +16,7 @@ Phase 1 focuses on repository structure, database planning, and integration rule
 
 ## Out of Scope (Phase 1)
 
-- Real Supabase connection in app code.
+- Full Supabase connection across the whole app.
 - Supabase SDK integration in components.
 - Stripe real payments.
 - Maps/geospatial production stack.
@@ -115,11 +115,15 @@ Important modeling decisions:
 - Final deal lives in `agreements`.
 - Invitations are modeled with `job_invitations` from Phase 1.
 - Chat is not created before acceptance.
-- Messages are not inserted directly from frontend; they must go through RPC `send_chat_message` when implemented.
+- Messages are not inserted directly from frontend; they go through RPC `send_chat_message`.
 - Realtime comes after RLS/RPC and basic fetch behavior are stable.
 
 ## Current Status
 
-- Supabase real connection: not enabled.
-- SQL execution in Supabase: not performed.
-- This document defines structure and guardrails only.
+- Supabase real connection: partially enabled.
+- SQL execution in Supabase: versioned and manually executed for the current Phase 1 slice.
+- RLS, RPCs and grants already exist in the repo and have been applied in Supabase for the active flows.
+- Admin real already includes several connected screens: dashboard KPIs, usuarios, trabajos, solicitudes, economia parcial, profesionales, chats, valoraciones y configuracion.
+- pg_cron auto-release is active and invokes `auto_release_due_jobs_cron()` every hour.
+- Stripe and real payments are still not implemented.
+- The current payment flow remains logical escrow only; there are no real charges or payouts.

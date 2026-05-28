@@ -38,7 +38,6 @@ function RegisterInner() {
     password: "",
     specialty: "",
     zone: "Vigo",
-    dni: "",
   });
   const upd = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
   const [loading, setLoading] = useState(false);
@@ -295,12 +294,6 @@ function RegisterInner() {
                   )}
                 </span>
               </div>
-              <Input
-                label="DNI / NIE"
-                value={form.dni}
-                onChange={(e) => upd("dni", e.target.value)}
-                placeholder="00000000A"
-              />
               {!isSupabase && (
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[13px] font-semibold text-ink-500">

@@ -21,9 +21,10 @@ function DetalleInner() {
   const [photos, setPhotos] = useState<string[]>([]);
   const [urgent, setUrgent] = useState(false);
 
-  const leaks = description ? scanLeaks(description) : [];
+  const leakScanText = [title, description, location].filter(Boolean).join("\n");
+  const leaks = leakScanText ? scanLeaks(leakScanText) : [];
 
-  const canNext = Boolean(title && description && priceRange && !hasLeak(description));
+  const canNext = Boolean(title && description && priceRange && !hasLeak(leakScanText));
 
   const next = () => {
     const q = new URLSearchParams(params?.toString());

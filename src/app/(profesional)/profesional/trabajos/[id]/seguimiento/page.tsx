@@ -9,7 +9,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
 import { JobStatusTimeline } from "@/components/jobs/job-status-timeline";
 import { jobs } from "@/lib/data";
-import { canAutoReleaseCompletedJob, getAgreement, getCommissionAmount, getEffectiveFinalPrice } from "@/lib/domain/policies";
+import { canAccessChat, canAutoReleaseCompletedJob, canSeeExactLocation, getAgreement, getCommissionAmount, getEffectiveFinalPrice } from "@/lib/domain/policies";
 import {
   getCurrentProfessionalId,
   getEffectiveAdminConfig,
@@ -25,6 +25,7 @@ interface Props {
 function Inner({ id }: { id: string }) {
   const session = useSession();
   const currentProfessionalId = useSession(getCurrentProfessionalId);
+  const currentProStatus = useSession((s) => s.proStatus);
   const adminConfig = useSession(getEffectiveAdminConfig);
   const effectiveJob = useMemo(() => getEffectiveJobById(session, id), [session, id]);
   const agreement = session.agreements[id];
@@ -50,6 +51,25 @@ function Inner({ id }: { id: string }) {
     agreement: resolvedAgreement,
     completionDeadline: job.completionDeadline,
   });
+  const canSeeLocation = canSeeExactLocation({
+    viewerRole: "professional",
+    proStatus: currentProStatus,
+    jobStatus: job.status,
+    assignedProId: job.assignedProId,
+    currentProfessionalId,
+  });
+  const canOpenChat = canAccessChat({
+    role: "professional",
+    proStatus: currentProStatus,
+    jobStatus: job.status,
+    assignedProId: job.assignedProId,
+    currentProfessionalId,
+  });
+  const clientDisplayName = canOpenChat ? job.clientName : "Cliente de Arranxos";
+  const locationDisplay = canSeeLocation
+    ? job.location
+    : job.locationApprox || "Ubicación aproximada no disponible";
+  const hasTrackingPrivacyGate = !canSeeLocation || !canOpenChat;
 
   useEffect(() => {
     if (canAutoRelease) {
@@ -111,21 +131,32 @@ function Inner({ id }: { id: string }) {
 
         <Card className="mb-3">
           <div className="font-bold text-[13.5px] text-ink-800 mb-3">Cliente</div>
+          {hasTrackingPrivacyGate && (
+            <div className="mb-3 rounded-2xl border border-amber-100 bg-amber-50 px-3 py-3 text-[12px] text-amber-700 leading-snug">
+              El seguimiento detallado, la ubicación exacta y el chat solo están disponibles tras la aceptación del trabajo por el profesional asignado.
+            </div>
+          )}
           <div className="flex items-center gap-3 mb-3">
             <Avatar initials={job.clientAvatar} size={48} />
             <div className="flex-1">
               <div className="font-bold text-[14px] text-ink-800">
-                {job.clientName}
+                {clientDisplayName}
               </div>
               <div className="text-[11.5px] text-ink-500">
-                ★ {job.clientRating.toFixed(1)} · {job.location}
+                ★ {job.clientRating.toFixed(1)} · {locationDisplay}
               </div>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Button full variant="outline" href={`/chat/${job.id}`}>
-              Abrir chat
-            </Button>
+            {canOpenChat ? (
+              <Button full variant="outline" href={`/chat/${job.id}`}>
+                Abrir chat
+              </Button>
+            ) : (
+              <Button full variant="outline" disabled>
+                Chat tras aceptación
+              </Button>
+            )}
             {job.status === "escrow_funded" && job.assignedProId === currentProfessionalId ? (
               <Button full href={`/profesional/trabajos/${job.id}/finalizar`} testId="pro-finish-job">
                 Marcar terminado
