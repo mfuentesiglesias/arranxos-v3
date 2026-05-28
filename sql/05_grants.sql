@@ -68,6 +68,10 @@ grant execute on function public.open_dispute(uuid, text, text, jsonb) to authen
 grant execute on function public.resolve_dispute(uuid, text, text) to authenticated;
 grant execute on function public.auto_release_due_jobs() to authenticated;
 grant execute on function public.create_review(uuid, integer, text) to authenticated;
+grant execute on function public.create_catalog_request(text, uuid, text, text) to authenticated;
+grant execute on function public.approve_catalog_request(uuid, uuid, text, text, text) to authenticated;
+grant execute on function public.reject_catalog_request(uuid, text) to authenticated;
+grant execute on function public.merge_catalog_request(uuid, uuid) to authenticated;
 grant execute on function public.get_admin_config() to authenticated;
 grant execute on function public.update_admin_config(integer, integer, integer, integer, integer, boolean, jsonb) to authenticated;
 grant execute on function public.get_professional_reliability_score(uuid) to authenticated;
