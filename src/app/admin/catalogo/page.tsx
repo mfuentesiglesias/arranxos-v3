@@ -23,6 +23,7 @@ import {
   useSession,
 } from "@/lib/store";
 import { getRealCatalogCategories, getRealCatalogServices } from "@/lib/api/catalog";
+import { listAdminCatalogRequests } from "@/lib/api/adminCatalog";
 import { isSupabaseMode } from "@/lib/supabase/config";
 import type { CatalogCategory, CatalogService } from "@/lib/types";
 
@@ -35,6 +36,7 @@ export default function AdminCatalogoPage() {
   const isSupabase = isSupabaseMode();
   const [realCategories, setRealCategories] = useState<CatalogCategory[]>([]);
   const [realServices, setRealServices] = useState<CatalogService[]>([]);
+  const [realPendingRequests, setRealPendingRequests] = useState(0);
   const [query, setQuery] = useState("");
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
 
@@ -47,14 +49,18 @@ export default function AdminCatalogoPage() {
 
     const load = async () => {
       try {
-        const [cats, svcs] = await Promise.all([
+        const [cats, svcs, requests] = await Promise.all([
           getRealCatalogCategories(),
           getRealCatalogServices(),
+          listAdminCatalogRequests(),
         ]);
 
         if (!cancelled) {
           setRealCategories(cats);
           setRealServices(svcs);
+          setRealPendingRequests(
+            requests.filter((request) => ["pending", "reviewing"].includes(request.status)).length,
+          );
         }
       } catch {
         // Keep empty on error — the UI will show "no results" fallback.
@@ -88,9 +94,11 @@ export default function AdminCatalogoPage() {
       ),
     [approvedServices],
   );
-  const pendingRequests = catalogRequests.filter((request) =>
-    ["pending", "reviewing"].includes(request.status),
-  ).length;
+  const pendingRequests = isSupabase
+    ? realPendingRequests
+    : catalogRequests.filter((request) =>
+        ["pending", "reviewing"].includes(request.status),
+      ).length;
   const normalizedQuery = normalizeCatalogText(query);
 
   const displayCategories = isSupabase ? realCategories : effectiveCategories;

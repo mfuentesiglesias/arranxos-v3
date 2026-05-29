@@ -29,7 +29,6 @@ Arranxos mantiene dos modos de datos:
 - mapas / geospatial real
 - emails reales
 - realtime completo de chat
-- cron/ejecución automática real de auto-release (1B versiona el scheduler pg_cron cada hora; queda pendiente ejecutar el SQL en Supabase para activarlo)
 - listado global completo de chats admin más allá de moderación por flags
 - automatismos de bloqueo por score o strikes
 - ranking derivado del score
@@ -80,7 +79,8 @@ Arranxos mantiene dos modos de datos:
 | `/admin/solicitudes` real | Completado | Listado real de `job_requests` sin leer `message`. |
 | `/admin/economia` parcial real | Completado | Resumen lógico Supabase + auto-release manual real; sin Stripe real. |
 | Hardening reviews / chats 1A | Completado | Reviews ya no quedan abiertas a todo `authenticated`; `/admin/chats` evita mostrar contenido original en crudo en la lista. |
-| Cron scheduler 1B | Versionado | pg_cron programado cada hora para `auto_release_due_jobs_cron()`; SQL listo en `sql/22_pg_cron_schedule.sql`; ejecución pendiente en Supabase. |
+| Cron scheduler 1B | Completado | pg_cron activo con `jobname = auto-release-due-jobs`, `schedule = 0 * * * *`, `command = select public.auto_release_due_jobs_cron();`, `active = true`. |
+| Admin Real 3A catálogo / solicitudes | Completado | RPCs, APIs, rutas admin, perfil profesional y publicación cliente conectados a datos reales. |
 | `/admin/valoraciones` real | Completado | Listado real de reviews. |
 | `/admin/configuracion` real | Completado | `admin_config` real vía RPC. |
 | `/admin/profesionales` real | Completado | Scores reales y recálculo manual. |
@@ -96,6 +96,9 @@ Arranxos mantiene dos modos de datos:
 | `/admin/economia` | parcial real | `agreements` + `jobs` + `auto_release_due_jobs()` |
 | `/admin/profesionales` | real | scores y snapshot reales |
 | `/admin/chats` | real | `moderation_flags` y acciones RPC |
+| `/admin/catalogo` | real | `catalog_categories` + `catalog_services` + `catalog_requests` |
+| `/admin/solicitudes-catalogo` | real | `catalog_requests` con acciones RPC de aprobar/rechazar/fusionar |
+| `/admin/tickets-busqueda` | mock | Queda para 3B |
 | `/admin/valoraciones` | real | `reviews` reales |
 | `/admin/configuracion` | real | `admin_config` vía RPC |
 
@@ -111,7 +114,11 @@ Arranxos mantiene dos modos de datos:
 | `refresh_professional_reliability_snapshot` | `sql/17_reliability_autorefresh.sql` | Helper interno que recalcula y persiste `reliability_snapshot`. |
 | `auto_release_due_jobs` | `sql/12_auto_release_rpc.sql` | Auto-release lógico manual admin-only usado desde `/admin/economia`. |
 | `auto_release_due_jobs_cron` | `sql/20_auto_release_cron_rpc.sql` | Variante backend-only para ejecución headless vía `service_role`. |
-| Cron scheduler 1B | `sql/22_pg_cron_schedule.sql` | pg_cron programado cada hora para invocar `auto_release_due_jobs_cron()`; pendiente de ejecutar en Supabase. |
+| Cron scheduler 1B | `sql/22_pg_cron_schedule.sql` | Scheduler real ya ejecutado en Supabase; pg_cron invoca cada hora `auto_release_due_jobs_cron()`; rollback con `select cron.unschedule('auto-release-due-jobs')`. |
+| `create_catalog_request` | `sql/23_catalog_requests_rpc.sql` | Crear solicitud real de catálogo desde cliente/profesional autenticado. |
+| `approve_catalog_request` | `sql/23_catalog_requests_rpc.sql` | Aprobar solicitud real y crear categoría/servicio transaccionalmente. |
+| `reject_catalog_request` | `sql/23_catalog_requests_rpc.sql` | Rechazar solicitud real con motivo opcional. |
+| `merge_catalog_request` | `sql/23_catalog_requests_rpc.sql` | Fusionar solicitud real con servicio existente. |
 | `reviews_select_participants` | `sql/21_hardening_reviews_rls.sql` | Endurece la lectura de reviews para limitarla a admin o participantes del trabajo. |
 | `apply_moderation_strike` | `sql/18_moderation_strike_rpc.sql` | Aplicar strike manual admin-only sobre una `moderation_flag`. |
 | `resolve_moderation_flag` | `sql/19_moderation_resolve_rpc.sql` | Marcar una `moderation_flag` como revisada sin strike. |
@@ -229,7 +236,7 @@ npm run dev
 
 ## Roadmap recomendado
 
-1. Ejecutar `sql/22_pg_cron_schedule.sql` en Supabase para activar el scheduler real de `auto_release_due_jobs_cron()`.
+1. Conectar `search_tickets` y `/admin/tickets-busqueda` en un bloque 3B separado.
 2. Endurecer campos sensibles y, si hace falta, mover lecturas delicadas a vistas/RPCs más acotadas.
 3. Evaluar chats globales admin o detalles seguros más allá de moderación por flags.
 4. Definir consecuencias configurables del score solo si siguen siendo admin-reviewed.

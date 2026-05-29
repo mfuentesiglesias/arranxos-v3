@@ -17,6 +17,11 @@ import {
   type ApiProfessionalReliabilityScore,
 } from "@/lib/api/reliability";
 import { getCurrentProfile, type ApiProfile } from "@/lib/api/profiles";
+import { getRealCatalogServices } from "@/lib/api/catalog";
+import {
+  createCatalogRequest as createRealCatalogRequest,
+  getMyCatalogRequests,
+} from "@/lib/api/catalogRequests";
 import { isSupabaseMode } from "@/lib/supabase/config";
 import {
   getEffectiveCatalogServices,
@@ -86,6 +91,8 @@ export default function PerfilProPage() {
   const [reliabilityError, setReliabilityError] = useState<string | null>(null);
   const [specialtySearch, setSpecialtySearch] = useState("");
   const [catalogRequestFeedback, setCatalogRequestFeedback] = useState<string | null>(null);
+  const [realCatalogServices, setRealCatalogServices] = useState<CatalogService[]>([]);
+  const [realCatalogRequests, setRealCatalogRequests] = useState<CatalogRequest[]>([]);
   const [editSaved, setEditSaved] = useState(false);
   const [specialtiesSaved, setSpecialtiesSaved] = useState(false);
   const [bankingSaved, setBankingSaved] = useState(false);
@@ -115,7 +122,10 @@ export default function PerfilProPage() {
   );
   const professional =
     professionals.find((entry) => entry.id === currentProfessionalId) ?? currentPro;
-  const catalogServices = getEffectiveCatalogServices(approvedCatalogServices);
+  const catalogServices =
+    isSupabase && realCatalogServices.length > 0
+      ? realCatalogServices
+      : getEffectiveCatalogServices(approvedCatalogServices);
   const savedProfileState = getSavedProfessionalProfileState(
     professional,
     catalogServices,
@@ -180,8 +190,12 @@ export default function PerfilProPage() {
     )
     .slice(0, normalizedSpecialtySearch ? 8 : 6);
   const requestableSpecialtySearch = specialtySearch.trim();
+  const effectiveCatalogRequests = isSupabase ? realCatalogRequests : storeCatalogRequests;
+  const catalogRequesterId = isSupabase
+    ? (realProfile?.id ?? "")
+    : (currentProfessionalId || professional.id);
   const duplicateCatalogRequest = normalizedSpecialtySearch
-    ? storeCatalogRequests.find(
+    ? effectiveCatalogRequests.find(
         (request) =>
           isActiveOrApprovedCatalogRequest(request) &&
           normalizeSpecialtySearch(request.requestedName) === normalizedSpecialtySearch,
@@ -191,8 +205,8 @@ export default function PerfilProPage() {
     requestableSpecialtySearch.length > 0 &&
     matchingCatalogServices.length === 0 &&
     !duplicateCatalogRequest;
-  const professionalCatalogRequests = storeCatalogRequests.filter(
-    (request) => request.requestedByUserId === professional.id,
+  const professionalCatalogRequests = effectiveCatalogRequests.filter(
+    (request) => request.requestedByUserId === catalogRequesterId,
   );
   const displayAvatarInitials =
     isSupabase && realProfile
@@ -276,6 +290,30 @@ export default function PerfilProPage() {
     };
   }, [isSupabase]);
 
+  useEffect(() => {
+    if (!isSupabase) return;
+    let cancelled = false;
+    const loadCatalogState = async () => {
+      try {
+        const [services, requests] = await Promise.all([
+          getRealCatalogServices(),
+          getMyCatalogRequests(),
+        ]);
+        if (!cancelled) {
+          setRealCatalogServices(services);
+          setRealCatalogRequests(requests);
+        }
+      } catch {
+        if (!cancelled) {
+          setRealCatalogServices([]);
+          setRealCatalogRequests([]);
+        }
+      }
+    };
+    void loadCatalogState();
+    return () => { cancelled = true; };
+  }, [isSupabase]);
+
   const syncSpecialtiesDraftFromSaved = () => {
     setSpecialtiesDraft(savedProfileState.specialties);
     setWorkBaseDraft(savedProfileState.workBase);
@@ -317,11 +355,29 @@ export default function PerfilProPage() {
     );
   };
 
-  const requestNewSpecialty = () => {
+  const requestNewSpecialty = async () => {
     const requestedName = requestableSpecialtySearch.trim();
     if (!requestedName) return;
 
     const suggestedCategory = inferSuggestedCategory(requestedName, catalogServices);
+
+    if (isSupabase) {
+      try {
+        const created = await createRealCatalogRequest({
+          requestedName,
+          suggestedCategoryId: suggestedCategory?.id,
+          suggestedCategoryName: suggestedCategory?.name,
+        });
+        setRealCatalogRequests((current) => [created, ...current]);
+        setCatalogRequestFeedback("Solicitud enviada a revisión real");
+      } catch (error) {
+        setCatalogRequestFeedback(
+          error instanceof Error && error.message ? error.message : "No pudimos registrar la solicitud real.",
+        );
+      }
+      return;
+    }
+
     const result = createCatalogRequest({
       requestedName,
       suggestedCategoryId: suggestedCategory?.id,

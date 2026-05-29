@@ -1,5 +1,5 @@
 "use client";
-import { useState, Suspense } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
@@ -12,19 +12,55 @@ import {
   normalizeCatalogText,
   slugifyCatalogText,
 } from "@/lib/catalog";
+import { getRealCatalogCategories, getRealCatalogServices } from "@/lib/api/catalog";
 import {
   getEffectiveApprovedCatalogCategories,
   getEffectiveApprovedCatalogServices,
   useSession,
 } from "@/lib/store";
+import { isSupabaseMode } from "@/lib/supabase/config";
+import type { CatalogCategory, CatalogService } from "@/lib/types";
 
 function ServicioInner() {
   const router = useRouter();
   const params = useSearchParams();
+  const isSupabase = isSupabaseMode();
+  const [realCategories, setRealCategories] = useState<CatalogCategory[]>([]);
+  const [realServices, setRealServices] = useState<CatalogService[]>([]);
   const approvedCatalogCategories = useSession(getEffectiveApprovedCatalogCategories);
   const approvedCatalogServices = useSession(getEffectiveApprovedCatalogServices);
-  const effectiveCategories = getEffectiveCatalogCategories(approvedCatalogCategories);
-  const effectiveServices = getEffectiveCatalogServices(approvedCatalogServices);
+  const effectiveCategories =
+    isSupabase && realCategories.length > 0
+      ? realCategories
+      : getEffectiveCatalogCategories(approvedCatalogCategories);
+  const effectiveServices =
+    isSupabase && realServices.length > 0
+      ? realServices
+      : getEffectiveCatalogServices(approvedCatalogServices);
+
+  useEffect(() => {
+    if (!isSupabase) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const [categories, services] = await Promise.all([
+          getRealCatalogCategories(),
+          getRealCatalogServices(),
+        ]);
+        if (!cancelled) {
+          setRealCategories(categories);
+          setRealServices(services);
+        }
+      } catch {
+        if (!cancelled) {
+          setRealCategories([]);
+          setRealServices([]);
+        }
+      }
+    };
+    void load();
+    return () => { cancelled = true; };
+  }, [isSupabase]);
   const requestedCategoryId = params?.get("categoryId") ?? params?.get("cat") ?? "";
   const requestedCategoryName = params?.get("categoryName") ?? "";
   const hasRequestedCategory = Boolean(requestedCategoryId || requestedCategoryName);

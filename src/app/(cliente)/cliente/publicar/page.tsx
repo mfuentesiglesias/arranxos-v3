@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
@@ -12,16 +12,36 @@ import {
   normalizeCatalogGroupValue,
   slugifyCatalogText,
 } from "@/lib/catalog";
+import { getRealCatalogCategories } from "@/lib/api/catalog";
 import { getEffectiveApprovedCatalogCategories, useSession } from "@/lib/store";
+import { isSupabaseMode } from "@/lib/supabase/config";
 import type { CatalogCategory } from "@/lib/types";
 
 export default function PublicarCategoriaPage() {
   const [open, setOpen] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [realCategories, setRealCategories] = useState<CatalogCategory[]>([]);
   const approvedCatalogCategories = useSession(getEffectiveApprovedCatalogCategories);
-  const categoryGroups = groupCatalogCategories(
-    getEffectiveCatalogCategories(approvedCatalogCategories),
-  );
+  const isSupabase = isSupabaseMode();
+
+  useEffect(() => {
+    if (!isSupabase) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const categories = await getRealCatalogCategories();
+        if (!cancelled) setRealCategories(categories);
+      } catch { if (!cancelled) setRealCategories([]); }
+    };
+    void load();
+    return () => { cancelled = true; };
+  }, [isSupabase]);
+
+  const displayCategories =
+    isSupabase && realCategories.length > 0
+      ? realCategories
+      : getEffectiveCatalogCategories(approvedCatalogCategories);
+  const categoryGroups = groupCatalogCategories(displayCategories);
 
   return (
     <div className="flex-1 flex flex-col bg-white">

@@ -63,8 +63,9 @@ export async function getRealCatalogCategories(): Promise<CatalogCategory[]> {
 
   const { data, error } = await client
     .from("catalog_categories")
-    .select("*")
+    .select("id, name, icon, group_name, color, active, source, created_from_request_id")
     .eq("active", true)
+    .order("name", { ascending: true })
     .returns<CatalogCategoryRow[]>();
 
   if (error) {
@@ -97,8 +98,9 @@ export async function getRealCatalogServices(): Promise<CatalogService[]> {
 
   const { data: serviceRows, error: serviceError } = await client
     .from("catalog_services")
-    .select("*")
+    .select("id, category_id, name, description, aliases, active, source, created_from_request_id")
     .eq("active", true)
+    .order("name", { ascending: true })
     .returns<CatalogServiceRow[]>();
 
   if (serviceError) {

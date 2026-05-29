@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
@@ -25,12 +25,21 @@ import {
   getEffectiveCatalogRequests,
   useSession,
 } from "@/lib/store";
+import {
+  approveCatalogRequest as approveRealCatalogRequest,
+  listAdminCatalogCategories,
+  listAdminCatalogRequests,
+  listAdminCatalogServices,
+  mergeCatalogRequest as mergeRealCatalogRequest,
+  rejectCatalogRequest as rejectRealCatalogRequest,
+} from "@/lib/api/adminCatalog";
+import { isSupabaseMode } from "@/lib/supabase/config";
 import type { CatalogCategory, CatalogRequest, CatalogService } from "@/lib/types";
 
 type ResolutionType = "create" | "merge" | "reject";
 
 export default function AdminCatalogRequestsPage() {
-  const catalogRequests = useSession(getEffectiveCatalogRequests);
+  const storeCatalogRequests = useSession(getEffectiveCatalogRequests);
   const approvedCatalogServices = useSession(getEffectiveApprovedCatalogServices);
   const approvedCatalogCategories = useSession(getEffectiveApprovedCatalogCategories);
   const createApprovedCatalogCategory = useSession((s) => s.createApprovedCatalogCategory);
@@ -38,6 +47,13 @@ export default function AdminCatalogRequestsPage() {
   const rejectCatalogRequest = useSession((s) => s.rejectCatalogRequest);
   const mergeCatalogRequest = useSession((s) => s.mergeCatalogRequest);
   const currentAdminId = useSession((s) => s.currentAdminId);
+  const isSupabase = isSupabaseMode();
+  const [realCatalogRequests, setRealCatalogRequests] = useState<CatalogRequest[]>([]);
+  const [realCatalogServices, setRealCatalogServices] = useState<CatalogService[]>([]);
+  const [realCatalogCategories, setRealCatalogCategories] = useState<CatalogCategory[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [actionRequestId, setActionRequestId] = useState<string | null>(null);
   const [resolutionByRequestId, setResolutionByRequestId] = useState<Record<string, ResolutionType>>({});
   const [finalNameByRequestId, setFinalNameByRequestId] = useState<Record<string, string>>({});
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<Record<string, string>>({});
@@ -49,12 +65,48 @@ export default function AdminCatalogRequestsPage() {
   const [rejectionReasonByRequestId, setRejectionReasonByRequestId] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<string | null>(null);
 
-  const effectiveCatalogServices = getEffectiveCatalogServices(approvedCatalogServices).sort(
+  const fetchRealState = async () => {
+    const [requests, categories, services] = await Promise.all([
+      listAdminCatalogRequests(),
+      listAdminCatalogCategories(),
+      listAdminCatalogServices(),
+    ]);
+    return { requests, categories, services };
+  };
+
+  useEffect(() => {
+    if (!isSupabase) return;
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      setPageError(null);
+      try {
+        const next = await fetchRealState();
+        if (!cancelled) {
+          setRealCatalogRequests(next.requests);
+          setRealCatalogCategories(next.categories);
+          setRealCatalogServices(next.services);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPageError(error instanceof Error && error.message ? error.message : "No pudimos cargar las solicitudes reales.");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    void load();
+    return () => { cancelled = true; };
+  }, [isSupabase]);
+
+  const catalogRequests = isSupabase ? realCatalogRequests : storeCatalogRequests;
+
+  const effectiveCatalogServices = (isSupabase ? realCatalogServices : getEffectiveCatalogServices(approvedCatalogServices)).sort(
     (a, b) =>
       a.categoryName.localeCompare(b.categoryName, "es") ||
       a.name.localeCompare(b.name, "es"),
   );
-  const effectiveCatalogCategories = getEffectiveCatalogCategories(approvedCatalogCategories).sort(
+  const effectiveCatalogCategories = (isSupabase ? realCatalogCategories : getEffectiveCatalogCategories(approvedCatalogCategories)).sort(
     (a, b) =>
       (a.group ?? "").localeCompare(b.group ?? "", "es") ||
       a.name.localeCompare(b.name, "es"),
@@ -79,7 +131,7 @@ export default function AdminCatalogRequestsPage() {
     setFeedback(null);
   };
 
-  const approveRequest = (request: CatalogRequest) => {
+  const approveRequest = async (request: CatalogRequest) => {
     const finalName = getDraftFinalName(request, finalNameByRequestId);
     const categoryId = getDraftCategoryId(
       request,
@@ -96,7 +148,12 @@ export default function AdminCatalogRequestsPage() {
       return;
     }
 
-    if (!category) {
+    const draftCategoryName = formatCatalogServiceName(
+      newCategoryNameByRequestId[request.id] ?? categorySearchByRequestId[request.id] ?? "",
+    );
+    const canCreateNewCategory = Boolean(draftCategoryName) && !category;
+
+    if (!category && !canCreateNewCategory) {
       setFeedback("Selecciona una categoría antes de aprobar la solicitud.");
       return;
     }
@@ -105,6 +162,37 @@ export default function AdminCatalogRequestsPage() {
       setFeedback(
         `Ya existe ${conflictingService.name}. Usa la resolución de fusión en lugar de crear otra especialidad.`,
       );
+      return;
+    }
+
+    if (isSupabase) {
+      try {
+        setActionRequestId(request.id);
+        setFeedback(null);
+        await approveRealCatalogRequest({
+          requestId: request.id,
+          categoryId: category?.id,
+          categoryName: category?.name ?? draftCategoryName,
+          serviceName: finalName,
+          categoryGroupName: canCreateNewCategory
+            ? getDraftCategoryGroup(request.id, categoryGroupByRequestId)
+            : undefined,
+        });
+        const next = await fetchRealState();
+        setRealCatalogRequests(next.requests);
+        setRealCatalogCategories(next.categories);
+        setRealCatalogServices(next.services);
+        setFeedback(`${finalName} aprobada y añadida al catálogo real.`);
+      } catch (error) {
+        setFeedback(error instanceof Error && error.message ? error.message : "No pudimos aprobar la solicitud real.");
+      } finally {
+        setActionRequestId(null);
+      }
+      return;
+    }
+
+    if (!category) {
+      setFeedback("Selecciona una categoría antes de aprobar la solicitud.");
       return;
     }
 
@@ -134,6 +222,10 @@ export default function AdminCatalogRequestsPage() {
   };
 
   const createCategory = (request: CatalogRequest) => {
+    if (isSupabase) {
+      setFeedback("En modo Supabase la nueva categoría se crea al aprobar la solicitud.");
+      return;
+    }
     const categoryName = formatCatalogServiceName(
       newCategoryNameByRequestId[request.id] ?? categorySearchByRequestId[request.id] ?? "",
     );
@@ -157,7 +249,7 @@ export default function AdminCatalogRequestsPage() {
     );
   };
 
-  const mergeRequest = (request: CatalogRequest) => {
+  const mergeRequest = async (request: CatalogRequest) => {
     const serviceId = getDraftExistingServiceId(
       request,
       existingServiceIdsByRequestId,
@@ -167,6 +259,24 @@ export default function AdminCatalogRequestsPage() {
 
     if (!service) {
       setFeedback("Selecciona una especialidad existente para fusionar la solicitud.");
+      return;
+    }
+
+    if (isSupabase) {
+      try {
+        setActionRequestId(request.id);
+        setFeedback(null);
+        await mergeRealCatalogRequest({ requestId: request.id, serviceId: service.id });
+        const next = await fetchRealState();
+        setRealCatalogRequests(next.requests);
+        setRealCatalogCategories(next.categories);
+        setRealCatalogServices(next.services);
+        setFeedback(`${request.requestedName} fusionada con ${service.name}.`);
+      } catch (error) {
+        setFeedback(error instanceof Error && error.message ? error.message : "No pudimos fusionar la solicitud real.");
+      } finally {
+        setActionRequestId(null);
+      }
       return;
     }
 
@@ -182,7 +292,28 @@ export default function AdminCatalogRequestsPage() {
     );
   };
 
-  const rejectRequest = (request: CatalogRequest) => {
+  const rejectRequest = async (request: CatalogRequest) => {
+    if (isSupabase) {
+      try {
+        setActionRequestId(request.id);
+        setFeedback(null);
+        await rejectRealCatalogRequest({
+          requestId: request.id,
+          rejectionReason: rejectionReasonByRequestId[request.id]?.trim() || undefined,
+        });
+        const next = await fetchRealState();
+        setRealCatalogRequests(next.requests);
+        setRealCatalogCategories(next.categories);
+        setRealCatalogServices(next.services);
+        setFeedback(`${request.requestedName} rechazada en el catálogo real.`);
+      } catch (error) {
+        setFeedback(error instanceof Error && error.message ? error.message : "No pudimos rechazar la solicitud real.");
+      } finally {
+        setActionRequestId(null);
+      }
+      return;
+    }
+
     const rejected = rejectCatalogRequest(
       request.id,
       rejectionReasonByRequestId[request.id]?.trim() || "Rechazada en demo por admin de catálogo",
@@ -203,6 +334,16 @@ export default function AdminCatalogRequestsPage() {
         subtitle="Nuevas especialidades propuestas por profesionales"
       />
       <ScreenBody className="px-4 pt-3 pb-6">
+        {isSupabase && loading && (
+          <Card className="mb-3 text-[12px] text-ink-600 leading-snug">
+            Estamos cargando las solicitudes reales de catálogo.
+          </Card>
+        )}
+        {pageError && (
+          <Card className="mb-3 bg-rose-50 border-rose-100 text-[12px] text-rose-700 leading-snug">
+            {pageError}
+          </Card>
+        )}
         <Card className="bg-sky-50 border-sky-100 mb-3">
           <div className="flex items-start gap-3">
             <div className="w-9 h-9 rounded-full bg-sky-500 text-white flex items-center justify-center">
@@ -293,6 +434,9 @@ export default function AdminCatalogRequestsPage() {
               const matchingExistingService = effectiveCatalogServices.find(
                 (service) => normalizeCatalogText(service.name) === normalizeCatalogText(finalName),
               );
+              const canApproveCreate = isSupabase
+                ? Boolean(finalName && (selectedCategory || (newCategoryName && !exactCategoryMatch)) && !matchingExistingService)
+                : Boolean(finalName && selectedCategory && !matchingExistingService);
 
               return (
                 <Card
@@ -453,8 +597,9 @@ export default function AdminCatalogRequestsPage() {
                                   variant="outline"
                                   onClick={() => createCategory(request)}
                                   testId={`create-catalog-category-${slug}`}
+                                  disabled={isSupabase}
                                 >
-                                  Crear nueva categoría
+                                  {isSupabase ? "Se creará al aprobar" : "Crear nueva categoría"}
                                 </Button>
                               </div>
                             )}
@@ -473,11 +618,11 @@ export default function AdminCatalogRequestsPage() {
                           <Button
                             size="sm"
                             full
-                            disabled={!finalName || !selectedCategory || Boolean(matchingExistingService)}
+                            disabled={!canApproveCreate || actionRequestId === request.id}
                             onClick={() => approveRequest(request)}
                             testId={`approve-catalog-request-${slug}`}
                           >
-                            Aprobar y crear especialidad
+                            {actionRequestId === request.id ? "Guardando..." : "Aprobar y crear especialidad"}
                           </Button>
                         </>
                       )}
@@ -517,11 +662,11 @@ export default function AdminCatalogRequestsPage() {
                             size="sm"
                             full
                             variant="outline"
-                            disabled={!existingServiceId}
+                            disabled={!existingServiceId || actionRequestId === request.id}
                             onClick={() => mergeRequest(request)}
                             testId={`merge-catalog-request-${slug}`}
                           >
-                            Fusionar con especialidad existente
+                            {actionRequestId === request.id ? "Guardando..." : "Fusionar con especialidad existente"}
                           </Button>
                         </>
                       )}
@@ -544,9 +689,10 @@ export default function AdminCatalogRequestsPage() {
                             full
                             variant="danger"
                             onClick={() => rejectRequest(request)}
+                            disabled={actionRequestId === request.id}
                             testId={`reject-catalog-request-${slug}`}
                           >
-                            Rechazar solicitud
+                            {actionRequestId === request.id ? "Guardando..." : "Rechazar solicitud"}
                           </Button>
                         </>
                       )}
