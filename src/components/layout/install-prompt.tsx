@@ -56,7 +56,7 @@ export function InstallPrompt() {
       </div>
       <div className="flex-1">
         <div className="font-bold text-[13px] text-ink-800">
-          Instala Arranxos
+          Instala Dersux
         </div>
         <div className="text-[11px] text-ink-400">
           Acceso rápido desde tu pantalla de inicio.

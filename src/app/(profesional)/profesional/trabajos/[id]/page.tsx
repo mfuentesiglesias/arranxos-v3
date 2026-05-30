@@ -86,7 +86,7 @@ function ReviewStatusCard({
     <Card className="mb-3" testId="pro-review-cta-card">
       <div className="font-bold text-[13.5px] text-ink-800 mb-2">Valoración del cliente</div>
       <div className="text-[11.5px] text-ink-500 leading-snug mb-3">
-        Tu opinión ayuda a mejorar la confianza dentro de Arranxos.
+        Tu opinión ayuda a mejorar la confianza dentro de Dersux.
       </div>
       <Button full href={`/profesional/trabajos/${jobId}/valorar`} testId="pro-review-cta">
         Valorar al cliente
@@ -390,7 +390,7 @@ function Inner({ id }: { id: string }) {
                   Dirección exacta y chat solo tras aceptación.
                 </div>
                 <div className="mt-2 text-[11.5px] text-sky-700/80 leading-snug">
-                  El precio mostrado es orientativo. El precio final se acordará dentro de Arranxos.
+                  El precio mostrado es orientativo. El precio final se acordará dentro de Dersux.
                 </div>
               </Card>
 
@@ -549,7 +549,7 @@ function Inner({ id }: { id: string }) {
         {/* Comisión */}
         <Card className="mb-3 bg-sand-50">
           <div className="text-[12px] text-ink-500 leading-snug">
-            Comisión Arranxos: <strong>{commissionPct}%</strong> ·
+            Comisión Dersux: <strong>{commissionPct}%</strong> ·
             ~ {formatEuro(commission)}. Recibirás{" "}
             <strong>{formatEuro(agreedAmount - commission)}</strong>{" "}
             {resolvedAgreement

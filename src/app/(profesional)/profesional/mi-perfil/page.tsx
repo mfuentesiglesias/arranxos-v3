@@ -1053,7 +1053,7 @@ export default function PerfilProPage() {
           <div className="flex flex-col gap-3 pb-1">
             <InfoPanel
               title="Términos de uso"
-              body="Arranxos actúa como plataforma de conexión y pago protegido. Los acuerdos, estados y revisiones de esta demo son representaciones funcionales, no un contrato real."
+              body="Dersux actúa como plataforma de conexión y pago protegido. Los acuerdos, estados y revisiones de esta demo son representaciones funcionales, no un contrato real."
             />
             <InfoPanel
               title="Privacidad"
@@ -1366,7 +1366,7 @@ export default function PerfilProPage() {
         ))}
 
         <div className="text-center text-[11px] text-ink-400 pt-2">
-          Arranxos · v1.0 · DEMO
+          Dersux · v1.0 · DEMO
         </div>
       </ScreenBody>
     </div>

@@ -258,7 +258,7 @@ function SupabaseInner({ id }: { id: string }) {
           <div className="text-[12px] text-ink-500 mb-1">Trabajo {currentJob?.id ?? id}</div>
           <div className="text-[12px] text-ink-600 mb-1">Cuéntanos cómo fue trabajar con este cliente</div>
           <div className="text-[11.5px] text-ink-400 mb-3">
-            Tu valoración ayuda a mejorar la confianza en Arranxos.
+            Tu valoración ayuda a mejorar la confianza en Dersux.
           </div>
           <div className="flex items-center justify-center gap-1 mb-2">
             {renderStars(review?.rating ?? rating, review ? undefined : setRating, Boolean(review))}

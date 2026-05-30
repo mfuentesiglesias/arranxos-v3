@@ -352,7 +352,7 @@ export default function AdminDashboard() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="text-[11px] text-white/60 uppercase tracking-wide font-semibold">
-              {adminFirstName ? `Arranxos · Admin · ${adminFirstName}` : "Arranxos · Admin"}
+              {adminFirstName ? `Dersux · Admin · ${adminFirstName}` : "Dersux · Admin"}
             </div>
             <div className="font-extrabold text-[20px]">Panel de control</div>
           </div>

@@ -316,7 +316,7 @@ function Inner({ id }: { id: string }) {
               <Icon name="alert" size={16} />
             </div>
             <div className="text-[12px] text-rose-700 leading-snug">
-              Arranxos revisará la disputa en la demo y mantendrá el acuerdo y el pago protegido mock asociados al trabajo hasta su resolución.
+              Dersux revisará la disputa en la demo y mantendrá el acuerdo y el pago protegido mock asociados al trabajo hasta su resolución.
             </div>
           </div>
         </Card>

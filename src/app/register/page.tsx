@@ -549,7 +549,7 @@ function RegisterInner() {
             <div className="rounded-2xl bg-sand-50 px-3 py-2.5 text-[11.5px] text-ink-500 leading-snug">
               {isSupabase
                 ? "Este contenido es informativo y no sustituye documentación legal definitiva."
-                : "Este contenido es informativo para la demo de Arranxos y no sustituye documentación legal definitiva."}
+                : "Este contenido es informativo para la demo de Dersux y no sustituye documentación legal definitiva."}
             </div>
             <div className="mt-3 text-[12px] text-ink-600 leading-snug">
               {legalPanel === "terms"

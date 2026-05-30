@@ -135,7 +135,7 @@ function Inner({ id }: { id: string }) {
           </div>
           <div className="flex items-center justify-between text-[12.5px] mb-1">
             <span className="text-ink-500">
-              Comisión Arranxos ({defaultAdminConfig.commissionPct}%)
+              Comisión Dersux ({defaultAdminConfig.commissionPct}%)
             </span>
             <span className="font-bold text-ink-800">−{formatEuro(commission)}</span>
           </div>

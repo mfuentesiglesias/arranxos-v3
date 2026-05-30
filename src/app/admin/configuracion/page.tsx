@@ -295,7 +295,7 @@ function MockInner() {
             <div className="text-[12px] text-amber-700 leading-snug">
               DEMO: estos cambios se aplican solo en el estado local de la app.
               En producción, se guardarían en la configuración global real de
-              Arranxos.
+              Dersux.
             </div>
           </div>
         </Card>
@@ -304,7 +304,7 @@ function MockInner() {
           <div className="font-bold text-[14px] text-ink-800 mb-3">Economía</div>
           <div className="flex flex-col gap-4">
             <Input
-              label={`Comisión Arranxos (%) · actual ${cfg.commissionPct}%`}
+              label={`Comisión Dersux (%) · actual ${cfg.commissionPct}%`}
               type="number"
               min={0}
               max={30}

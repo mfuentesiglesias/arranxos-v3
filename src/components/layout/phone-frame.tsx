@@ -91,7 +91,7 @@ export function PhoneFrame({ children }: { children: React.ReactNode }) {
         <aside className="w-[200px] self-start sticky top-5 mr-4">
           <div className="bg-white/5 rounded-2xl p-3 max-h-[calc(100vh-40px)] overflow-y-auto no-scrollbar">
             <div className="px-2 pb-2 text-[10px] font-extrabold text-white/40 uppercase tracking-widest">
-              Pantallas · Arranxos
+              Pantallas · Dersux
             </div>
             {NAV_GROUPS.map((group) => (
               <div key={group.group} className="mb-1">

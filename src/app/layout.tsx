@@ -5,8 +5,8 @@ import { ServiceWorkerRegister } from "@/components/layout/service-worker-regist
 import "./globals.css";
 
 export const metadata: Metadata = {
-  applicationName: "Arranxos",
-  title: "Arranxos — Demo PWA de servicios locales",
+  applicationName: "Dersux",
+  title: "Dersux — Demo PWA de servicios locales",
   description:
     "Demo PWA para conectar clientes y profesionales. Simulación de trabajos, acuerdos y pago protegido mock.",
   manifest: "/manifest.json",
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Arranxos",
+    title: "Dersux",
   },
   icons: {
     icon: [

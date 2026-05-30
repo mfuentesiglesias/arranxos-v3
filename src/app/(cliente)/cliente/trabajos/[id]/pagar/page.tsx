@@ -222,7 +222,7 @@ function SupabaseInner({ id }: { id: string }) {
             </div>
             {commission !== null && commissionPct !== null && (
               <div className="flex items-center justify-between gap-3">
-                <span className="text-ink-500">Comisión Arranxos ({commissionPct}%)</span>
+                <span className="text-ink-500">Comisión Dersux ({commissionPct}%)</span>
                 <span className="font-bold text-ink-800">{formatEuro(commission)}</span>
               </div>
             )}
@@ -319,7 +319,7 @@ function MockInner({ id }: { id: string }) {
               <span className="font-bold text-ink-800">{formatEuro(total)}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <span className="text-ink-500">Comisión Arranxos ({commissionPct}%)</span>
+              <span className="text-ink-500">Comisión Dersux ({commissionPct}%)</span>
               <span className="font-bold text-ink-800">{formatEuro(commission)}</span>
             </div>
             <div className="border-t border-sand-200 pt-2 text-[11.5px] text-ink-500 leading-snug">

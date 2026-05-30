@@ -283,7 +283,7 @@ export default function HomeProPage() {
             </div>
             <div>
               <div className="font-bold text-[13.5px] text-ink-800 mb-0.5">
-                Consejo Arranxos
+                Consejo Dersux
               </div>
               <div className="text-[12px] text-ink-500 leading-snug">
                 Responde en menos de 1 h para aparecer primero en los resultados.

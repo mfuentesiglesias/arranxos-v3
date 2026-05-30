@@ -19,7 +19,7 @@ export function AntiLeakAlert({ leaks }: Props) {
         </div>
         <div className="text-[12px] text-amber-700/90 leading-snug">
           Hemos detectado {types.map((t) => LEAK_LABELS[t]).join(" y ")}. Por tu seguridad,
-          mantén la conversación y el pago dentro de Arranxos.
+          mantén la conversación y el pago dentro de Dersux.
         </div>
         <div className="text-[11px] text-amber-600 mt-1.5">
           Intentar saltarse esta regla genera strikes en tu cuenta.

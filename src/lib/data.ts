@@ -47,7 +47,7 @@ export const currentPro: Professional = {
   responseTime: "< 1h",
   bio: "Electricista industrial con más de 12 años de experiencia en Galicia. Instalaciones residenciales, pequeñas empresas y pequeña domótica.",
   phone: "+34 600 111 222",
-  email: "manuel.garcia@arranxos.gal",
+  email: "manuel.garcia@dersux.gal",
   zone: "Vigo y área metropolitana",
   radiusKm: 25,
   reliability: 96,

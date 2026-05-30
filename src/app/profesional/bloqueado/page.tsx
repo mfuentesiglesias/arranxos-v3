@@ -43,7 +43,7 @@ export default function BloqueadoPage() {
         </Card>
         <Button
           full
-          href="mailto:soporte@arranxos.gal?subject=Revisi%C3%B3n%20de%20cuenta%20bloqueada%20%28demo%29"
+          href="mailto:soporte@dersux.gal?subject=Revisi%C3%B3n%20de%20cuenta%20bloqueada%20%28demo%29"
           testId="blocked-support-contact"
         >
           Contactar con soporte

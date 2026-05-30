@@ -43,7 +43,7 @@ export function Logo({ size = 32, light = false, compact = false, className }: P
             light ? "text-white" : "text-ink-900",
           )}
         >
-          arranxos
+          dersux
         </span>
       )}
     </div>

@@ -214,7 +214,7 @@ function Inner() {
             <StrikeBadge strikes={pro.strikes ?? 0} />
           </div>
           <div className="text-[12px] text-ink-500 leading-snug">
-            Datos simulados de confianza en esta demo: en Arranxos desde {pro.since}
+            Datos simulados de confianza en esta demo: en Dersux desde {pro.since}
             y cumplimiento estimado del <strong>{pro.completedOnTime ?? 95}%</strong>.
           </div>
         </Card>
@@ -276,7 +276,7 @@ function Inner() {
             </div>
             <div className="text-[12px] text-amber-700 leading-snug">
               Contacto y dirección exactos solo se comparten al aceptar al
-              profesional. Mantén la conversación dentro del chat de Arranxos.
+              profesional. Mantén la conversación dentro del chat de Dersux.
             </div>
           </div>
         </Card>

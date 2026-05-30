@@ -48,7 +48,7 @@ export default function LoginPage() {
 
       const profile = await getCurrentProfile();
       if (!profile) {
-        throw new Error("No se encontró tu perfil en Arranxos.");
+        throw new Error("No se encontró tu perfil en Dersux.");
       }
 
       if (profile.role === "admin") {
@@ -128,7 +128,7 @@ export default function LoginPage() {
             Bienvenida de nuevo
           </h2>
           <p className="text-[14px] text-ink-400 mb-7">
-            Inicia sesión en tu cuenta de Arranxos
+            Inicia sesión en tu cuenta de Dersux
           </p>
           <div className="flex flex-col gap-4 mb-5">
             <Input

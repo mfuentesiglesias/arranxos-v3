@@ -199,7 +199,7 @@ export default function PagosPage() {
         </div>
 
         <Card className="mt-4 bg-sand-50 text-[11.5px] text-ink-500 leading-snug">
-          Cobros mock: la comisión de Arranxos ({adminConfig.commissionPct}%) se
+          Cobros mock: la comisión de Dersux ({adminConfig.commissionPct}%) se
           aplica de forma simulada. En esta demo no hay transferencias bancarias
           reales ni abonos a cuentas.
         </Card>

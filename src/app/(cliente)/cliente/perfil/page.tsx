@@ -320,7 +320,7 @@ export default function PerfilClientePage() {
         ))}
 
         <div className="text-center text-[11px] text-ink-400 pt-2">
-          Arranxos · v1.0 · DEMO
+          Dersux · v1.0 · DEMO
         </div>
       </ScreenBody>
     </div>
@@ -349,7 +349,7 @@ function getClientProfilePanelDescription(panelId: ClientProfilePanelId | null) 
       saved_addresses: "Resumen demo de cómo guardarás ubicaciones habituales sin mostrar datos sensibles fuera de contexto.",
       notifications: "Preferencias demo para avisos de trabajos, chat, pagos y disputas.",
       identity_verification: "Explicación demo del proceso de confianza y validación futura de identidad.",
-      privacy_security: "Resumen corto de ubicación exacta, anti-fuga y controles de privacidad dentro de Arranxos.",
+      privacy_security: "Resumen corto de ubicación exacta, anti-fuga y controles de privacidad dentro de Dersux.",
       language_region: "Espacio demo para futuros ajustes de idioma y configuración regional.",
       help: "Ayuda rápida y soporte demo para resolver dudas frecuentes.",
       terms: "Texto demo orientativo, no documento legal definitivo.",
@@ -399,7 +399,7 @@ function getClientProfilePanelCards(panelId: ClientProfilePanelId) {
       identity_verification: [
         {
           title: "Verificación futura",
-          body: "Arranxos añadirá controles de identidad y confianza para determinados flujos, pero esta demo no solicita documentos reales.",
+          body: "Dersux añadirá controles de identidad y confianza para determinados flujos, pero esta demo no solicita documentos reales.",
           muted: false,
         },
         {
@@ -452,7 +452,7 @@ function getClientProfilePanelCards(panelId: ClientProfilePanelId) {
         },
         {
           title: "Versión real",
-          body: "Cuando Arranxos conecte backend, autenticación y pagos reales, esta sección deberá sustituirse por textos legales definitivos y versionados.",
+          body: "Cuando Dersux conecte backend, autenticación y pagos reales, esta sección deberá sustituirse por textos legales definitivos y versionados.",
           muted: true,
         },
       ],

@@ -1,4 +1,4 @@
-# Arranxos
+# Dersux (antes Arranxos)
 
 **Servicios de confianza en Galicia** — marketplace PWA que conecta clientes con profesionales verificados (electricistas, fontaneros, reformas, viticultores, ganadería, digital, eventos, turismo rural…). Pago en custodia futuro, anti-fuga de contactos, strikes configurables y panel admin completo.
 
@@ -206,7 +206,7 @@ Configuración mínima para instalación:
 ### Instalar en Android
 
 1. Abre la demo en Chrome para Android.
-2. Si el navegador muestra el banner `Instala Arranxos`, úsalo.
+2. Si el navegador muestra el banner `Instala Dersux`, úsalo.
 3. Si no aparece, abre el menu del navegador y usa `Instalar aplicacion` o `Anadir a pantalla de inicio`.
 
 ### Instalar en iPhone
@@ -245,7 +245,7 @@ No hay configuración validada de Cloudflare Pages en este repo ahora mismo. Si 
 
 ### Dominio personalizado
 
-En Vercel → Settings → Domains. Añade `arranxos.gal` (o subdominio) y apunta DNS.
+En Vercel → Settings → Domains. Añade el dominio (o subdominio) y apunta DNS.
 
 ---
 

@@ -65,7 +65,7 @@ function Inner({ id }: { id: string }) {
     assignedProId: job.assignedProId,
     currentProfessionalId,
   });
-  const clientDisplayName = canOpenChat ? job.clientName : "Cliente de Arranxos";
+  const clientDisplayName = canOpenChat ? job.clientName : "Cliente de Dersux";
   const locationDisplay = canSeeLocation
     ? job.location
     : job.locationApprox || "Ubicación aproximada no disponible";

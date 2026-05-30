@@ -43,10 +43,10 @@ export default function PendientePage() {
         <div className="text-[12px] text-ink-400 mb-5">
           ¿Necesitas algo? Escríbenos a{" "}
           <a
-            href="mailto:soporte@arranxos.gal?subject=Consulta%20de%20cuenta%20pendiente%20%28demo%29"
+            href="mailto:soporte@dersux.gal?subject=Consulta%20de%20cuenta%20pendiente%20%28demo%29"
             className="font-semibold text-coral-600"
           >
-            soporte@arranxos.gal
+            soporte@dersux.gal
           </a>
         </div>
         <Button full variant="outline" href="/welcome">

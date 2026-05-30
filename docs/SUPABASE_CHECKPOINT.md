@@ -4,6 +4,8 @@
 
 Arranxos mantiene dos modos de datos:
 
+> **Nota de marca:** La app pasa comercialmente a **Dersux**. El código, repo y documentación técnica pueden mantener nombres internos "Arranxos" durante la transición.
+
 - `mock` por defecto para la demo completa y los smoke tests.
 - `supabase` para una parte ya integrada de los flujos reales mediante RLS + RPC.
 

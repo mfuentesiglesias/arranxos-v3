@@ -180,7 +180,7 @@ function RevisarInner() {
               </div>
               <div className="text-[11.5px] text-amber-700/80 leading-snug">
                 Teléfono, email o redes sociales quedarán visibles para admin y
-                pueden causar sanciones. Usa el chat de Arranxos.
+                pueden causar sanciones. Usa el chat de Dersux.
               </div>
             </div>
           </div>
