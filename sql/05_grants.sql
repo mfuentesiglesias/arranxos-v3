@@ -72,6 +72,8 @@ grant execute on function public.create_catalog_request(text, uuid, text, text) 
 grant execute on function public.approve_catalog_request(uuid, uuid, text, text, text) to authenticated;
 grant execute on function public.reject_catalog_request(uuid, text) to authenticated;
 grant execute on function public.merge_catalog_request(uuid, uuid) to authenticated;
+grant execute on function public.create_search_ticket_from_job(uuid, public.search_ticket_reason) to authenticated;
+grant execute on function public.update_search_ticket_status(uuid, public.search_ticket_status) to authenticated;
 grant execute on function public.get_admin_config() to authenticated;
 grant execute on function public.update_admin_config(integer, integer, integer, integer, integer, boolean, jsonb) to authenticated;
 grant execute on function public.get_professional_reliability_score(uuid) to authenticated;

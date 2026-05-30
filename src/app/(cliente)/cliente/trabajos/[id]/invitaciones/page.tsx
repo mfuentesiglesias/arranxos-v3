@@ -1,5 +1,5 @@
 "use client";
-import { use, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
@@ -18,6 +18,12 @@ import {
   getEffectiveJobById,
   useSession,
 } from "@/lib/store";
+import { isSupabaseMode } from "@/lib/supabase/config";
+import {
+  createSearchTicketFromJob as createRealSearchTicketFromJob,
+  getMySearchTicketByJobId,
+  type ApiSearchTicket,
+} from "@/lib/api/searchTickets";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -27,6 +33,7 @@ export default function Page({ params }: Props) {
   const { id } = use(params);
   const session = useSession();
   const adminConfig = useSession(getEffectiveAdminConfig);
+  const isSupabase = isSupabaseMode();
   const effectiveJob = useMemo(() => getEffectiveJobById(session, id), [session, id]);
   const outreachMeta = session.jobOutreachMeta[id];
   const searchTicket = useMemo(
@@ -39,14 +46,50 @@ export default function Page({ params }: Props) {
   const limit = adminConfig.invitationLimitPerJob;
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sent, setSent] = useState(false);
+  const [realSearchTicket, setRealSearchTicket] = useState<ApiSearchTicket | null>(null);
+  const [searchTicketActionError, setSearchTicketActionError] = useState<string | null>(null);
+  const [searchTicketActionNotice, setSearchTicketActionNotice] = useState<string | null>(null);
+  const [creatingSearchTicketReason, setCreatingSearchTicketReason] = useState<
+    "no_pros_in_zone" | "no_useful_response" | null
+  >(null);
   const prosInZone = getProfessionalsInZoneForJob(job, professionals);
-  const searchTicketState = getSearchTicketClientState({
-    job,
-    professionals,
-    outreachMeta,
-    existingTicket: searchTicket,
-    daysThreshold: adminConfig.searchTicketNoResponseDays,
-  });
+  const searchTicketState = isSupabase && realSearchTicket
+    ? "ticket_created"
+    : getSearchTicketClientState({
+        job,
+        professionals,
+        outreachMeta,
+        existingTicket: isSupabase ? undefined : searchTicket,
+        daysThreshold: adminConfig.searchTicketNoResponseDays,
+      });
+
+  useEffect(() => {
+    if (!isSupabase) {
+      setRealSearchTicket(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadRealSearchTicket = async () => {
+      try {
+        const ticket = await getMySearchTicketByJobId(id);
+        if (!cancelled) {
+          setRealSearchTicket(ticket);
+        }
+      } catch {
+        if (!cancelled) {
+          setRealSearchTicket(null);
+        }
+      }
+    };
+
+    void loadRealSearchTicket();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, isSupabase]);
 
   const toggle = (proId: string) => {
     setSelected((prev) => {
@@ -65,6 +108,31 @@ export default function Page({ params }: Props) {
     setTimeout(() => history.back(), 700);
   };
 
+  const createTicketForJob = async (reason: "no_pros_in_zone" | "no_useful_response") => {
+    if (!isSupabase) {
+      createSearchTicket(id, reason);
+      return;
+    }
+
+    setCreatingSearchTicketReason(reason);
+    setSearchTicketActionError(null);
+    setSearchTicketActionNotice(null);
+
+    try {
+      const ticket = await createRealSearchTicketFromJob(id, reason);
+      setRealSearchTicket(ticket);
+      setSearchTicketActionNotice("Ticket de búsqueda real creado correctamente.");
+    } catch (error) {
+      setSearchTicketActionError(
+        error instanceof Error && error.message
+          ? error.message
+          : "No pudimos crear el ticket de búsqueda real.",
+      );
+    } finally {
+      setCreatingSearchTicketReason(null);
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col bg-sand-50">
       <StatusBar />
@@ -73,6 +141,18 @@ export default function Page({ params }: Props) {
         subtitle={`Máx. ${limit} invitaciones · ${job.title}`}
       />
       <ScreenBody className="px-4 pt-3 pb-6">
+        {searchTicketActionError && (
+          <Card className="mb-3 bg-rose-50 border-rose-100 text-[12px] text-rose-700 leading-snug">
+            {searchTicketActionError}
+          </Card>
+        )}
+
+        {searchTicketActionNotice && (
+          <Card className="mb-3 bg-teal-50 border-teal-100 text-[12px] text-teal-700 leading-snug">
+            {searchTicketActionNotice}
+          </Card>
+        )}
+
         <Card className="bg-amber-50/50 border-amber-100 mb-3">
           <div className="text-[12px] text-amber-700 leading-snug">
             Las invitaciones permiten avisar a profesionales seleccionados sobre
@@ -95,9 +175,10 @@ export default function Page({ params }: Props) {
             <Button
               size="sm"
               full
-              onClick={() => createSearchTicket(id, "no_pros_in_zone")}
+              onClick={() => void createTicketForJob("no_pros_in_zone")}
+              disabled={creatingSearchTicketReason !== null}
             >
-              Crear ticket de búsqueda
+              {creatingSearchTicketReason === "no_pros_in_zone" ? "Creando..." : "Crear ticket de búsqueda"}
             </Button>
           </Card>
         ) : searchTicketState === "waiting_info" ? (
@@ -114,9 +195,10 @@ export default function Page({ params }: Props) {
             <Button
               size="sm"
               full
-              onClick={() => createSearchTicket(id, "no_useful_response")}
+              onClick={() => void createTicketForJob("no_useful_response")}
+              disabled={creatingSearchTicketReason !== null}
             >
-              Crear ticket de búsqueda
+              {creatingSearchTicketReason === "no_useful_response" ? "Creando..." : "Crear ticket de búsqueda"}
             </Button>
           </Card>
         ) : null}

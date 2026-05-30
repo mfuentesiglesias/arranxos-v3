@@ -16,6 +16,11 @@ import { StatusBadge } from "@/components/ui/badge";
 import { JobStatusTimeline } from "@/components/jobs/job-status-timeline";
 import { getJobAgreementContext, type ApiJobAgreementContext } from "@/lib/api/agreements";
 import { getMyReviewForJob, type ApiReview } from "@/lib/api/reviews";
+import {
+  createSearchTicketFromJob as createRealSearchTicketFromJob,
+  getMySearchTicketByJobId,
+  type ApiSearchTicket,
+} from "@/lib/api/searchTickets";
 import { jobs, professionals } from "@/lib/data";
 import {
   getActiveNegotiation,
@@ -118,6 +123,13 @@ function Inner({ id }: { id: string }) {
   );
   const [realAgreementContext, setRealAgreementContext] = useState<ApiJobAgreementContext | null>(null);
   const [realReview, setRealReview] = useState<ApiReview | null>(null);
+  const [realSearchTicket, setRealSearchTicket] = useState<ApiSearchTicket | null>(null);
+  const [searchTicketActionError, setSearchTicketActionError] = useState<string | null>(null);
+  const [searchTicketActionNotice, setSearchTicketActionNotice] = useState<string | null>(null);
+  const [creatingSearchTicketReason, setCreatingSearchTicketReason] = useState<
+    "no_pros_in_zone" | "no_useful_response" | null
+  >(null);
+  const effectiveSearchTicket = isSupabase ? realSearchTicket : existingSearchTicket;
   const postPaymentActions = getPostPaymentJobActionsForClient({
     status: job.status,
     agreement: resolvedAgreement,
@@ -146,13 +158,15 @@ function Inner({ id }: { id: string }) {
       (job.status === "in_progress" || job.status === "agreement_pending") &&
       !resolvedAgreement,
   );
-  const searchTicketState = getSearchTicketClientState({
-    job,
-    professionals,
-    outreachMeta,
-    existingTicket: searchTicket,
-    daysThreshold: adminConfig.searchTicketNoResponseDays,
-  });
+  const searchTicketState = isSupabase && realSearchTicket
+    ? "ticket_created"
+    : getSearchTicketClientState({
+        job,
+        professionals,
+        outreachMeta,
+        existingTicket: isSupabase ? undefined : searchTicket,
+        daysThreshold: adminConfig.searchTicketNoResponseDays,
+      });
   const jobExistsInSeed = jobs.some((seedJob) => seedJob.id === job.id);
   const requestingPros =
     effectiveJobRequests.length > 0
@@ -211,6 +225,34 @@ function Inner({ id }: { id: string }) {
     };
   }, [id, isSupabase]);
 
+  useEffect(() => {
+    if (!isSupabase) {
+      setRealSearchTicket(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadRealSearchTicket = async () => {
+      try {
+        const ticket = await getMySearchTicketByJobId(id);
+        if (!cancelled) {
+          setRealSearchTicket(ticket);
+        }
+      } catch {
+        if (!cancelled) {
+          setRealSearchTicket(null);
+        }
+      }
+    };
+
+    void loadRealSearchTicket();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, isSupabase]);
+
   const realJob = realAgreementContext?.status === "ready" ? realAgreementContext.job : null;
   const realAgreement = realAgreementContext?.status === "ready" ? realAgreementContext.agreement : null;
   const reviewSummary: DetailReviewSummary | undefined = isSupabase
@@ -249,6 +291,31 @@ function Inner({ id }: { id: string }) {
       job.id,
       new Date(new Date(job.completionDeadline).getTime() + 1000).toISOString(),
     );
+  };
+
+  const createSearchTicketForJob = async (reason: "no_pros_in_zone" | "no_useful_response") => {
+    if (!isSupabase) {
+      createSearchTicket(job.id, reason);
+      return;
+    }
+
+    setCreatingSearchTicketReason(reason);
+    setSearchTicketActionError(null);
+    setSearchTicketActionNotice(null);
+
+    try {
+      const ticket = await createRealSearchTicketFromJob(job.id, reason);
+      setRealSearchTicket(ticket);
+      setSearchTicketActionNotice("Ticket de búsqueda real creado correctamente.");
+    } catch (error) {
+      setSearchTicketActionError(
+        error instanceof Error && error.message
+          ? error.message
+          : "No pudimos crear el ticket de búsqueda real.",
+      );
+    } finally {
+      setCreatingSearchTicketReason(null);
+    }
   };
 
   return (
@@ -557,13 +624,25 @@ function Inner({ id }: { id: string }) {
           </Card>
         )}
 
-        {searchTicketState === "ticket_created" && existingSearchTicket ? (
+        {searchTicketActionError && (
+          <Card className="mb-3 bg-rose-50 border-rose-100 text-[12px] text-rose-700 leading-snug">
+            {searchTicketActionError}
+          </Card>
+        )}
+
+        {searchTicketActionNotice && (
+          <Card className="mb-3 bg-teal-50 border-teal-100 text-[12px] text-teal-700 leading-snug">
+            {searchTicketActionNotice}
+          </Card>
+        )}
+
+        {searchTicketState === "ticket_created" && effectiveSearchTicket ? (
           <Card className="mb-3 bg-teal-50/50 border-teal-100">
             <div className="font-bold text-[13px] text-teal-700 mb-1">
               Ticket de búsqueda creado
             </div>
             <div className="text-[11.5px] text-teal-700/80 leading-snug">
-              {existingSearchTicket.reason === "no_pros_in_zone"
+              {effectiveSearchTicket.reason === "no_pros_in_zone"
                 ? "Admin ya tiene un ticket para buscar profesionales en tu zona."
                 : "Admin ya tiene un ticket por falta de respuesta útil a tus invitaciones."}
             </div>
@@ -579,10 +658,11 @@ function Inner({ id }: { id: string }) {
             <Button
               size="sm"
               full
-              onClick={() => createSearchTicket(job.id, "no_pros_in_zone")}
+              onClick={() => void createSearchTicketForJob("no_pros_in_zone")}
+              disabled={creatingSearchTicketReason !== null}
               testId="create-search-ticket"
             >
-              Crear ticket de búsqueda
+              {creatingSearchTicketReason === "no_pros_in_zone" ? "Creando..." : "Crear ticket de búsqueda"}
             </Button>
           </Card>
         ) : searchTicketState === "waiting_info" ? (
@@ -605,10 +685,11 @@ function Inner({ id }: { id: string }) {
             <Button
               size="sm"
               full
-              onClick={() => createSearchTicket(job.id, "no_useful_response")}
+              onClick={() => void createSearchTicketForJob("no_useful_response")}
+              disabled={creatingSearchTicketReason !== null}
               testId="create-search-ticket"
             >
-              Crear ticket de búsqueda
+              {creatingSearchTicketReason === "no_useful_response" ? "Creando..." : "Crear ticket de búsqueda"}
             </Button>
           </Card>
         ) : null}
