@@ -22,7 +22,7 @@ Arranxos mantiene dos modos de datos:
 - resumen admin de economía parcial/lógico
 - dashboard admin con KPIs reales básicos
 - hardening 1A de reviews y listado admin de moderación
-- Admin Real 3B versionado para tickets de búsqueda (pendiente de ejecutar SQL nuevo)
+- Admin Real 3B completado para tickets de búsqueda (SQL ejecutado y verificado)
 
 ### Sigue mock o parcial
 
@@ -30,7 +30,7 @@ Arranxos mantiene dos modos de datos:
 - mapas / geospatial real
 - emails reales
 - realtime completo de chat
-- tickets de búsqueda reales (SQL y frontend preparados; ejecución pendiente)
+- tickets de búsqueda reales (completado; SQL ejecutado y verificado en Supabase)
 - publicación real de jobs desde cliente
 - persistencia real de especialidades profesionales
 - listado global completo de chats admin más allá de moderación por flags
@@ -85,7 +85,8 @@ Arranxos mantiene dos modos de datos:
 | Hardening reviews / chats 1A | Completado | Reviews ya no quedan abiertas a todo `authenticated`; `/admin/chats` evita mostrar contenido original en crudo en la lista. |
 | Cron scheduler 1B | Completado | pg_cron activo con `jobname = auto-release-due-jobs`, `schedule = 0 * * * *`, `command = select public.auto_release_due_jobs_cron();`, `active = true`. |
 | Admin Real 3A catálogo / solicitudes | Completado | RPCs, APIs, rutas admin, perfil profesional y publicación cliente conectados a datos reales. |
-| Admin Real 3B tickets de búsqueda | Versionado | SQL, API y rutas preparadas para `search_tickets`; pendiente ejecutar `sql/24_search_tickets_rpc.sql` y grants. |
+| Admin Real 3B tickets de búsqueda | Completado | SQL ejecutado, RPCs verificadas, `/admin/tickets-busqueda` funcional en vivo con usuario admin real. |
+| Admin Real 4A jobs reales cliente | Completado | `listMyJobs()` y `getMyJobById()` en `src/lib/api/clientJobs.ts`; `/cliente/trabajos` y `/cliente/trabajos/[id]` ya cargan trabajos reales en modo Supabase; no implementa publicación real de jobs todavía. |
 | `/admin/valoraciones` real | Completado | Listado real de reviews. |
 | `/admin/configuracion` real | Completado | `admin_config` real vía RPC. |
 | `/admin/profesionales` real | Completado | Scores reales y recálculo manual. |
@@ -103,7 +104,7 @@ Arranxos mantiene dos modos de datos:
 | `/admin/chats` | real | `moderation_flags` y acciones RPC |
 | `/admin/catalogo` | real | `catalog_categories` + `catalog_services` + `catalog_requests` |
 | `/admin/solicitudes-catalogo` | real | `catalog_requests` con acciones RPC de aprobar/rechazar/fusionar |
-| `/admin/tickets-busqueda` | versionado | UI y API reales preparadas; pendiente ejecutar SQL de `search_tickets` RPC |
+| `/admin/tickets-busqueda` | real | `search_tickets` + RPCs `create_search_ticket_from_job` / `update_search_ticket_status` |
 | `/admin/valoraciones` | real | `reviews` reales |
 | `/admin/configuracion` | real | `admin_config` vía RPC |
 
@@ -156,7 +157,7 @@ Arranxos mantiene dos modos de datos:
 - Los listados admin nuevos no necesitan `auth.users`, `service_role` ni `job_private_locations`.
 - `service_role` sigue sin usarse en frontend; en 1A solo queda previsto como caller backend de `auto_release_due_jobs_cron()`.
 - El scheduler pg_cron de 1B ejecuta `auto_release_due_jobs_cron()` cada hora sin depender de JWT de usuario; rollback con `select cron.unschedule('auto-release-due-jobs')`.
-- `search_tickets` y sus mutaciones reales quedan versionadas en `sql/24_search_tickets_rpc.sql`, pero requieren ejecución manual en Supabase antes de usar el flujo real.
+- `search_tickets` y sus mutaciones reales ya están ejecutadas en Supabase; las RPCs `create_search_ticket_from_job` y `update_search_ticket_status` están activas con SECURITY DEFINER y grants a authenticated.
 - `profiles` puede leerse como admin, pero los listados seguros deben proyectar solo campos mínimos.
 - `reviews` ya no queda abierta con `using (true)` para todo `authenticated`; la lectura real se limita a admin o participantes del trabajo.
 
@@ -245,7 +246,7 @@ npm run dev
 
 ## Roadmap recomendado
 
-1. Ejecutar `sql/24_search_tickets_rpc.sql` y el bloque nuevo de `sql/05_grants.sql` para activar el flujo real de tickets de búsqueda.
+1. ~~Ejecutar `sql/24_search_tickets_rpc.sql`~~ (completado — Admin Real 3B ya activo).
 2. Endurecer campos sensibles y, si hace falta, mover lecturas delicadas a vistas/RPCs más acotadas.
 3. Evaluar chats globales admin o detalles seguros más allá de moderación por flags.
 4. Definir consecuencias configurables del score solo si siguen siendo admin-reviewed.

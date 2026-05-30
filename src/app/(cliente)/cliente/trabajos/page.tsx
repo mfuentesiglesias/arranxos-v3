@@ -1,11 +1,15 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StatusBar } from "@/components/layout/status-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
 import { JobCard } from "@/components/jobs/job-card";
 import Link from "next/link";
 import { Icon } from "@/components/ui/icon";
+import { Card } from "@/components/ui/card";
 import { getEffectiveJobs, useSession } from "@/lib/store";
+import { isSupabaseMode } from "@/lib/supabase/config";
+import { listMyJobs, toMockJob, type ApiClientJob } from "@/lib/api/clientJobs";
+import type { Job } from "@/lib/types";
 
 type Filter = "activos" | "pendientes" | "completados" | "cancelados";
 
@@ -13,8 +17,59 @@ export default function TrabajosPage() {
   const [filter, setFilter] = useState<Filter>("activos");
   const session = useSession();
   const currentClientId = session.currentClientId;
+  const isSupabase = isSupabaseMode();
   const effectiveJobs = getEffectiveJobs(session);
-  const mine = effectiveJobs.filter((j) => j.clientId === currentClientId);
+  const [realJobs, setRealJobs] = useState<ApiClientJob[]>([]);
+  const [loadingReal, setLoadingReal] = useState(false);
+  const [errorReal, setErrorReal] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isSupabase) {
+      setRealJobs([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const load = async () => {
+      setLoadingReal(true);
+      setErrorReal(null);
+
+      try {
+        const jobs = await listMyJobs();
+        if (!cancelled) {
+          setRealJobs(jobs);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setErrorReal(
+            error instanceof Error && error.message
+              ? error.message
+              : "No pudimos cargar tus trabajos reales.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingReal(false);
+        }
+      }
+    };
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isSupabase]);
+
+  const mockClientJobs = effectiveJobs.filter((j) => j.clientId === currentClientId);
+
+  const realDisplayJobs = useMemo(
+    () => realJobs.map((apiJob) => toMockJob(apiJob)),
+    [realJobs],
+  );
+
+  const mine: Job[] = isSupabase ? realDisplayJobs : mockClientJobs;
 
   const groups: Record<Filter, typeof mine> = {
     activos: mine.filter((j) =>
@@ -81,23 +136,36 @@ export default function TrabajosPage() {
         </div>
       </div>
       <ScreenBody className="px-4 pt-4 pb-6">
-        {shown.length === 0 ? (
+        {isSupabase && loadingReal && (
+          <Card className="mb-3 text-[12px] text-ink-600 leading-snug">
+            Cargando tus trabajos reales…
+          </Card>
+        )}
+
+        {errorReal && (
+          <Card className="mb-3 bg-rose-50 border-rose-100 text-[12px] text-rose-700 leading-snug">
+            {errorReal}
+          </Card>
+        )}
+
+        {!isSupabase && shown.length === 0 || isSupabase && !loadingReal && !errorReal && shown.length === 0 ? (
           <div className="text-center py-16">
             <div className="w-16 h-16 rounded-full bg-sand-100 mx-auto flex items-center justify-center mb-4">
               <Icon name="briefcase" size={28} className="text-ink-400" />
             </div>
             <div className="font-bold text-[15px] text-ink-800 mb-1">
-              Nada por aquí
+              {isSupabase ? "Aún no tienes trabajos publicados" : "Nada por aquí"}
             </div>
             <div className="text-[12.5px] text-ink-400 mb-4 max-w-[220px] mx-auto leading-snug">
-              No tienes trabajos en esta categoría. Publica uno nuevo y recibe
-              propuestas en horas.
+              {isSupabase
+                ? "Cuando publiques un trabajo aparecerá aquí."
+                : "No tienes trabajos en esta categoría. Publica uno nuevo y recibe propuestas en horas."}
             </div>
             <Link
               href="/cliente/publicar"
               className="inline-flex items-center gap-1.5 bg-coral-500 text-white rounded-full px-4 py-2 text-[13px] font-bold"
             >
-              Publicar trabajo
+              {isSupabase ? "Publicar trabajo" : "Publicar trabajo"}
               <Icon name="forward" size={14} stroke={2.5} />
             </Link>
           </div>

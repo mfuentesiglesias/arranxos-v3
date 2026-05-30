@@ -25,6 +25,20 @@ export function addDays(iso: string, days: number) {
   return d.toISOString();
 }
 
+export function relativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffSeconds < 60) return "ahora";
+  if (diffMinutes < 60) return `hace ${diffMinutes} min`;
+  if (diffHours < 24) return `hace ${diffHours}h`;
+  if (diffDays < 7) return `hace ${diffDays} d`;
+  return `hace ${Math.floor(diffDays / 7)} sem`;
+}
+
 export function initials(name: string) {
   return name
     .split(" ")

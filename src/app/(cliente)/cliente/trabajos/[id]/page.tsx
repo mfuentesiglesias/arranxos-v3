@@ -21,6 +21,11 @@ import {
   getMySearchTicketByJobId,
   type ApiSearchTicket,
 } from "@/lib/api/searchTickets";
+import {
+  getMyJobById,
+  toMockJob,
+  type ApiClientJob,
+} from "@/lib/api/clientJobs";
 import { jobs, professionals } from "@/lib/data";
 import {
   getActiveNegotiation,
@@ -103,7 +108,8 @@ function Inner({ id }: { id: string }) {
   const autoReleaseCompletedJob = useSession((s) => s.autoReleaseCompletedJob);
   const submitNegotiationProposal = useSession((s) => s.submitNegotiationProposal);
   const acceptNegotiation = useSession((s) => s.acceptNegotiation);
-  const job = effectiveJob ?? jobs[0];
+  const jobFromSeed = effectiveJob ?? jobs.find((j) => j.id === id) ?? null;
+  const jobExistsInSeed = Boolean(jobFromSeed);
   const effectiveJobRequests = (jobRequests ?? []).filter(
     (jobRequest) => jobRequest.jobId === id,
   );
@@ -117,12 +123,64 @@ function Inner({ id }: { id: string }) {
   const existingSearchTicket = searchTicket ?? null;
   const resolvedAgreement = getAgreement(agreement);
   const activeNegotiation = getActiveNegotiation(negotiation);
-  const finalPrice = getEffectiveFinalPrice(job, resolvedAgreement);
+
+  useEffect(() => {
+    if (!isSupabase || jobExistsInSeed) {
+      setRealClientJob(null);
+      setRealClientJobError(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const load = async () => {
+      setRealClientJobLoading(true);
+      setRealClientJobError(null);
+
+      try {
+        const apiJob = await getMyJobById(id);
+        if (!cancelled) {
+          if (apiJob) {
+            setRealClientJob(apiJob);
+          } else {
+            setRealClientJobError("No pudimos cargar este trabajo o no tienes acceso a él.");
+          }
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setRealClientJobError(
+            error instanceof Error && error.message
+              ? error.message
+              : "No pudimos cargar este trabajo.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setRealClientJobLoading(false);
+        }
+      }
+    };
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, isSupabase, jobExistsInSeed]);
+
+  const resolvedJobForInit = jobFromSeed ?? jobs[0];
   const [counterofferAmount, setCounterofferAmount] = useState(
-    String(activeNegotiation?.lastAmount ?? Math.round((job.priceMin + job.priceMax) / 2)),
+    String(activeNegotiation?.lastAmount ?? Math.round((resolvedJobForInit.priceMin + resolvedJobForInit.priceMax) / 2)),
   );
   const [realAgreementContext, setRealAgreementContext] = useState<ApiJobAgreementContext | null>(null);
   const [realReview, setRealReview] = useState<ApiReview | null>(null);
+  const [realClientJob, setRealClientJob] = useState<ApiClientJob | null>(null);
+  const [realClientJobLoading, setRealClientJobLoading] = useState(false);
+  const [realClientJobError, setRealClientJobError] = useState<string | null>(null);
+  const resolvedRealJob = realClientJob ? toMockJob(realClientJob) : null;
+  const job = isSupabase && resolvedRealJob ? resolvedRealJob : (jobFromSeed ?? jobs[0]);
+  const finalPrice = getEffectiveFinalPrice(job, resolvedAgreement);
+  const showJobContent = !(isSupabase && realClientJobLoading) && !realClientJobError;
   const [realSearchTicket, setRealSearchTicket] = useState<ApiSearchTicket | null>(null);
   const [searchTicketActionError, setSearchTicketActionError] = useState<string | null>(null);
   const [searchTicketActionNotice, setSearchTicketActionNotice] = useState<string | null>(null);
@@ -167,7 +225,6 @@ function Inner({ id }: { id: string }) {
         existingTicket: isSupabase ? undefined : searchTicket,
         daysThreshold: adminConfig.searchTicketNoResponseDays,
       });
-  const jobExistsInSeed = jobs.some((seedJob) => seedJob.id === job.id);
   const requestingPros =
     effectiveJobRequests.length > 0
       ? effectiveJobRequests
@@ -365,6 +422,37 @@ function Inner({ id }: { id: string }) {
       />
 
       <ScreenBody className="px-4 pt-3 pb-6">
+        {isSupabase && realClientJobLoading && (
+          <Card className="mb-3 text-[12px] text-ink-600 leading-snug">
+            Cargando trabajo&hellip;
+          </Card>
+        )}
+
+        {realClientJobError && (
+          <Card className="mb-3 bg-rose-50 border-rose-100 text-[12px] text-rose-700 leading-snug">
+            {realClientJobError}
+          </Card>
+        )}
+
+        {realClientJobError && (
+          <div className="text-center py-12">
+            <div className="font-bold text-[15px] text-ink-800 mb-2">
+              No pudimos cargar este trabajo
+            </div>
+            <div className="text-[12.5px] text-ink-400 mb-3">
+              Comprueba que el identificador es correcto o vuelve a tu listado.
+            </div>
+            <Link
+              href="/cliente/trabajos"
+              className="inline-flex items-center gap-1.5 bg-coral-500 text-white rounded-full px-4 py-2 text-[13px] font-bold"
+            >
+              Ver mis trabajos
+            </Link>
+          </div>
+        )}
+
+        {showJobContent && (
+          <div>
         {justPublished && (
           <Card className="bg-teal-50 border-teal-100 mb-3">
             <div className="flex items-center gap-3">
@@ -510,7 +598,23 @@ function Inner({ id }: { id: string }) {
         )}
 
         {/* Solicitudes / invitaciones */}
-        {clientActions.includes("view_requests") && (
+        {isSupabase && !jobExistsInSeed && clientActions.includes("view_requests") ? (
+          <Card className="mb-3">
+            <div className="flex items-center justify-between mb-3">
+              <div className="font-bold text-[13.5px] text-ink-800">
+                Solicitudes recibidas ({job.requests})
+              </div>
+            </div>
+            <div className="text-[11.5px] text-ink-500 leading-snug bg-sand-50 rounded-xl p-3">
+              Las solicitudes reales se conectarán en un bloque posterior.
+            </div>
+            {clientActions.includes("invite_pros") && (
+              <div className="text-center text-[11.5px] text-ink-400 mt-3 pt-3 border-t border-sand-200/70">
+                Las invitaciones reales se conectarán en un bloque posterior.
+              </div>
+            )}
+          </Card>
+        ) : clientActions.includes("view_requests") && (
           <Card className="mb-3">
             <div className="flex items-center justify-between mb-3">
               <div className="font-bold text-[13.5px] text-ink-800">
@@ -636,7 +740,25 @@ function Inner({ id }: { id: string }) {
           </Card>
         )}
 
-        {searchTicketState === "ticket_created" && effectiveSearchTicket ? (
+        {isSupabase && !jobExistsInSeed && job.status === "published" && searchTicketState !== "ticket_created" ? (
+          <Card className="mb-3 bg-coral-50/50 border-coral-100">
+            <div className="font-bold text-[13px] text-coral-700 mb-1">
+              ¿Necesitas ayuda para encontrar profesionales?
+            </div>
+            <div className="text-[11.5px] text-coral-700/80 leading-snug mb-3">
+              Activa la búsqueda de profesionales para que podamos ayudarte a encontrar cobertura en tu zona.
+            </div>
+            <Button
+              size="sm"
+              full
+              onClick={() => void createSearchTicketForJob("no_pros_in_zone")}
+              disabled={creatingSearchTicketReason !== null}
+              testId="create-search-ticket"
+            >
+              {creatingSearchTicketReason !== null ? "Creando..." : "Activar búsqueda de profesionales"}
+            </Button>
+          </Card>
+        ) : searchTicketState === "ticket_created" && effectiveSearchTicket ? (
           <Card className="mb-3 bg-teal-50/50 border-teal-100">
             <div className="font-bold text-[13px] text-teal-700 mb-1">
               Ticket de búsqueda creado
@@ -710,6 +832,8 @@ function Inner({ id }: { id: string }) {
           isSupabase={isSupabase}
           canShowRealReviewBlock={canShowRealReviewBlock}
         />
+        </div>
+        )}
       </ScreenBody>
     </div>
   );
