@@ -89,6 +89,7 @@ Arranxos mantiene dos modos de datos:
 | Admin Real 3A catálogo / solicitudes | Completado | RPCs, APIs, rutas admin, perfil profesional y publicación cliente conectados a datos reales. |
 | Admin Real 3B tickets de búsqueda | Completado | SQL ejecutado, RPCs verificadas, `/admin/tickets-busqueda` funcional en vivo con usuario admin real. |
 | Admin Real 4A jobs reales cliente | Completado | `listMyJobs()` y `getMyJobById()` en `src/lib/api/clientJobs.ts`; `/cliente/trabajos` y `/cliente/trabajos/[id]` ya cargan trabajos reales en modo Supabase; no implementa publicación real de jobs todavía. |
+| Admin Real 4B solicitudes reales en detalle cliente | Completado | Code-only; `getClientJobRequestsWithProfessionalInfo()` y `acceptJobRequest()` ya existían en `src/lib/api/jobRequests.ts`; la RPC `get_client_job_requests_with_professional_public_info` ya estaba desplegada; el detalle cliente muestra solicitudes reales con nombre público, especialidad, zona, estado y mensaje; permite aceptar solicitud real vía `accept_job_request` con feedback de error; el rechazo real (`reject_job_request`) queda pendiente para bloque futuro; invitaciones reales siguen pendientes. |
 | `/admin/valoraciones` real | Completado | Listado real de reviews. |
 | `/admin/configuracion` real | Completado | `admin_config` real vía RPC. |
 | `/admin/profesionales` real | Completado | Scores reales y recálculo manual. |

@@ -26,6 +26,11 @@ import {
   toMockJob,
   type ApiClientJob,
 } from "@/lib/api/clientJobs";
+import {
+  getClientJobRequestsWithProfessionalInfo,
+  acceptJobRequest as acceptRealJobRequest,
+  type ApiClientJobRequestWithProfessionalInfo,
+} from "@/lib/api/jobRequests";
 import { jobs, professionals } from "@/lib/data";
 import {
   getActiveNegotiation,
@@ -177,6 +182,10 @@ function Inner({ id }: { id: string }) {
   const [realClientJob, setRealClientJob] = useState<ApiClientJob | null>(null);
   const [realClientJobLoading, setRealClientJobLoading] = useState(false);
   const [realClientJobError, setRealClientJobError] = useState<string | null>(null);
+  const [realRequests, setRealRequests] = useState<ApiClientJobRequestWithProfessionalInfo[]>([]);
+  const [realRequestsLoading, setRealRequestsLoading] = useState(false);
+  const [realRequestsError, setRealRequestsError] = useState<string | null>(null);
+  const [acceptingRequestId, setAcceptingRequestId] = useState<string | null>(null);
   const resolvedRealJob = realClientJob ? toMockJob(realClientJob) : null;
   const job = isSupabase && resolvedRealJob ? resolvedRealJob : (jobFromSeed ?? jobs[0]);
   const finalPrice = getEffectiveFinalPrice(job, resolvedAgreement);
@@ -309,6 +318,63 @@ function Inner({ id }: { id: string }) {
       cancelled = true;
     };
   }, [id, isSupabase]);
+
+  useEffect(() => {
+    if (!isSupabase || jobExistsInSeed) {
+      setRealRequests([]);
+      setRealRequestsError(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadRealRequests = async () => {
+      setRealRequestsLoading(true);
+      setRealRequestsError(null);
+
+      try {
+        const requests = await getClientJobRequestsWithProfessionalInfo(id);
+        if (!cancelled) {
+          setRealRequests(requests);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setRealRequestsError(
+            error instanceof Error && error.message
+              ? error.message
+              : "No pudimos cargar las solicitudes reales.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setRealRequestsLoading(false);
+        }
+      }
+    };
+
+    void loadRealRequests();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, isSupabase, jobExistsInSeed]);
+
+  const handleAcceptRequest = async (requestId: string) => {
+    setAcceptingRequestId(requestId);
+    try {
+      await acceptRealJobRequest(requestId);
+      const updated = await getClientJobRequestsWithProfessionalInfo(id);
+      setRealRequests(updated);
+    } catch (error) {
+      setRealRequestsError(
+        error instanceof Error && error.message
+          ? error.message
+          : "No pudimos aceptar esta solicitud. Inténtalo de nuevo.",
+      );
+    } finally {
+      setAcceptingRequestId(null);
+    }
+  };
 
   const realJob = realAgreementContext?.status === "ready" ? realAgreementContext.job : null;
   const realAgreement = realAgreementContext?.status === "ready" ? realAgreementContext.agreement : null;
@@ -602,12 +668,72 @@ function Inner({ id }: { id: string }) {
           <Card className="mb-3">
             <div className="flex items-center justify-between mb-3">
               <div className="font-bold text-[13.5px] text-ink-800">
-                Solicitudes recibidas ({job.requests})
+                Solicitudes recibidas ({realRequests.length})
               </div>
             </div>
-            <div className="text-[11.5px] text-ink-500 leading-snug bg-sand-50 rounded-xl p-3">
-              Las solicitudes reales se conectarán en un bloque posterior.
-            </div>
+            {realRequestsLoading && (
+              <div className="text-[11.5px] text-ink-400 leading-snug bg-sand-50 rounded-xl p-3">
+                Cargando solicitudes&hellip;
+              </div>
+            )}
+            {realRequestsError && (
+              <div className="text-[11.5px] text-rose-600 leading-snug bg-rose-50 rounded-xl p-3 mb-2">
+                {realRequestsError}
+              </div>
+            )}
+            {!realRequestsLoading && !realRequestsError && realRequests.length === 0 && (
+              <div className="text-[11.5px] text-ink-400 leading-snug bg-sand-50 rounded-xl p-3">
+                Aún no hay solicitudes de profesionales.
+              </div>
+            )}
+            {realRequests.length > 0 && (
+              <div className="flex flex-col gap-2.5">
+                {realRequests.slice(0, 3).map((req) => (
+                  <div
+                    key={req.requestId}
+                    className="flex items-center gap-3 p-2.5 rounded-xl border border-sand-200"
+                  >
+                    <Avatar
+                      initials={req.professionalAvatarInitials ?? req.professionalDisplayName.substring(0, 2).toUpperCase()}
+                      size={40}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-[13px] text-ink-800 truncate">
+                        {req.professionalDisplayName}
+                      </div>
+                      <div className="text-[11px] text-ink-400">
+                        {req.professionalSpecialtyLabel ?? "Sin especialidad"}
+                        {req.professionalZone ? ` · ${req.professionalZone}` : ""}
+                      </div>
+                      {req.requestStatus === "accepted" && (
+                        <div className="mt-2 inline-flex rounded-full bg-teal-50 px-2.5 py-1 text-[10.5px] font-bold text-teal-700">
+                          Solicitud aceptada
+                        </div>
+                      )}
+                      {req.requestStatus === "pending" && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <button
+                            onClick={() => void handleAcceptRequest(req.requestId)}
+                            disabled={acceptingRequestId !== null}
+                            className="text-[11px] font-bold text-coral-600 bg-coral-50 px-2.5 py-1 rounded-lg disabled:opacity-50"
+                          >
+                            {acceptingRequestId === req.requestId ? "Aceptando..." : "Aceptar"}
+                          </button>
+                          <span className="text-[10.5px] text-ink-400">
+                            La aceptación real conecta en un bloque posterior.
+                          </span>
+                        </div>
+                      )}
+                      {req.requestMessage && (
+                        <div className="mt-2 text-[12px] text-ink-600 bg-sand-50 rounded-lg p-2.5 border border-sand-200/70 leading-relaxed">
+                          &ldquo;{req.requestMessage}&rdquo;
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             {clientActions.includes("invite_pros") && (
               <div className="text-center text-[11.5px] text-ink-400 mt-3 pt-3 border-t border-sand-200/70">
                 Las invitaciones reales se conectarán en un bloque posterior.
