@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { getMyJobById, type ApiClientJob } from "@/lib/api/clientJobs";
 import {
+  createJobInvitation,
   listInvitableProfessionalsForJob,
   type ApiInvitableProfessionalCandidate,
 } from "@/lib/api/jobInvitations";
@@ -85,6 +86,9 @@ export default function Page({ params }: Props) {
   const [realCandidates, setRealCandidates] = useState<ApiInvitableProfessionalCandidate[]>([]);
   const [realCandidatesLoading, setRealCandidatesLoading] = useState(false);
   const [realCandidatesError, setRealCandidatesError] = useState<string | null>(null);
+  const [invitingProfessionalId, setInvitingProfessionalId] = useState<string | null>(null);
+  const [invitationSuccessMessage, setInvitationSuccessMessage] = useState<string | null>(null);
+  const [invitationErrorMessage, setInvitationErrorMessage] = useState<string | null>(null);
   const prosInZone = getProfessionalsInZoneForJob(job, professionals);
   const searchTicketState = getSearchTicketClientState({
     job,
@@ -201,6 +205,79 @@ export default function Page({ params }: Props) {
     createSearchTicket(id, reason);
   };
 
+  const handleInviteProfessional = async (professionalId: string) => {
+    setInvitationSuccessMessage(null);
+    setInvitationErrorMessage(null);
+    setInvitingProfessionalId(professionalId);
+
+    try {
+      const invitation = await createJobInvitation(id, professionalId);
+      setInvitationSuccessMessage("Invitación enviada al profesional Dersux.");
+
+      try {
+        const [updatedCandidates, updatedJob] = await Promise.all([
+          listInvitableProfessionalsForJob(id),
+          getMyJobById(id),
+        ]);
+
+        setRealCandidates(updatedCandidates);
+        setRealCandidatesError(null);
+
+        if (updatedJob) {
+          setRealClientJob(updatedJob);
+          setRealClientJobError(null);
+        }
+      } catch {
+        setRealCandidates((current) =>
+          current.map((candidate) =>
+            candidate.professionalId === professionalId
+              ? {
+                  ...candidate,
+                  invitationId: invitation.invitationId,
+                  invitationStatus: invitation.status,
+                  invitationCreatedAt: invitation.createdAt,
+                }
+              : candidate,
+          ),
+        );
+        setRealClientJob((current) =>
+          current
+            ? {
+                ...current,
+                invitedCount: current.invitedCount + 1,
+                invitationsSentAt: invitation.createdAt,
+              }
+            : current,
+        );
+      }
+    } catch (error) {
+      setInvitationErrorMessage(
+        error instanceof Error && error.message
+          ? error.message
+          : "No pudimos enviar la invitación real. Inténtalo de nuevo.",
+      );
+
+      try {
+        const [updatedCandidates, updatedJob] = await Promise.all([
+          listInvitableProfessionalsForJob(id),
+          getMyJobById(id),
+        ]);
+
+        setRealCandidates(updatedCandidates);
+        setRealCandidatesError(null);
+
+        if (updatedJob) {
+          setRealClientJob(updatedJob);
+          setRealClientJobError(null);
+        }
+      } catch {
+        // Keep the existing list and safe error message if refresh fails.
+      }
+    } finally {
+      setInvitingProfessionalId(null);
+    }
+  };
+
   if (useRealJob) {
     const realJobStatus = (realClientJob?.status ?? "published") as JobStatus;
 
@@ -241,8 +318,26 @@ export default function Page({ params }: Props) {
               </Card>
 
               <Card className="bg-amber-50/60 border-amber-100 mb-3 text-[12px] text-amber-700 leading-snug">
-                Mostrando solo datos públicos mínimos de profesionales Dersux. El CTA real de invitar se conectará en el siguiente paso.
+                Mostrando solo datos públicos mínimos de profesionales Dersux. Invitar no abre chat ni revela la dirección exacta.
               </Card>
+
+              {invitationErrorMessage && (
+                <Card
+                  className="bg-rose-50 border-rose-100 mb-3 text-[12px] text-rose-700 leading-snug"
+                  testId="real-invitation-error"
+                >
+                  {invitationErrorMessage}
+                </Card>
+              )}
+
+              {invitationSuccessMessage && (
+                <Card
+                  className="bg-teal-50 border-teal-100 mb-3 text-[12px] text-teal-700 leading-snug"
+                  testId="real-invitation-success"
+                >
+                  {invitationSuccessMessage}
+                </Card>
+              )}
 
               {realCandidatesLoading ? (
                 <Card
@@ -329,12 +424,21 @@ export default function Page({ params }: Props) {
 
                             <Button
                               full
-                              variant={candidate.invitationStatus ? "outline" : "secondary"}
-                              disabled
+                              variant={candidate.invitationStatus ? "outline" : "primary"}
+                              disabled={Boolean(candidate.invitationStatus) || invitingProfessionalId !== null}
+                              onClick={
+                                candidate.invitationStatus
+                                  ? undefined
+                                  : () => void handleInviteProfessional(candidate.professionalId)
+                              }
                               className="mt-3"
                               testId={`invite-professional-${candidate.professionalId}`}
                             >
-                              {candidate.invitationStatus ? "Ya invitado" : "Disponible en el siguiente paso"}
+                              {candidate.invitationStatus
+                                ? "Ya invitado"
+                                : invitingProfessionalId === candidate.professionalId
+                                  ? "Enviando..."
+                                  : "Invitar"}
                             </Button>
                           </div>
                         </div>
