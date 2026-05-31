@@ -4,10 +4,12 @@ import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
 import { Card } from "@/components/ui/card";
+import { StatusBadge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { RatingStars } from "@/components/pros/rating-stars";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { getMyJobById, type ApiClientJob } from "@/lib/api/clientJobs";
 import { jobs, professionals } from "@/lib/data";
 import {
   getProfessionalsInZoneForJob,
@@ -18,12 +20,8 @@ import {
   getEffectiveJobById,
   useSession,
 } from "@/lib/store";
+import type { JobStatus } from "@/lib/types";
 import { isSupabaseMode } from "@/lib/supabase/config";
-import {
-  createSearchTicketFromJob as createRealSearchTicketFromJob,
-  getMySearchTicketByJobId,
-  type ApiSearchTicket,
-} from "@/lib/api/searchTickets";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -35,6 +33,9 @@ export default function Page({ params }: Props) {
   const adminConfig = useSession(getEffectiveAdminConfig);
   const isSupabase = isSupabaseMode();
   const effectiveJob = useMemo(() => getEffectiveJobById(session, id), [session, id]);
+  const jobFromSeed = effectiveJob ?? jobs.find((j) => j.id === id) ?? null;
+  const jobExistsInSeed = Boolean(jobFromSeed);
+  const useRealJob = isSupabase && !jobExistsInSeed;
   const outreachMeta = session.jobOutreachMeta[id];
   const searchTicket = useMemo(
     () => session.searchTickets.find((ticket) => ticket.jobId === id),
@@ -42,54 +43,66 @@ export default function Page({ params }: Props) {
   );
   const recordInvitationsSent = useSession((s) => s.recordInvitationsSent);
   const createSearchTicket = useSession((s) => s.createSearchTicket);
-  const job = effectiveJob ?? jobs.find((j) => j.id === id) ?? jobs[0];
+  const job = jobFromSeed ?? jobs[0];
   const limit = adminConfig.invitationLimitPerJob;
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sent, setSent] = useState(false);
-  const [realSearchTicket, setRealSearchTicket] = useState<ApiSearchTicket | null>(null);
-  const [searchTicketActionError, setSearchTicketActionError] = useState<string | null>(null);
-  const [searchTicketActionNotice, setSearchTicketActionNotice] = useState<string | null>(null);
-  const [creatingSearchTicketReason, setCreatingSearchTicketReason] = useState<
-    "no_pros_in_zone" | "no_useful_response" | null
-  >(null);
+  const [realClientJob, setRealClientJob] = useState<ApiClientJob | null>(null);
+  const [realClientJobLoading, setRealClientJobLoading] = useState(false);
+  const [realClientJobError, setRealClientJobError] = useState<string | null>(null);
   const prosInZone = getProfessionalsInZoneForJob(job, professionals);
-  const searchTicketState = isSupabase && realSearchTicket
-    ? "ticket_created"
-    : getSearchTicketClientState({
-        job,
-        professionals,
-        outreachMeta,
-        existingTicket: isSupabase ? undefined : searchTicket,
-        daysThreshold: adminConfig.searchTicketNoResponseDays,
-      });
+  const searchTicketState = getSearchTicketClientState({
+    job,
+    professionals,
+    outreachMeta,
+    existingTicket: searchTicket,
+    daysThreshold: adminConfig.searchTicketNoResponseDays,
+  });
 
   useEffect(() => {
-    if (!isSupabase) {
-      setRealSearchTicket(null);
+    if (!useRealJob) {
+      setRealClientJob(null);
+      setRealClientJobError(null);
+      setRealClientJobLoading(false);
       return;
     }
 
     let cancelled = false;
 
-    const loadRealSearchTicket = async () => {
+    const loadRealJob = async () => {
+      setRealClientJobLoading(true);
+      setRealClientJobError(null);
+
       try {
-        const ticket = await getMySearchTicketByJobId(id);
+        const apiJob = await getMyJobById(id);
         if (!cancelled) {
-          setRealSearchTicket(ticket);
+          if (apiJob) {
+            setRealClientJob(apiJob);
+          } else {
+            setRealClientJobError("No pudimos cargar este trabajo o no tienes acceso a él.");
+          }
         }
-      } catch {
+      } catch (error) {
         if (!cancelled) {
-          setRealSearchTicket(null);
+          setRealClientJobError(
+            error instanceof Error && error.message
+              ? error.message
+              : "No pudimos cargar este trabajo.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setRealClientJobLoading(false);
         }
       }
     };
 
-    void loadRealSearchTicket();
+    void loadRealJob();
 
     return () => {
       cancelled = true;
     };
-  }, [id, isSupabase]);
+  }, [id, useRealJob]);
 
   const toggle = (proId: string) => {
     setSelected((prev) => {
@@ -109,29 +122,63 @@ export default function Page({ params }: Props) {
   };
 
   const createTicketForJob = async (reason: "no_pros_in_zone" | "no_useful_response") => {
-    if (!isSupabase) {
-      createSearchTicket(id, reason);
-      return;
-    }
-
-    setCreatingSearchTicketReason(reason);
-    setSearchTicketActionError(null);
-    setSearchTicketActionNotice(null);
-
-    try {
-      const ticket = await createRealSearchTicketFromJob(id, reason);
-      setRealSearchTicket(ticket);
-      setSearchTicketActionNotice("Ticket de búsqueda real creado correctamente.");
-    } catch (error) {
-      setSearchTicketActionError(
-        error instanceof Error && error.message
-          ? error.message
-          : "No pudimos crear el ticket de búsqueda real.",
-      );
-    } finally {
-      setCreatingSearchTicketReason(null);
-    }
+    createSearchTicket(id, reason);
   };
+
+  if (useRealJob) {
+    const realJobStatus = (realClientJob?.status ?? "published") as JobStatus;
+
+    return (
+      <div className="flex-1 flex flex-col bg-sand-50">
+        <StatusBar />
+        <TopBar
+          title="Invitar profesionales"
+          subtitle={realClientJob?.title ?? "Trabajo real"}
+        />
+        <ScreenBody className="px-4 pt-3 pb-6">
+          {realClientJobLoading ? (
+            <Card className="bg-white border-sand-200 text-[13px] text-ink-600 leading-snug">
+              Cargando trabajo real...
+            </Card>
+          ) : realClientJobError ? (
+            <Card className="bg-rose-50 border-rose-100 text-[12px] text-rose-700 leading-snug">
+              {realClientJobError}
+            </Card>
+          ) : realClientJob ? (
+            <>
+              <Card className="bg-white border-sand-200 mb-3">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div>
+                    <div className="text-[14px] font-bold text-ink-800 leading-snug">
+                      {realClientJob.title}
+                    </div>
+                    <div className="text-[12px] text-ink-500 mt-1">
+                      {realClientJob.approxLocation ?? "Ubicación aproximada no disponible"}
+                    </div>
+                  </div>
+                  <StatusBadge status={realJobStatus} />
+                </div>
+
+                <div className="text-[12px] text-ink-600 leading-snug">
+                  La invitación real se preparó a nivel seguro en backend. El límite por trabajo se validará server-side con <code>admin_config.invitation_limit_per_job</code>.
+                </div>
+              </Card>
+
+              <Card className="bg-amber-50/60 border-amber-100 text-[12px] text-amber-700 leading-snug">
+                La selección real de profesionales Dersux se conectará en el siguiente bloque.
+              </Card>
+            </>
+          ) : null}
+        </ScreenBody>
+
+        <div className="app-bottom-bar px-5 pb-5 pt-3 bg-white border-t border-sand-200/70">
+          <Button full variant="outline" href={`/cliente/trabajos/${id}`}>
+            Volver al detalle
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col bg-sand-50">
@@ -141,18 +188,6 @@ export default function Page({ params }: Props) {
         subtitle={`Máx. ${limit} invitaciones · ${job.title}`}
       />
       <ScreenBody className="px-4 pt-3 pb-6">
-        {searchTicketActionError && (
-          <Card className="mb-3 bg-rose-50 border-rose-100 text-[12px] text-rose-700 leading-snug">
-            {searchTicketActionError}
-          </Card>
-        )}
-
-        {searchTicketActionNotice && (
-          <Card className="mb-3 bg-teal-50 border-teal-100 text-[12px] text-teal-700 leading-snug">
-            {searchTicketActionNotice}
-          </Card>
-        )}
-
         <Card className="bg-amber-50/50 border-amber-100 mb-3">
           <div className="text-[12px] text-amber-700 leading-snug">
             Las invitaciones permiten avisar a profesionales seleccionados sobre
@@ -176,9 +211,8 @@ export default function Page({ params }: Props) {
               size="sm"
               full
               onClick={() => void createTicketForJob("no_pros_in_zone")}
-              disabled={creatingSearchTicketReason !== null}
             >
-              {creatingSearchTicketReason === "no_pros_in_zone" ? "Creando..." : "Crear ticket de búsqueda"}
+              Crear ticket de búsqueda
             </Button>
           </Card>
         ) : searchTicketState === "waiting_info" ? (
@@ -196,9 +230,8 @@ export default function Page({ params }: Props) {
               size="sm"
               full
               onClick={() => void createTicketForJob("no_useful_response")}
-              disabled={creatingSearchTicketReason !== null}
             >
-              {creatingSearchTicketReason === "no_useful_response" ? "Creando..." : "Crear ticket de búsqueda"}
+              Crear ticket de búsqueda
             </Button>
           </Card>
         ) : null}
