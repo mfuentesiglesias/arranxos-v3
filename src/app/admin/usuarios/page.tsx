@@ -284,7 +284,6 @@ function MockAdminUsuariosPage() {
           name: clientId === currentClient.id ? currentClient.name : latestJob?.clientName ?? clientId,
           avatar: clientId === currentClient.id ? currentClient.avatar : latestJob?.clientAvatar ?? "??",
           roleLabel: "Cliente",
-          email: clientId === currentClient.id ? currentClient.email : undefined,
           location: clientId === currentClient.id ? currentClient.location : latestJob?.location,
           jobsPublished: clientJobs.length,
           disputes: clientDisputes.length,
@@ -344,7 +343,7 @@ function MockAdminUsuariosPage() {
                     {u.name}
                   </div>
                   <div className="text-[11.5px] text-ink-500 truncate">
-                    {u.roleLabel} · {u.id} · {u.email ?? "—"} · {u.location ?? "—"}
+                    {u.roleLabel} · {u.id} · {u.location ?? "—"}
                   </div>
                   <div
                     className="mt-1 text-[11px] text-ink-400 truncate"

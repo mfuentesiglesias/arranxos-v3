@@ -362,11 +362,13 @@ function Inner({ id }: { id: string }) {
   }, [id, isSupabase, jobExistsInSeed]);
 
   const handleAcceptRequest = async (requestId: string) => {
+    setRealRequestsError(null);
     setAcceptingRequestId(requestId);
     try {
       await acceptRealJobRequest(requestId);
       const updated = await getClientJobRequestsWithProfessionalInfo(id);
       setRealRequests(updated);
+      setRealRequestsError(null);
     } catch (error) {
       setRealRequestsError(
         error instanceof Error && error.message
@@ -379,11 +381,13 @@ function Inner({ id }: { id: string }) {
   };
 
   const handleRejectRequest = async (requestId: string) => {
+    setRealRequestsError(null);
     setRejectingRequestId(requestId);
     try {
       await rejectRealJobRequest(requestId);
       const updated = await getClientJobRequestsWithProfessionalInfo(id);
       setRealRequests(updated);
+      setRealRequestsError(null);
     } catch (error) {
       setRealRequestsError(
         error instanceof Error && error.message
