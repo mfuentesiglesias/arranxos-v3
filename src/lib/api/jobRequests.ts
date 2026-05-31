@@ -313,6 +313,55 @@ export async function acceptJobRequest(
   return mapAcceptJobRequestRow(result);
 }
 
+function normalizeRejectJobRequestError(error: unknown): Error {
+  const message = getErrorMessage(error).toLowerCase();
+
+  if (
+    message.includes("only the client owner") ||
+    message.includes("only the client owner can reject") ||
+    message.includes("authentication required") ||
+    message.includes("current user does not have a profile") ||
+    message.includes("permission denied")
+  ) {
+    return new Error("No puedes rechazar solicitudes de este trabajo.");
+  }
+
+  if (message.includes("does not exist")) {
+    return new Error("Esta solicitud ya no existe o ya no está disponible.");
+  }
+
+  if (message.includes("is not pending")) {
+    return new Error("Esta solicitud ya no está pendiente.");
+  }
+
+  if (
+    message.includes("not in published status") ||
+    message.includes("not in published")
+  ) {
+    return new Error("Este trabajo ya no admite gestionar solicitudes.");
+  }
+
+  return new Error("No pudimos rechazar la solicitud. Inténtalo de nuevo.");
+}
+
+export async function rejectJobRequest(
+  requestId: string,
+): Promise<void> {
+  if (!isSupabaseMode()) {
+    throw new Error("rejectJobRequest() is unavailable while NEXT_PUBLIC_DATA_MODE=mock.");
+  }
+
+  const client = getBrowserSupabaseClient();
+
+  const { error } = await client.rpc("reject_job_request", {
+    p_request_id: requestId,
+  });
+
+  if (error) {
+    throw normalizeRejectJobRequestError(error);
+  }
+}
+
 export async function createJobRequest(
   jobId: string,
   message?: string,

@@ -58,6 +58,7 @@ grant select on table public.moderation_flags to authenticated;
 grant execute on function public.is_job_in_status(uuid, variadic public.job_status[]) to authenticated;
 grant execute on function public.create_job_request(uuid, text) to authenticated;
 grant execute on function public.accept_job_request(uuid) to authenticated;
+grant execute on function public.reject_job_request(uuid) to authenticated;
 grant execute on function public.send_chat_message(uuid, text) to authenticated;
 grant execute on function public.create_agreement(uuid, integer, boolean) to authenticated;
 grant execute on function public.accept_agreement(uuid) to authenticated;

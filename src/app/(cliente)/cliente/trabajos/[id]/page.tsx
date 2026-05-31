@@ -29,6 +29,7 @@ import {
 import {
   getClientJobRequestsWithProfessionalInfo,
   acceptJobRequest as acceptRealJobRequest,
+  rejectJobRequest as rejectRealJobRequest,
   type ApiClientJobRequestWithProfessionalInfo,
 } from "@/lib/api/jobRequests";
 import { jobs, professionals } from "@/lib/data";
@@ -186,6 +187,7 @@ function Inner({ id }: { id: string }) {
   const [realRequestsLoading, setRealRequestsLoading] = useState(false);
   const [realRequestsError, setRealRequestsError] = useState<string | null>(null);
   const [acceptingRequestId, setAcceptingRequestId] = useState<string | null>(null);
+  const [rejectingRequestId, setRejectingRequestId] = useState<string | null>(null);
   const resolvedRealJob = realClientJob ? toMockJob(realClientJob) : null;
   const job = isSupabase && resolvedRealJob ? resolvedRealJob : (jobFromSeed ?? jobs[0]);
   const finalPrice = getEffectiveFinalPrice(job, resolvedAgreement);
@@ -373,6 +375,23 @@ function Inner({ id }: { id: string }) {
       );
     } finally {
       setAcceptingRequestId(null);
+    }
+  };
+
+  const handleRejectRequest = async (requestId: string) => {
+    setRejectingRequestId(requestId);
+    try {
+      await rejectRealJobRequest(requestId);
+      const updated = await getClientJobRequestsWithProfessionalInfo(id);
+      setRealRequests(updated);
+    } catch (error) {
+      setRealRequestsError(
+        error instanceof Error && error.message
+          ? error.message
+          : "No pudimos rechazar esta solicitud. Inténtalo de nuevo.",
+      );
+    } finally {
+      setRejectingRequestId(null);
     }
   };
 
@@ -714,14 +733,23 @@ function Inner({ id }: { id: string }) {
                         <div className="mt-2 flex items-center gap-2">
                           <button
                             onClick={() => void handleAcceptRequest(req.requestId)}
-                            disabled={acceptingRequestId !== null}
+                            disabled={acceptingRequestId !== null || rejectingRequestId !== null}
                             className="text-[11px] font-bold text-coral-600 bg-coral-50 px-2.5 py-1 rounded-lg disabled:opacity-50"
                           >
                             {acceptingRequestId === req.requestId ? "Aceptando..." : "Aceptar"}
                           </button>
-                          <span className="text-[10.5px] text-ink-400">
-                            La aceptación real conecta en un bloque posterior.
-                          </span>
+                          <button
+                            onClick={() => void handleRejectRequest(req.requestId)}
+                            disabled={acceptingRequestId !== null || rejectingRequestId !== null}
+                            className="text-[11px] font-bold text-ink-500 bg-sand-100 px-2.5 py-1 rounded-lg disabled:opacity-50"
+                          >
+                            {rejectingRequestId === req.requestId ? "Rechazando..." : "Rechazar"}
+                          </button>
+                        </div>
+                      )}
+                      {req.requestStatus === "rejected" && (
+                        <div className="mt-2 inline-flex rounded-full bg-sand-100 px-2.5 py-1 text-[10.5px] font-bold text-ink-500">
+                          Solicitud rechazada
                         </div>
                       )}
                       {req.requestMessage && (
