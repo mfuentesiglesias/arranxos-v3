@@ -93,6 +93,7 @@ Arranxos mantiene dos modos de datos:
 | Admin Real 4C rechazo real de solicitudes | Completado | SQL ejecutado y verificado en Supabase; RPC `reject_job_request(uuid)` SECURITY DEFINER, `search_path = public, pg_temp`, solo cliente propietario, valida estado pending, no asigna profesional ni abre chat; grant execute a authenticated, revocada de anon/public; API `rejectJobRequest()` en `src/lib/api/jobRequests.ts`; botón "Rechazar" en detalle cliente con feedback de error; `rejected` badge visible. |
 | Hardening 4D errores/privacidad mock | Completado | Code-only; limpieza de `realRequestsError` al iniciar y completar aceptar/rechazar solicitudes reales; rama mock de `/admin/usuarios` deja de mostrar email visible; sin SQL y sin cambios de RLS/RPC/grants. |
 | Branding 1B guía Dersux/Dersu | Completado | Documentación creada en `docs/BRANDING_DERSUX.md`; sin cambios de UI, sin cambios de lógica, sin SQL y sin cambios técnicos en roles, rutas, tablas o RPCs. |
+| Branding 1C copy visible bajo riesgo | Completado | Solo cambios de copy visibles en pantallas cliente/profesional y navegación demo; usa "Profesional Dersux" y "Dersux Pro" donde aporta claridad; sin SQL, sin cambios de lógica y sin cambios técnicos en roles, rutas, tablas o RPCs. |
 | `/admin/valoraciones` real | Completado | Listado real de reviews. |
 | `/admin/configuracion` real | Completado | `admin_config` real vía RPC. |
 | `/admin/profesionales` real | Completado | Scores reales y recálculo manual. |

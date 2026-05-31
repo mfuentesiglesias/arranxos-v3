@@ -492,8 +492,8 @@ function Inner({ id }: { id: string }) {
             href: `/cliente/trabajos/${job.id}/solicitudes`,
           },
           {
-            label: "Invitar profesionales",
-            description: "Selecciona nuevos profesionales para este trabajo.",
+            label: "Invitar a profesionales Dersux",
+            description: "Selecciona nuevos profesionales Dersux para este trabajo.",
             icon: "plus",
             href: `/cliente/trabajos/${job.id}/invitaciones`,
           },
@@ -706,7 +706,7 @@ function Inner({ id }: { id: string }) {
             )}
             {!realRequestsLoading && !realRequestsError && realRequests.length === 0 && (
               <div className="text-[11.5px] text-ink-400 leading-snug bg-sand-50 rounded-xl p-3">
-                Aún no hay solicitudes de profesionales.
+                Aún no hay propuestas de profesionales Dersux.
               </div>
             )}
             {realRequests.length > 0 && (
@@ -901,10 +901,10 @@ function Inner({ id }: { id: string }) {
         {isSupabase && !jobExistsInSeed && job.status === "published" && searchTicketState !== "ticket_created" ? (
           <Card className="mb-3 bg-coral-50/50 border-coral-100">
             <div className="font-bold text-[13px] text-coral-700 mb-1">
-              ¿Necesitas ayuda para encontrar profesionales?
+              ¿Necesitas ayuda para encontrar un profesional Dersux?
             </div>
             <div className="text-[11.5px] text-coral-700/80 leading-snug mb-3">
-              Activa la búsqueda de profesionales para que podamos ayudarte a encontrar cobertura en tu zona.
+              Activa la búsqueda para que podamos ayudarte a encontrar un profesional Dersux en tu zona.
             </div>
             <Button
               size="sm"
@@ -930,7 +930,7 @@ function Inner({ id }: { id: string }) {
         ) : searchTicketState === "no_pros_cta" ? (
           <Card className="mb-3 bg-coral-50/50 border-coral-100">
             <div className="font-bold text-[13px] text-coral-700 mb-1">
-              ¿Necesitas ayuda para encontrar profesionales?
+              ¿Necesitas ayuda para encontrar un profesional Dersux?
             </div>
             <div className="text-[11.5px] text-coral-700/80 leading-snug mb-3">
               No vemos profesionales aprobados en tu zona para este trabajo.
@@ -957,7 +957,7 @@ function Inner({ id }: { id: string }) {
         ) : searchTicketState === "no_response_cta" ? (
           <Card className="mb-3 bg-coral-50/50 border-coral-100">
             <div className="font-bold text-[13px] text-coral-700 mb-1">
-              ¿Necesitas ayuda para encontrar profesionales?
+              ¿Necesitas ayuda para encontrar un profesional Dersux?
             </div>
             <div className="text-[11.5px] text-coral-700/80 leading-snug mb-3">
               Han pasado {adminConfig.searchTicketNoResponseDays} días sin respuesta útil tras las invitaciones.
@@ -1118,7 +1118,7 @@ function ActionsForStatus({
               Tu opinión ayuda a otros clientes a elegir profesionales de confianza.
             </div>
             <Button full href={`/cliente/trabajos/${jobId}/valorar`} testId="client-review-cta">
-              Valorar al profesional
+              Valorar al profesional Dersux
             </Button>
           </Card>
         ))}

@@ -49,7 +49,7 @@ function Inner() {
     <div className="flex-1 flex flex-col bg-sand-50">
       <StatusBar />
       <TopBar
-        title="Perfil profesional"
+        title="Perfil de profesional Dersux"
         right={
           <HeaderIconButton
             label="Abrir opciones para compartir perfil"

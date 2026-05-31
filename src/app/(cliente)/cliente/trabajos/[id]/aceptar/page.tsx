@@ -71,7 +71,7 @@ function Inner({ id }: { id: string }) {
   return (
     <div className="flex-1 flex flex-col bg-sand-50">
       <StatusBar />
-      <TopBar title="Aceptar profesional" />
+      <TopBar title="Aceptar profesional Dersux" />
 
       <ScreenBody className="px-4 pt-3 pb-6">
         <Card className="mb-3">
@@ -142,7 +142,7 @@ function Inner({ id }: { id: string }) {
         </Card>
 
         <div className="text-[11px] text-ink-400 leading-relaxed text-center">
-          Al aceptar, el profesional verá tu dirección exacta y se abrirá el chat.
+          Al aceptar, el profesional Dersux verá tu dirección exacta y se abrirá el chat.
           {agreed
             ? "El acuerdo ya está cerrado y puedes pasar al pago protegido."
             : "El precio final puede ajustarse si ambas partes lo acuerdan."}

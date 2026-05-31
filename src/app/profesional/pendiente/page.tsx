@@ -14,7 +14,7 @@ export default function PendientePage() {
           <Icon name="clock" size={36} stroke={2} />
         </div>
         <div className="font-extrabold text-[20px] text-ink-900 mb-2">
-          Estado pendiente simulado
+          Estado Dersux Pro pendiente
         </div>
         <div className="text-[13px] text-ink-500 leading-relaxed max-w-[300px] mb-6">
           En producción se verificaría la documentación profesional antes de

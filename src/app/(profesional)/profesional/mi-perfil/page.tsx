@@ -469,7 +469,7 @@ export default function PerfilProPage() {
           Mi perfil
         </h1>
         <HeaderIconButton
-          label="Abrir ajustes del perfil profesional"
+          label="Abrir ajustes de Dersux Pro"
           onClick={() => setSettingsOpen(true)}
         >
           <Icon name="settings" size={16} />
@@ -479,7 +479,7 @@ export default function PerfilProPage() {
       <HeaderActionSheet
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
-        title="Ajustes del perfil profesional"
+        title="Ajustes de Dersux Pro"
         description="Accesos rápidos a la configuración más habitual en esta demo."
         items={[
           {
