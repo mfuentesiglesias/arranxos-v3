@@ -4,12 +4,16 @@ import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
 import { Card } from "@/components/ui/card";
-import { StatusBadge } from "@/components/ui/badge";
+import { Badge, StatusBadge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { RatingStars } from "@/components/pros/rating-stars";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { getMyJobById, type ApiClientJob } from "@/lib/api/clientJobs";
+import {
+  listInvitableProfessionalsForJob,
+  type ApiInvitableProfessionalCandidate,
+} from "@/lib/api/jobInvitations";
 import { jobs, professionals } from "@/lib/data";
 import {
   getProfessionalsInZoneForJob,
@@ -25,6 +29,34 @@ import { isSupabaseMode } from "@/lib/supabase/config";
 
 interface Props {
   params: Promise<{ id: string }>;
+}
+
+function getMatchBadge(candidate: ApiInvitableProfessionalCandidate) {
+  switch (candidate.matchKind) {
+    case "service":
+      return { label: "Coincide con el servicio", color: "coral" as const };
+    case "category":
+      return { label: "Coincide con la categoría", color: "sky" as const };
+    default:
+      return { label: "Candidato disponible", color: "sand" as const };
+  }
+}
+
+function getInvitationStatusLabel(status: ApiInvitableProfessionalCandidate["invitationStatus"]) {
+  switch (status) {
+    case "pending":
+      return "Pendiente";
+    case "accepted":
+      return "Aceptada";
+    case "rejected":
+      return "Rechazada";
+    case "expired":
+      return "Caducada";
+    case "cancelled":
+      return "Cancelada";
+    default:
+      return null;
+  }
 }
 
 export default function Page({ params }: Props) {
@@ -50,6 +82,9 @@ export default function Page({ params }: Props) {
   const [realClientJob, setRealClientJob] = useState<ApiClientJob | null>(null);
   const [realClientJobLoading, setRealClientJobLoading] = useState(false);
   const [realClientJobError, setRealClientJobError] = useState<string | null>(null);
+  const [realCandidates, setRealCandidates] = useState<ApiInvitableProfessionalCandidate[]>([]);
+  const [realCandidatesLoading, setRealCandidatesLoading] = useState(false);
+  const [realCandidatesError, setRealCandidatesError] = useState<string | null>(null);
   const prosInZone = getProfessionalsInZoneForJob(job, professionals);
   const searchTicketState = getSearchTicketClientState({
     job,
@@ -98,6 +133,47 @@ export default function Page({ params }: Props) {
     };
 
     void loadRealJob();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, useRealJob]);
+
+  useEffect(() => {
+    if (!useRealJob) {
+      setRealCandidates([]);
+      setRealCandidatesError(null);
+      setRealCandidatesLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadRealCandidates = async () => {
+      setRealCandidatesLoading(true);
+      setRealCandidatesError(null);
+
+      try {
+        const candidates = await listInvitableProfessionalsForJob(id);
+        if (!cancelled) {
+          setRealCandidates(candidates);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setRealCandidatesError(
+            error instanceof Error && error.message
+              ? error.message
+              : "No pudimos cargar los profesionales disponibles.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setRealCandidatesLoading(false);
+        }
+      }
+    };
+
+    void loadRealCandidates();
 
     return () => {
       cancelled = true;
@@ -164,9 +240,109 @@ export default function Page({ params }: Props) {
                 </div>
               </Card>
 
-              <Card className="bg-amber-50/60 border-amber-100 text-[12px] text-amber-700 leading-snug">
-                La selección real de profesionales Dersux se conectará en el siguiente bloque.
+              <Card className="bg-amber-50/60 border-amber-100 mb-3 text-[12px] text-amber-700 leading-snug">
+                Mostrando solo datos públicos mínimos de profesionales Dersux. El CTA real de invitar se conectará en el siguiente paso.
               </Card>
+
+              {realCandidatesLoading ? (
+                <Card
+                  className="bg-white border-sand-200 text-[13px] text-ink-600 leading-snug"
+                  testId="real-invitation-candidates-loading"
+                >
+                  Cargando profesionales disponibles...
+                </Card>
+              ) : realCandidatesError ? (
+                <Card
+                  className="bg-rose-50 border-rose-100 text-[12px] text-rose-700 leading-snug"
+                  testId="real-invitation-candidates-error"
+                >
+                  {realCandidatesError}
+                </Card>
+              ) : realCandidates.length === 0 ? (
+                <Card
+                  className="bg-white border-sand-200 text-[12px] text-ink-600 leading-snug"
+                  testId="real-invitation-candidates-empty"
+                >
+                  No encontramos profesionales aprobados para mostrar en este trabajo todavía.
+                </Card>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {realCandidates.map((candidate) => {
+                    const matchBadge = getMatchBadge(candidate);
+                    const invitationStatusLabel = getInvitationStatusLabel(candidate.invitationStatus);
+
+                    return (
+                      <Card
+                        key={candidate.professionalId}
+                        className="bg-white border-sand-200"
+                        testId={`real-invitation-candidate-${candidate.professionalId}`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <Avatar initials={candidate.avatarInitials ?? "PD"} size={44} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2 mb-1.5">
+                              <div>
+                                <div className="font-bold text-[13.5px] text-ink-800 truncate">
+                                  {candidate.displayName}
+                                </div>
+                                <div className="text-[11px] font-semibold text-coral-600">
+                                  Profesional Dersux
+                                </div>
+                              </div>
+                              <Badge color={matchBadge.color}>{matchBadge.label}</Badge>
+                            </div>
+
+                            <div className="text-[11.5px] text-ink-500">
+                              {(candidate.specialtyLabel ?? "Especialidad no disponible")}
+                              {candidate.zone ? ` · ${candidate.zone}` : ""}
+                            </div>
+
+                            {candidate.matchedServiceName && (
+                              <div className="mt-1 text-[11px] text-ink-500">
+                                Servicio relacionado: {candidate.matchedServiceName}
+                                {candidate.isPrimaryService ? " · principal" : ""}
+                              </div>
+                            )}
+
+                            {candidate.reviewCount > 0 && candidate.averageRating !== null ? (
+                              <div className="mt-2 flex items-center gap-1.5">
+                                <RatingStars value={candidate.averageRating} />
+                                <span className="text-[11px] font-bold text-ink-700">
+                                  {candidate.averageRating.toFixed(1)}
+                                </span>
+                                <span className="text-[11px] text-ink-400">
+                                  ({candidate.reviewCount} reseñas)
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="mt-2 text-[11px] text-ink-400 italic">
+                                Sin reseñas visibles todavía.
+                              </div>
+                            )}
+
+                            {candidate.invitationStatus && (
+                              <div className="mt-2 flex items-center gap-2" data-testid={`invitation-status-${candidate.professionalId}`}>
+                                <Badge color="teal">Ya invitado</Badge>
+                                {invitationStatusLabel && <Badge color="sand">{invitationStatusLabel}</Badge>}
+                              </div>
+                            )}
+
+                            <Button
+                              full
+                              variant={candidate.invitationStatus ? "outline" : "secondary"}
+                              disabled
+                              className="mt-3"
+                              testId={`invite-professional-${candidate.professionalId}`}
+                            >
+                              {candidate.invitationStatus ? "Ya invitado" : "Disponible en el siguiente paso"}
+                            </Button>
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
             </>
           ) : null}
         </ScreenBody>
