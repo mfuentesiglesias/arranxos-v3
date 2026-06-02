@@ -6,8 +6,13 @@ import { StatusBar } from "@/components/layout/status-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
 import { JobCard } from "@/components/jobs/job-card";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { MapView } from "@/components/map/map-view";
+import {
+  listMyProfessionalInvitations,
+  type ApiProfessionalJobInvitation,
+} from "@/lib/api/jobInvitations";
 import {
   getPublishedJobsForProfessional,
   type ApiProfessionalPublishedJob,
@@ -49,6 +54,52 @@ type DistanceClassification = {
   distanceKm?: number;
   distanceLabel: string;
 };
+
+function formatInvitationDate(value: string): string {
+  const parsedDate = new Date(value);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return value;
+  }
+
+  return parsedDate.toLocaleDateString("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function getInvitationStatusLabel(status: ApiProfessionalJobInvitation["invitationStatus"]): string {
+  switch (status) {
+    case "pending":
+      return "Pendiente";
+    case "accepted":
+      return "Aceptada";
+    case "rejected":
+      return "Rechazada";
+    case "expired":
+      return "Expirada";
+    case "cancelled":
+      return "Cancelada";
+  }
+}
+
+function getRequestStatusLabel(status: ApiProfessionalJobInvitation["requestStatus"]): string | null {
+  switch (status) {
+    case "pending":
+      return "Solicitud pendiente";
+    case "accepted":
+      return "Solicitud aceptada";
+    case "rejected":
+      return "Solicitud rechazada";
+    case "closed":
+      return "Solicitud cerrada";
+    case "cancelled":
+      return "Solicitud cancelada";
+    default:
+      return null;
+  }
+}
 
 function Inner() {
   const params = useSearchParams();
@@ -99,6 +150,9 @@ function Inner() {
   const [realJobs, setRealJobs] = useState<ApiProfessionalPublishedJob[]>([]);
   const [realJobsLoading, setRealJobsLoading] = useState(false);
   const [realJobsError, setRealJobsError] = useState<string | null>(null);
+  const [professionalInvitations, setProfessionalInvitations] = useState<ApiProfessionalJobInvitation[]>([]);
+  const [invitationsLoading, setInvitationsLoading] = useState(false);
+  const [invitationsError, setInvitationsError] = useState<string | null>(null);
   const [isRealProfessionalApproved, setIsRealProfessionalApproved] = useState(false);
   const jobRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -121,6 +175,8 @@ function Inner() {
     const loadRealJobs = async () => {
       setRealJobsLoading(true);
       setRealJobsError(null);
+      setInvitationsLoading(true);
+      setInvitationsError(null);
 
       try {
         const profile = await getCurrentProfile();
@@ -129,25 +185,55 @@ function Inner() {
           if (!cancelled) {
             setIsRealProfessionalApproved(false);
             setRealJobs([]);
+            setProfessionalInvitations([]);
             setRealJobsLoading(false);
+            setInvitationsLoading(false);
           }
           return;
         }
 
-        const publishedJobs = await getPublishedJobsForProfessional();
+        const [publishedJobsResult, invitationsResult] = await Promise.allSettled([
+          getPublishedJobsForProfessional(),
+          listMyProfessionalInvitations(),
+        ]);
 
         if (!cancelled) {
           setIsRealProfessionalApproved(true);
-          setRealJobs(publishedJobs);
+          if (publishedJobsResult.status === "fulfilled") {
+            setRealJobs(publishedJobsResult.value);
+            setRealJobsError(null);
+          } else {
+            setRealJobs([]);
+            setRealJobsError(
+              "No pudimos cargar los trabajos reales ahora mismo. Vuelve a intentarlo más tarde.",
+            );
+          }
+
+          if (invitationsResult.status === "fulfilled") {
+            setProfessionalInvitations(invitationsResult.value);
+            setInvitationsError(null);
+          } else {
+            setProfessionalInvitations([]);
+            setInvitationsError(
+              "No pudimos cargar tus invitaciones reales ahora mismo. Vuelve a intentarlo más tarde.",
+            );
+          }
+
           setRealJobsLoading(false);
+          setInvitationsLoading(false);
         }
       } catch {
         if (!cancelled) {
           setRealJobs([]);
+          setProfessionalInvitations([]);
           setRealJobsError(
             "No pudimos cargar los trabajos reales ahora mismo. Vuelve a intentarlo más tarde.",
           );
+          setInvitationsError(
+            "No pudimos cargar tus invitaciones reales ahora mismo. Vuelve a intentarlo más tarde.",
+          );
           setRealJobsLoading(false);
+          setInvitationsLoading(false);
         }
       }
     };
@@ -327,7 +413,107 @@ function Inner() {
           )}
 
           {isRealProfessionalApproved && !realJobsLoading && !realJobsError && (
-            <div className="flex flex-col gap-2.5">
+            <div className="flex flex-col gap-3">
+              <Card className="bg-white border-sand-200/70" testId="professional-invitations-section">
+                <div className="font-bold text-[14px] text-ink-800 mb-1.5">Invitaciones recibidas</div>
+                <div className="text-[12px] text-ink-500 leading-snug mb-3">
+                  Trabajos a los que un cliente te ha invitado directamente. La dirección exacta y el chat solo se activan si el cliente acepta una solicitud.
+                </div>
+
+                {invitationsLoading ? (
+                  <div className="rounded-2xl border border-sand-200/70 bg-sand-50 px-4 py-5 text-[12px] text-ink-500 text-center" data-testid="professional-invitations-loading">
+                    Cargando invitaciones…
+                  </div>
+                ) : invitationsError ? (
+                  <div className="rounded-2xl border border-rose-100 bg-rose-50 px-4 py-4 text-[12px] text-rose-700 leading-snug" data-testid="professional-invitations-error">
+                    {invitationsError}
+                  </div>
+                ) : professionalInvitations.length === 0 ? (
+                  <div className="rounded-2xl border border-sand-200/70 bg-sand-50 px-4 py-5 text-[12px] text-ink-500 text-center leading-snug" data-testid="professional-invitations-empty">
+                    Aún no tienes invitaciones recibidas.
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2.5">
+                    {professionalInvitations.map((invitation) => {
+                      const requestStatusLabel = getRequestStatusLabel(invitation.requestStatus);
+
+                      return (
+                        <div
+                          key={invitation.invitationId}
+                          className="rounded-2xl border border-sand-200/70 bg-sand-50 px-[18px] py-[17px]"
+                          data-testid={`professional-invitation-${invitation.invitationId}`}
+                        >
+                          <div className="mb-1.5 flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1 text-[14px] font-bold leading-tight text-ink-800">
+                              {invitation.jobTitle}
+                            </div>
+                            <div className="flex flex-wrap justify-end gap-1.5">
+                              <span className="rounded-full bg-coral-50 px-2.5 py-1 text-[10.5px] font-bold text-coral-700">
+                                Invitado
+                              </span>
+                              <span className="rounded-full bg-sand-100 px-2.5 py-1 text-[10.5px] font-bold text-ink-500">
+                                {getInvitationStatusLabel(invitation.invitationStatus)}
+                              </span>
+                            </div>
+                          </div>
+
+                          {(invitation.categoryName || invitation.serviceName) && (
+                            <div className="mb-2 flex flex-wrap gap-1.5">
+                              {invitation.categoryName && (
+                                <span className="inline-flex rounded-full bg-white px-2.5 py-1 text-[10.5px] font-bold text-ink-500 border border-sand-200/70">
+                                  {invitation.categoryName}
+                                </span>
+                              )}
+                              {invitation.serviceName && (
+                                <span className="inline-flex rounded-full bg-teal-50 px-2.5 py-1 text-[10.5px] font-bold text-teal-700">
+                                  {invitation.serviceName}
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          <p className="mb-2 line-clamp-3 whitespace-pre-wrap text-[12.5px] text-ink-600 leading-relaxed">
+                            {invitation.jobDescription}
+                          </p>
+
+                          <div className="mb-2 flex items-center gap-1.5 text-[12px] text-ink-400">
+                            <Icon name="pin" size={12} stroke={2} />
+                            <span className="truncate">{invitation.approxLocation ?? "Ubicación aproximada no disponible"}</span>
+                            <span className="ml-auto whitespace-nowrap text-ink-400">
+                              {formatInvitationDate(invitation.invitationCreatedAt)}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-[12px]">
+                            <span className="font-bold text-coral-600">
+                              {formatPublishedJobPrice(invitation.priceMin, invitation.priceMax)}
+                            </span>
+                            <span className="text-[11px] font-medium text-ink-400">orientativo</span>
+                          </div>
+
+                          {requestStatusLabel && (
+                            <div className="mt-2 inline-flex rounded-full bg-sky-50 px-2.5 py-1 text-[10.5px] font-bold text-sky-700">
+                              {requestStatusLabel}
+                            </div>
+                          )}
+
+                          <div className="mt-3 pt-3 border-t border-sand-200/70">
+                            <Button
+                              href={`/profesional/trabajos/${invitation.jobId}`}
+                              variant="outline"
+                              size="sm"
+                              testId={`professional-invitation-detail-${invitation.invitationId}`}
+                            >
+                              Ver detalle
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </Card>
+
               {realJobs.length > 0 ? (
                 realJobs.map((job) => (
                   <div
