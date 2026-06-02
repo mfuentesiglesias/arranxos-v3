@@ -29,6 +29,7 @@ Arranxos mantiene dos modos de datos:
 - base 4E.2A para listar candidatos reales seguros ejecutada y verificada en Supabase
 - conexión 4E.2B del CTA real de invitar preparada en repo sin SQL nuevo
 - acceso visible 4E.2C a invitaciones preparado en repo sin SQL nuevo
+- base 4F.1A para invitaciones recibidas de profesional ejecutada y verificada en Supabase
 
 ### Sigue mock o parcial
 
@@ -100,6 +101,7 @@ Arranxos mantiene dos modos de datos:
 | Build 4E.2A candidatos reales seguros para invitaciones | Completado | SQL ejecutado y verificado en Supabase; RPC `get_client_job_invitable_professionals_with_public_info(uuid)` activa en `public`, con `SECURITY DEFINER`, `search_path = public, pg_temp`, `anon_can_execute = false` y `authenticated_can_execute = true`; `sql/05_grants.sql` ya recoge el grant execute a authenticated; `listInvitableProfessionalsForJob()` ya está añadida en `src/lib/api/jobInvitations.ts`; `/cliente/trabajos/[id]/invitaciones` lista candidatos reales con datos públicos mínimos; el CTA real de invitar sigue pendiente para 4E.2B y `createJobInvitation()` todavía no está conectada al botón; sin Stripe, sin chat y sin pagos. |
 | Build 4E.2B CTA real de invitar conectado | Preparado | Code-only; sin SQL nuevo y sin SQL remoto; `/cliente/trabajos/[id]/invitaciones` conecta el botón `Invitar` a `createJobInvitation(jobId, professionalId)` para candidatos sin `invitation_status`, muestra feedback seguro de éxito/error, refresca candidatos y el job real, y pasa el candidato a estado `Ya invitado`; no abre chat, no revela dirección exacta y no toca Stripe, pagos, acuerdos ni chat. |
 | Build 4E.2C acceso visible desde detalle | Preparado | Code-only; sin SQL nuevo y sin SQL remoto; el detalle del trabajo elimina el copy obsoleto que decía que las invitaciones aún no estaban conectadas y añade un CTA visible `Invitar a profesionales Dersux` hacia `/cliente/trabajos/[id]/invitaciones`; la opción del menú de 3 puntos se mantiene; invitar sigue sin abrir chat, sin revelar dirección exacta y sin tocar Stripe, pagos, acuerdos ni chat. |
+| Build 4F.1A invitaciones recibidas por profesional base segura | Completado | SQL ejecutado y verificado en Supabase; RPC `get_professional_job_invitations_with_public_job_info()` activa en `public`, con `SECURITY DEFINER`, `search_path = public, pg_temp`, `anon_can_execute = false` y `authenticated_can_execute = true`; `sql/05_grants.sql` ya recoge el grant execute a authenticated; `listMyProfessionalInvitations()` ya está añadida en `src/lib/api/jobInvitations.ts`; la UI profesional sigue pendiente para 4F.1B; `Enviar solicitud desde invitación` y aceptar/rechazar invitación siguen pendientes; sin Stripe, sin chat y sin pagos; sin dirección exacta. |
 | Branding 1B guía Dersux/Dersu | Completado | Documentación creada en `docs/BRANDING_DERSUX.md`; sin cambios de UI, sin cambios de lógica, sin SQL y sin cambios técnicos en roles, rutas, tablas o RPCs. |
 | Branding 1C copy visible bajo riesgo | Completado | Solo cambios de copy visibles en pantallas cliente/profesional y navegación demo; usa "Profesional Dersux" y "Dersux Pro" donde aporta claridad; sin SQL, sin cambios de lógica y sin cambios técnicos en roles, rutas, tablas o RPCs. |
 | QA 5A Playwright Extended Mock | Completado | Suite nueva `tests/e2e/qa-extended.spec.ts`; cubre privacidad mock en `/admin/usuarios`, copy visible Dersux/Dersux Pro y carga de rutas cliente/profesional relacionadas; sin SQL, sin cambios de app y sin cambios Supabase. |
@@ -145,6 +147,7 @@ Arranxos mantiene dos modos de datos:
 | `update_search_ticket_status` | `sql/24_search_tickets_rpc.sql` | Cambiar estado real del ticket de búsqueda desde admin. |
 | `create_job_invitation` | `sql/26_create_job_invitation_rpc.sql` | RPC ya ejecutada y verificada en Supabase para invitar un profesional aprobado a un job publicado del cliente; `SECURITY DEFINER`, `search_path = public, pg_temp`, sin execute para `anon` y con execute para `authenticated`. |
 | `get_client_job_invitable_professionals_with_public_info` | `sql/27_job_invitation_candidates_rpc.sql` | RPC ya ejecutada y verificada en Supabase para listar candidatos reales con proyección pública mínima, matching por servicio/categoría y estado de invitación sin exponer teléfono, `location_label`, lat/lng ni score interno; `SECURITY DEFINER`, `search_path = public, pg_temp`, sin execute para `anon` y con execute para `authenticated`. |
+| `get_professional_job_invitations_with_public_job_info` | `sql/28_professional_job_invitations_rpc.sql` | RPC ya ejecutada y verificada en Supabase para listar invitaciones recibidas por un profesional approved con solo datos públicos del job y estado de solicitud relacionado, sin dirección exacta, contacto del cliente, chat ni pagos; `SECURITY DEFINER`, `search_path = public, pg_temp`, sin execute para `anon` y con execute para `authenticated`. |
 | `reviews_select_participants` | `sql/21_hardening_reviews_rls.sql` | Endurece la lectura de reviews para limitarla a admin o participantes del trabajo. |
 | `apply_moderation_strike` | `sql/18_moderation_strike_rpc.sql` | Aplicar strike manual admin-only sobre una `moderation_flag`. |
 | `resolve_moderation_flag` | `sql/19_moderation_resolve_rpc.sql` | Marcar una `moderation_flag` como revisada sin strike. |
@@ -180,6 +183,7 @@ Arranxos mantiene dos modos de datos:
 - `get_client_job_invitable_professionals_with_public_info(uuid)` ya está ejecutada y verificada en Supabase; mantiene `SECURITY DEFINER`, `search_path = public, pg_temp`, sin execute para `anon` y con execute para `authenticated`.
 - 4E.2B no añade SQL nuevo; reutiliza las RPCs ya desplegadas `create_job_invitation(uuid, uuid)` y `get_client_job_invitable_professionals_with_public_info(uuid)`.
 - 4E.2C no añade SQL nuevo; solo mejora el acceso visible a invitaciones desde el detalle del trabajo.
+- `get_professional_job_invitations_with_public_job_info()` ya está ejecutada y verificada en Supabase; mantiene `SECURITY DEFINER`, `search_path = public, pg_temp`, sin execute para `anon` y con execute para `authenticated`.
 - `profiles` puede leerse como admin, pero los listados seguros deben proyectar solo campos mínimos.
 - `reviews` ya no queda abierta con `using (true)` para todo `authenticated`; la lectura real se limita a admin o participantes del trabajo.
 
@@ -199,6 +203,7 @@ Arranxos mantiene dos modos de datos:
 - La pantalla de invitaciones para jobs reales no mezcla jobs reales con profesionales mock y mantiene datos públicos mínimos.
 - 4E.2B permite invitar desde la lista real sin abrir chat ni revelar la dirección exacta del trabajo.
 - 4E.2C elimina el copy obsoleto del detalle y añade un CTA visible hacia la pantalla de invitaciones.
+- 4F.1A prepara solo la base segura de lectura para invitaciones recibidas; no añade UI todavía y deja pendientes `Enviar solicitud desde invitación` y aceptar/rechazar invitación.
 - `/admin/chats` es moderación por flags reales; no es todavía un listado global completo de chats.
 - Los listados admin nuevos son de solo lectura; no añaden acciones write en usuarios, trabajos ni solicitudes.
 

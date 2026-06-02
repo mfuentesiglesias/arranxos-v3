@@ -26,6 +26,26 @@ export interface ApiInvitableProfessionalCandidate {
   invitationCreatedAt: string | null;
 }
 
+export interface ApiProfessionalJobInvitation {
+  invitationId: string;
+  invitationStatus: ApiJobInvitation["status"];
+  invitationCreatedAt: string;
+  jobId: string;
+  jobTitle: string;
+  jobDescription: string;
+  categoryId: string | null;
+  categoryName: string | null;
+  serviceId: string | null;
+  serviceName: string | null;
+  approxLocation: string | null;
+  priceMin: number | null;
+  priceMax: number | null;
+  jobStatus: "published" | "in_progress" | "agreement_pending" | "agreed" | "escrow_funded" | "completed_pending_confirmation" | "completed" | "dispute" | "cancelled";
+  requestId: string | null;
+  requestStatus: "pending" | "accepted" | "rejected" | "closed" | "cancelled" | null;
+  requestCreatedAt: string | null;
+}
+
 interface CreateJobInvitationRow {
   invitation_id: string;
   job_id: string;
@@ -49,6 +69,26 @@ interface InvitableProfessionalCandidateRow {
   invitation_id: string | null;
   invitation_status: ApiInvitableProfessionalCandidate["invitationStatus"];
   invitation_created_at: string | null;
+}
+
+interface ProfessionalJobInvitationRow {
+  invitation_id: string;
+  invitation_status: ApiProfessionalJobInvitation["invitationStatus"];
+  invitation_created_at: string;
+  job_id: string;
+  job_title: string;
+  job_description: string;
+  category_id: string | null;
+  category_name: string | null;
+  service_id: string | null;
+  service_name: string | null;
+  approx_location: string | null;
+  price_min: number | null;
+  price_max: number | null;
+  job_status: ApiProfessionalJobInvitation["jobStatus"];
+  request_id: string | null;
+  request_status: ApiProfessionalJobInvitation["requestStatus"];
+  request_created_at: string | null;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -96,6 +136,30 @@ function mapInvitableProfessionalCandidateRow(
     invitationId: row.invitation_id,
     invitationStatus: row.invitation_status,
     invitationCreatedAt: row.invitation_created_at,
+  };
+}
+
+function mapProfessionalJobInvitationRow(
+  row: ProfessionalJobInvitationRow,
+): ApiProfessionalJobInvitation {
+  return {
+    invitationId: row.invitation_id,
+    invitationStatus: row.invitation_status,
+    invitationCreatedAt: row.invitation_created_at,
+    jobId: row.job_id,
+    jobTitle: row.job_title,
+    jobDescription: row.job_description,
+    categoryId: row.category_id,
+    categoryName: row.category_name,
+    serviceId: row.service_id,
+    serviceName: row.service_name,
+    approxLocation: row.approx_location,
+    priceMin: row.price_min,
+    priceMax: row.price_max,
+    jobStatus: row.job_status,
+    requestId: row.request_id,
+    requestStatus: row.request_status,
+    requestCreatedAt: row.request_created_at,
   };
 }
 
@@ -188,6 +252,31 @@ function normalizeListInvitableProfessionalsError(error: unknown): Error {
   return new Error("No pudimos cargar los profesionales disponibles. Inténtalo de nuevo.");
 }
 
+function normalizeListMyProfessionalInvitationsError(error: unknown): Error {
+  const message = getErrorMessage(error).toLowerCase();
+
+  if (
+    message.includes("authentication required") ||
+    message.includes("current user does not have a profile") ||
+    message.includes("jwt")
+  ) {
+    return new Error("Necesitas iniciar sesión para ver tus invitaciones reales.");
+  }
+
+  if (
+    message.includes("only professionals can list received invitations") ||
+    message.includes("permission denied")
+  ) {
+    return new Error("No puedes ver invitaciones reales con esta cuenta.");
+  }
+
+  if (message.includes("only approved professionals can list received invitations")) {
+    return new Error("Solo profesionales aprobados pueden ver invitaciones reales.");
+  }
+
+  return new Error("No pudimos cargar tus invitaciones reales. Inténtalo de nuevo.");
+}
+
 export async function listInvitableProfessionalsForJob(
   jobId: string,
 ): Promise<ApiInvitableProfessionalCandidate[]> {
@@ -209,6 +298,25 @@ export async function listInvitableProfessionalsForJob(
 
   return ((data as InvitableProfessionalCandidateRow[] | null) ?? []).map(
     mapInvitableProfessionalCandidateRow,
+  );
+}
+
+export async function listMyProfessionalInvitations(): Promise<ApiProfessionalJobInvitation[]> {
+  if (!isSupabaseMode()) {
+    throw new Error("listMyProfessionalInvitations() is unavailable while NEXT_PUBLIC_DATA_MODE=mock.");
+  }
+
+  const client = getBrowserSupabaseClient();
+  const { data, error } = await client.rpc(
+    "get_professional_job_invitations_with_public_job_info",
+  );
+
+  if (error) {
+    throw normalizeListMyProfessionalInvitationsError(error);
+  }
+
+  return ((data as ProfessionalJobInvitationRow[] | null) ?? []).map(
+    mapProfessionalJobInvitationRow,
   );
 }
 
