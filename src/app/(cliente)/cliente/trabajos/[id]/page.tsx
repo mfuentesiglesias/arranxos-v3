@@ -767,8 +767,19 @@ function Inner({ id }: { id: string }) {
               </div>
             )}
             {clientActions.includes("invite_pros") && (
-              <div className="text-center text-[11.5px] text-ink-400 mt-3 pt-3 border-t border-sand-200/70">
-                Las invitaciones reales se conectarán en un bloque posterior.
+              <div className="mt-3 pt-3 border-t border-sand-200/70">
+                <div className="rounded-2xl border border-coral-100 bg-coral-50/50 p-3">
+                  <div className="text-[12px] text-ink-600 leading-snug mb-3">
+                    Invita directamente a profesionales Dersux aprobados para este trabajo.
+                  </div>
+                  <Link
+                    href={`/cliente/trabajos/${job.id}/invitaciones`}
+                    className="inline-flex items-center gap-2 rounded-full bg-coral-500 px-4 py-2 text-[12px] font-bold text-white shadow-coral hover:bg-coral-600"
+                  >
+                    Invitar a profesionales Dersux
+                    <Icon name="forward" size={12} stroke={2.5} />
+                  </Link>
+                </div>
               </div>
             )}
           </Card>
