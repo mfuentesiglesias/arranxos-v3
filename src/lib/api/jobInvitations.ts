@@ -46,6 +46,16 @@ export interface ApiProfessionalJobInvitation {
   requestCreatedAt: string | null;
 }
 
+export interface ApiJobRequestFromInvitationResult {
+  invitationId: string;
+  invitationStatus: ApiJobInvitation["status"];
+  requestId: string;
+  requestStatus: "pending" | "accepted" | "rejected" | "closed" | "cancelled";
+  jobId: string;
+  professionalId: string;
+  requestCreatedAt: string;
+}
+
 interface CreateJobInvitationRow {
   invitation_id: string;
   job_id: string;
@@ -89,6 +99,16 @@ interface ProfessionalJobInvitationRow {
   request_id: string | null;
   request_status: ApiProfessionalJobInvitation["requestStatus"];
   request_created_at: string | null;
+}
+
+interface CreateJobRequestFromInvitationRow {
+  invitation_id: string;
+  invitation_status: ApiJobRequestFromInvitationResult["invitationStatus"];
+  request_id: string;
+  request_status: ApiJobRequestFromInvitationResult["requestStatus"];
+  job_id: string;
+  professional_id: string;
+  request_created_at: string;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -159,6 +179,20 @@ function mapProfessionalJobInvitationRow(
     jobStatus: row.job_status,
     requestId: row.request_id,
     requestStatus: row.request_status,
+    requestCreatedAt: row.request_created_at,
+  };
+}
+
+function mapCreateJobRequestFromInvitationRow(
+  row: CreateJobRequestFromInvitationRow,
+): ApiJobRequestFromInvitationResult {
+  return {
+    invitationId: row.invitation_id,
+    invitationStatus: row.invitation_status,
+    requestId: row.request_id,
+    requestStatus: row.request_status,
+    jobId: row.job_id,
+    professionalId: row.professional_id,
     requestCreatedAt: row.request_created_at,
   };
 }
@@ -277,6 +311,51 @@ function normalizeListMyProfessionalInvitationsError(error: unknown): Error {
   return new Error("No pudimos cargar tus invitaciones reales. Inténtalo de nuevo.");
 }
 
+function normalizeCreateJobRequestFromInvitationError(error: unknown): Error {
+  const message = getErrorMessage(error).toLowerCase();
+
+  if (
+    message.includes("authentication required") ||
+    message.includes("current user does not have a profile") ||
+    message.includes("jwt")
+  ) {
+    return new Error("Necesitas iniciar sesión para responder invitaciones reales.");
+  }
+
+  if (
+    message.includes("only approved professionals can respond to job invitations") ||
+    message.includes("only professionals can respond to job invitations")
+  ) {
+    return new Error("Solo profesionales aprobados pueden responder invitaciones reales.");
+  }
+
+  if (
+    message.includes("invitation id is required") ||
+    (message.includes("job invitation") && message.includes("does not exist")) ||
+    message.includes("does not belong to the current professional")
+  ) {
+    return new Error("Esta invitación no existe o no te pertenece.");
+  }
+
+  if (message.includes("is not pending")) {
+    return new Error("Esta invitación ya no está pendiente.");
+  }
+
+  if (message.includes("is not published")) {
+    return new Error("Este trabajo ya no está publicado.");
+  }
+
+  if (message.includes("already has an assigned professional")) {
+    return new Error("Este trabajo ya tiene un profesional asignado.");
+  }
+
+  if (message.includes("already exists")) {
+    return new Error("Ya existe una solicitud para este trabajo.");
+  }
+
+  return new Error("No pudimos enviar la solicitud desde la invitación. Inténtalo de nuevo.");
+}
+
 export async function listInvitableProfessionalsForJob(
   jobId: string,
 ): Promise<ApiInvitableProfessionalCandidate[]> {
@@ -347,4 +426,33 @@ export async function createJobInvitation(
   }
 
   return mapCreateJobInvitationRow(row);
+}
+
+export async function createJobRequestFromInvitation(
+  invitationId: string,
+  message?: string,
+): Promise<ApiJobRequestFromInvitationResult> {
+  if (!isSupabaseMode()) {
+    throw new Error("createJobRequestFromInvitation() is unavailable while NEXT_PUBLIC_DATA_MODE=mock.");
+  }
+
+  const client = getBrowserSupabaseClient();
+  const { data, error } = await client.rpc("create_job_request_from_invitation", {
+    p_invitation_id: invitationId,
+    p_message: message?.trim() || null,
+  });
+
+  if (error) {
+    throw normalizeCreateJobRequestFromInvitationError(error);
+  }
+
+  const row = Array.isArray(data)
+    ? (data[0] as CreateJobRequestFromInvitationRow | undefined)
+    : ((data as CreateJobRequestFromInvitationRow | null) ?? undefined);
+
+  if (!row) {
+    throw new Error("No pudimos enviar la solicitud desde la invitación. Inténtalo de nuevo.");
+  }
+
+  return mapCreateJobRequestFromInvitationRow(row);
 }

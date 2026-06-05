@@ -60,6 +60,7 @@ grant execute on function public.create_job_request(uuid, text) to authenticated
 grant execute on function public.create_job_invitation(uuid, uuid) to authenticated;
 grant execute on function public.get_client_job_invitable_professionals_with_public_info(uuid) to authenticated;
 grant execute on function public.get_professional_job_invitations_with_public_job_info() to authenticated;
+grant execute on function public.create_job_request_from_invitation(uuid, text) to authenticated;
 grant execute on function public.accept_job_request(uuid) to authenticated;
 grant execute on function public.reject_job_request(uuid) to authenticated;
 grant execute on function public.send_chat_message(uuid, text) to authenticated;
