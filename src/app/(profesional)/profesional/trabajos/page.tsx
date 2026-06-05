@@ -499,7 +499,7 @@ function Inner() {
 
                           <div className="mt-3 pt-3 border-t border-sand-200/70">
                             <Button
-                              href={`/profesional/trabajos/${invitation.jobId}`}
+                              href={`/profesional/trabajos/${invitation.jobId}?invitationId=${encodeURIComponent(invitation.invitationId)}`}
                               variant="outline"
                               size="sm"
                               testId={`professional-invitation-detail-${invitation.invitationId}`}

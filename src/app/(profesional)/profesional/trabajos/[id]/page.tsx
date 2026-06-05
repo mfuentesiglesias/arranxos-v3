@@ -1,6 +1,7 @@
 "use client";
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { StatusBar } from "@/components/layout/status-bar";
 import { TopBar } from "@/components/layout/top-bar";
 import { ScreenBody } from "@/components/layout/screen-body";
@@ -14,6 +15,11 @@ import { JobStatusTimeline } from "@/components/jobs/job-status-timeline";
 import { MapView } from "@/components/map/map-view";
 import { getJobAgreementContext, type ApiJobAgreementContext } from "@/lib/api/agreements";
 import { createJobRequest } from "@/lib/api/jobRequests";
+import {
+  createJobRequestFromInvitation,
+  listMyProfessionalInvitations,
+  type ApiProfessionalJobInvitation,
+} from "@/lib/api/jobInvitations";
 import { getPublishedJobForProfessional, type ApiProfessionalPublishedJob } from "@/lib/api/jobs";
 import { getCurrentProfile } from "@/lib/api/profiles";
 import { getMyReviewForJob, type ApiReview } from "@/lib/api/reviews";
@@ -97,6 +103,8 @@ function ReviewStatusCard({
 
 function Inner({ id }: { id: string }) {
   const isSupabase = isSupabaseMode();
+  const searchParams = useSearchParams();
+  const invitationId = searchParams?.get("invitationId")?.trim() || null;
   const session = useSession();
   const currentProfessionalId = getCurrentProfessionalId(session);
   const adminConfig = useSession(getEffectiveAdminConfig);
@@ -128,6 +136,8 @@ function Inner({ id }: { id: string }) {
   const [requestSending, setRequestSending] = useState(false);
   const [requestState, setRequestState] = useState<"idle" | "sent" | "duplicate">("idle");
   const [requestError, setRequestError] = useState<string | null>(null);
+  const [invitationContext, setInvitationContext] = useState<ApiProfessionalJobInvitation | null>(null);
+  const [invitationContextLoading, setInvitationContextLoading] = useState(false);
 
   const isMine = job.assignedProId === currentProfessionalId;
   const canSeeLocation = canSeeExactLocation({
@@ -193,6 +203,7 @@ function Inner({ id }: { id: string }) {
       setRealJobError(null);
       setRequestError(null);
       setRequestState("idle");
+      setInvitationContext(null);
 
       try {
         const [profile, nextAgreementContext, nextReview] = await Promise.all([
@@ -270,8 +281,62 @@ function Inner({ id }: { id: string }) {
     };
   }, [id, isSupabase]);
 
+  useEffect(() => {
+    if (!isSupabase || !invitationId || !isRealProfessionalApproved) {
+      setInvitationContext(null);
+      setInvitationContextLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadInvitationContext = async () => {
+      setInvitationContextLoading(true);
+
+      try {
+        const invitations = await listMyProfessionalInvitations();
+        const matchingInvitation = invitations.find(
+          (invitation) => invitation.invitationId === invitationId && invitation.jobId === id,
+        );
+
+        if (!cancelled) {
+          setInvitationContext(matchingInvitation ?? null);
+          setInvitationContextLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setInvitationContext(null);
+          setInvitationContextLoading(false);
+        }
+      }
+    };
+
+    void loadInvitationContext();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, invitationId, isRealProfessionalApproved, isSupabase]);
+
+  useEffect(() => {
+    if (!invitationId || !invitationContext?.requestStatus) {
+      return;
+    }
+
+    setRequestState(
+      invitationContext.requestStatus === "pending" || invitationContext.requestStatus === "accepted"
+        ? "sent"
+        : "duplicate",
+    );
+  }, [invitationContext, invitationId]);
+
   const sendRealRequest = async () => {
-    if (!realJob || requestSending || requestState !== "idle") {
+    if (
+      !realJob ||
+      requestSending ||
+      requestState !== "idle" ||
+      (Boolean(invitationId) && invitationContextLoading)
+    ) {
       return;
     }
 
@@ -279,7 +344,12 @@ function Inner({ id }: { id: string }) {
     setRequestError(null);
 
     try {
-      await createJobRequest(realJob.id, requestMessage);
+      if (invitationId) {
+        await createJobRequestFromInvitation(invitationId, requestMessage);
+      } else {
+        await createJobRequest(realJob.id, requestMessage);
+      }
+
       setRequestState("sent");
     } catch (error) {
       const message =
@@ -287,7 +357,10 @@ function Inner({ id }: { id: string }) {
           ? error.message
           : "No pudimos enviar la solicitud. Inténtalo de nuevo.";
 
-      if (message === "Ya has solicitado este trabajo.") {
+      if (
+        message === "Ya has solicitado este trabajo." ||
+        message === "Ya existe una solicitud para este trabajo."
+      ) {
         setRequestState("duplicate");
       } else {
         setRequestError(message);
@@ -394,18 +467,48 @@ function Inner({ id }: { id: string }) {
                 </div>
               </Card>
 
+              {invitationId && (
+                <Card
+                  className="mb-3 border-coral-100 bg-coral-50/50"
+                  testId="professional-invitation-context"
+                >
+                  <div className="mb-1.5 inline-flex rounded-full bg-coral-100 px-2.5 py-1 text-[10.5px] font-bold text-coral-700">
+                    Invitación recibida
+                  </div>
+                  <div className="text-[12px] text-ink-700 leading-snug">
+                    Este cliente te ha invitado directamente a valorar el trabajo. Puedes responder enviando una solicitud. El chat y la dirección exacta solo se activan si el cliente acepta.
+                  </div>
+                </Card>
+              )}
+
               {showRealReviewBlock && <ReviewStatusCard jobId={id} review={realReview} />}
 
               {requestState === "sent" && (
                 <Card className="mb-3 bg-teal-50 border-teal-100">
                   <div className="font-bold text-[13px] text-teal-700 mb-1">Solicitud enviada</div>
                   <div className="text-[11.5px] text-teal-700/80 leading-snug">
-                    El cliente podrá revisar tu solicitud en cuanto acceda al trabajo.
+                    {invitationId
+                      ? "Solicitud enviada desde la invitación."
+                      : "El cliente podrá revisar tu solicitud en cuanto acceda al trabajo."}
+                  </div>
+                  {invitationId && (
+                    <div className="mt-1 text-[11.5px] text-teal-700/80 leading-snug">
+                      El cliente podrá revisar tu solicitud en cuanto acceda al trabajo.
+                    </div>
+                  )}
+                </Card>
+              )}
+
+              {invitationId && invitationContext?.requestStatus && requestState === "duplicate" && (
+                <Card className="mb-3 bg-sky-50 border-sky-100">
+                  <div className="font-bold text-[13px] text-sky-700 mb-1">Solicitud ya registrada</div>
+                  <div className="text-[11.5px] text-sky-700/80 leading-snug">
+                    Ya existe una solicitud asociada a esta invitación. No hace falta enviarla de nuevo.
                   </div>
                 </Card>
               )}
 
-              {requestState === "duplicate" && (
+              {requestState === "duplicate" && !(invitationId && invitationContext?.requestStatus) && (
                 <Card className="mb-3 bg-amber-50 border-amber-100">
                   <div className="font-bold text-[13px] text-amber-800 mb-1">Solicitud ya registrada</div>
                   <div className="text-[11.5px] text-amber-700 leading-snug">
@@ -429,20 +532,30 @@ function Inner({ id }: { id: string }) {
                   onChange={(event) => setRequestMessage(event.target.value)}
                   placeholder="Preséntate brevemente y explica por qué encajas para este trabajo."
                   rows={5}
-                  disabled={requestState !== "idle" || requestSending}
+                  disabled={requestState !== "idle" || requestSending || invitationContextLoading}
                 />
                 <div className="mt-3">
                   <Button
                     full
                     onClick={sendRealRequest}
-                    disabled={!realJob || requestSending || requestState !== "idle"}
+                    disabled={
+                      !realJob ||
+                      requestSending ||
+                      requestState !== "idle" ||
+                      invitationContextLoading
+                    }
+                    testId={invitationId ? "professional-invitation-submit" : undefined}
                   >
-                    {requestSending
+                    {invitationContextLoading
+                      ? "Comprobando invitación…"
+                      : requestSending
                       ? "Enviando…"
                       : requestState === "sent"
                       ? "Solicitud enviada"
                       : requestState === "duplicate"
                       ? "Ya solicitado"
+                      : invitationId
+                      ? "Responder enviando solicitud"
                       : "Enviar solicitud"}
                   </Button>
                 </div>
