@@ -101,6 +101,9 @@ function getRequestStatusLabel(status: ApiProfessionalJobInvitation["requestStat
   }
 }
 
+type RealInvitationFilter = "all" | "invited" | "not_invited";
+type RealSortOrder = "newest";
+
 function Inner() {
   const params = useSearchParams();
   const myOnly = params?.get("mine") === "1";
@@ -154,8 +157,75 @@ function Inner() {
   const [invitationsLoading, setInvitationsLoading] = useState(false);
   const [invitationsError, setInvitationsError] = useState<string | null>(null);
   const [isRealProfessionalApproved, setIsRealProfessionalApproved] = useState(false);
+  const [realSearchQuery, setRealSearchQuery] = useState("");
+  const [realSelectedCategoryId, setRealSelectedCategoryId] = useState("all");
+  const [realInvitationFilter, setRealInvitationFilter] = useState<RealInvitationFilter>("all");
+  const [realSortOrder, setRealSortOrder] = useState<RealSortOrder>("newest");
   const jobRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const realCategoryOptions = useMemo(() => {
+    const categoryMap = new Map<string, string>();
+
+    for (const job of realJobs) {
+      if (job.categoryId && job.categoryName) {
+        categoryMap.set(job.categoryId, job.categoryName);
+      }
+    }
+
+    return Array.from(categoryMap.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, "es-ES"));
+  }, [realJobs]);
+
+  const invitedRealJobIds = useMemo(
+    () => new Set(professionalInvitations.map((invitation) => invitation.jobId)),
+    [professionalInvitations],
+  );
+
+  const filteredRealJobs = useMemo(() => {
+    const normalizedQuery = realSearchQuery.trim().toLowerCase();
+
+    return [...realJobs]
+      .filter((job) => {
+        if (normalizedQuery) {
+          const haystack = [
+            job.title,
+            job.description,
+            job.categoryName ?? "",
+            job.serviceName ?? "",
+            job.approxLocation ?? "",
+          ]
+            .join("\n")
+            .toLowerCase();
+
+          if (!haystack.includes(normalizedQuery)) {
+            return false;
+          }
+        }
+
+        if (realSelectedCategoryId !== "all" && job.categoryId !== realSelectedCategoryId) {
+          return false;
+        }
+
+        if (realInvitationFilter === "invited" && !invitedRealJobIds.has(job.id)) {
+          return false;
+        }
+
+        if (realInvitationFilter === "not_invited" && invitedRealJobIds.has(job.id)) {
+          return false;
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        if (realSortOrder === "newest") {
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        }
+
+        return 0;
+      });
+  }, [invitedRealJobIds, realInvitationFilter, realJobs, realSearchQuery, realSelectedCategoryId, realSortOrder]);
 
   useEffect(() => {
     return () => {
@@ -514,8 +584,86 @@ function Inner() {
                 )}
               </Card>
 
-              {realJobs.length > 0 ? (
-                realJobs.map((job) => (
+              <Card className="bg-white border-sand-200/70" testId="pro-jobs-filters">
+                <div className="font-bold text-[14px] text-ink-800 mb-1.5">Filtrar oportunidades</div>
+                <div className="text-[12px] text-ink-500 leading-snug mb-3">
+                  Filtros simples sobre trabajos publicados. El mapa y la distancia se conectarán más adelante manteniendo la privacidad.
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <input
+                      value={realSearchQuery}
+                      onChange={(event) => setRealSearchQuery(event.target.value)}
+                      placeholder="Buscar por título, servicio o zona..."
+                      className="w-full rounded-2xl border border-sand-200/70 bg-sand-50 px-3.5 py-2.5 text-[14px] text-ink-800 outline-none placeholder:text-ink-400"
+                      data-testid="pro-jobs-search"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <label className="flex flex-col gap-1.5 text-[12px] font-semibold text-ink-500">
+                      <span>Categoría</span>
+                      <select
+                        value={realSelectedCategoryId}
+                        onChange={(event) => setRealSelectedCategoryId(event.target.value)}
+                        className="rounded-2xl border border-sand-200/70 bg-white px-3.5 py-2.5 text-[13px] text-ink-800 outline-none"
+                        data-testid="pro-jobs-category-filter"
+                      >
+                        <option value="all">Todas las categorías</option>
+                        {realCategoryOptions.map((category) => (
+                          <option key={category.id} value={category.id}>
+                            {category.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <div className="flex flex-col gap-1.5 text-[12px] font-semibold text-ink-500">
+                      <span>Invitación</span>
+                      <div className="flex flex-wrap gap-2" data-testid="pro-jobs-invitation-filter">
+                        {([
+                          { value: "all", label: "Todos" },
+                          { value: "invited", label: "Con invitación" },
+                          { value: "not_invited", label: "Sin invitación" },
+                        ] as const).map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => setRealInvitationFilter(option.value)}
+                            className={`rounded-full border-[1.5px] px-3 py-1.5 text-[12px] font-bold transition ${
+                              realInvitationFilter === option.value
+                                ? "border-coral-500 bg-coral-50 text-coral-700"
+                                : "border-sand-200 text-ink-500 bg-white"
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <label className="flex flex-col gap-1.5 text-[12px] font-semibold text-ink-500">
+                      <span>Orden</span>
+                      <select
+                        value={realSortOrder}
+                        onChange={(event) => setRealSortOrder(event.target.value as RealSortOrder)}
+                        className="rounded-2xl border border-sand-200/70 bg-white px-3.5 py-2.5 text-[13px] text-ink-800 outline-none"
+                        data-testid="pro-jobs-sort"
+                      >
+                        <option value="newest">Más recientes</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
+              </Card>
+
+              <div className="px-1 text-[12px] font-semibold text-ink-500" data-testid="pro-jobs-results-count">
+                {filteredRealJobs.length} oportunidad{filteredRealJobs.length === 1 ? "" : "es"} encontrada{filteredRealJobs.length === 1 ? "" : "s"}
+              </div>
+
+              {filteredRealJobs.length > 0 ? (
+                filteredRealJobs.map((job) => (
                   <div
                     key={job.id}
                     className="rounded-2xl border border-sand-200/70 bg-white px-[18px] py-[17px]"
@@ -574,8 +722,11 @@ function Inner() {
                   </div>
                 ))
               ) : (
-                <div className="rounded-2xl border border-sand-200/70 bg-white px-4 py-6 text-[12px] text-ink-500 text-center leading-snug">
-                  No hay trabajos publicados reales disponibles para tu perfil ahora mismo.
+                <div
+                  className="rounded-2xl border border-sand-200/70 bg-white px-4 py-6 text-[12px] text-ink-500 text-center leading-snug"
+                  data-testid="pro-jobs-empty-filtered"
+                >
+                  No hay oportunidades que coincidan con estos filtros.
                 </div>
               )}
             </div>
