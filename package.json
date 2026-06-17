@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:e2e:extended": "playwright test tests/e2e/qa-extended.spec.ts"
+    "test:e2e:extended": "playwright test tests/e2e/qa-extended.spec.ts",
+    "test:e2e:supabase": "playwright test -c playwright.supabase.config.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",

@@ -107,6 +107,7 @@ Arranxos mantiene dos modos de datos:
 | Build 4F.1B UI profesional invitaciones recibidas | Preparado | Code-only; sin SQL nuevo y sin SQL remoto; `/profesional/trabajos` muestra una sección superior `Invitaciones recibidas` usando `listMyProfessionalInvitations()`, con cards de datos públicos mínimos, estado de invitación, estado de solicitud y enlace `Ver detalle`; no implementa `Enviar solicitud desde invitación`, no implementa aceptar/rechazar invitación, no abre chat, no toca pagos y no revela dirección exacta. |
 | Build 4F.1C-A solicitud real desde invitación | Completado | SQL ejecutado y verificado en Supabase; RPC `create_job_request_from_invitation(uuid, text)` activa en `public`, con `SECURITY DEFINER`, `search_path = public, pg_temp`, `anon_can_execute = false` y `authenticated_can_execute = true`; API `createJobRequestFromInvitation()` añadida en `src/lib/api/jobInvitations.ts`; la RPC crea `job_request` `pending` y marca la invitación como `accepted` en una sola operación transaccional; no abre chat, no revela dirección exacta, no toca Stripe/chat/pagos/acuerdos y el cliente sigue siendo quien acepta la solicitud. |
 | Build 4F.1C-B UI detalle profesional responde invitación | Preparado | Code-only; sin SQL nuevo y sin SQL remoto; `/profesional/trabajos` pasa `invitationId` al detalle y `/profesional/trabajos/[id]` usa `createJobRequestFromInvitation()` cuando existe `invitationId`, mantiene `createJobRequest()` para trabajos normales, muestra contexto `Invitación recibida` y evita reenvíos si ya existe solicitud; no abre chat, no toca pagos/acuerdos y no revela dirección exacta; el cliente sigue siendo quien acepta la solicitud. |
+| QA REAL 1A infraestructura Playwright Supabase smoke | Preparado | Code-only; sin SQL nuevo y sin SQL remoto; existe `playwright.supabase.config.ts` separada para tests reales contra Supabase, `npm run test:e2e:supabase` y un smoke no destructivo `tests/e2e/supabase-smoke.spec.ts` que valida login real de cliente y profesional con variables de entorno (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `E2E_SUPABASE_CLIENT_EMAIL`, `E2E_SUPABASE_CLIENT_PASSWORD`, `E2E_SUPABASE_PRO_EMAIL`, `E2E_SUPABASE_PRO_PASSWORD`); no crea jobs, no crea invitaciones, no responde invitaciones, no abre chat y deja el flujo completo invitación → solicitud para QA REAL 1B/1C con fixtures. |
 | Branding 1B guía Dersux/Dersu | Completado | Documentación creada en `docs/BRANDING_DERSUX.md`; sin cambios de UI, sin cambios de lógica, sin SQL y sin cambios técnicos en roles, rutas, tablas o RPCs. |
 | Branding 1C copy visible bajo riesgo | Completado | Solo cambios de copy visibles en pantallas cliente/profesional y navegación demo; usa "Profesional Dersux" y "Dersux Pro" donde aporta claridad; sin SQL, sin cambios de lógica y sin cambios técnicos en roles, rutas, tablas o RPCs. |
 | QA 5A Playwright Extended Mock | Completado | Suite nueva `tests/e2e/qa-extended.spec.ts`; cubre privacidad mock en `/admin/usuarios`, copy visible Dersux/Dersux Pro y carga de rutas cliente/profesional relacionadas; sin SQL, sin cambios de app y sin cambios Supabase. |
@@ -193,6 +194,7 @@ Arranxos mantiene dos modos de datos:
 - 4F.1B no añade SQL nuevo; reutiliza `get_professional_job_invitations_with_public_job_info()` desde `/profesional/trabajos`.
 - `create_job_request_from_invitation(uuid, text)` ya está ejecutada y verificada en Supabase; mantiene `SECURITY DEFINER`, `search_path = public, pg_temp`, sin execute para `anon` y con execute para `authenticated`.
 - 4F.1C-B no añade SQL nuevo; reutiliza `create_job_request_from_invitation(uuid, text)` desde `/profesional/trabajos/[id]` cuando la navegación llega con `invitationId`.
+- QA REAL 1A no añade SQL nuevo; separa Playwright real de mock con `playwright.supabase.config.ts` y requiere variables de entorno explícitas para login real no destructivo contra Supabase.
 - `profiles` puede leerse como admin, pero los listados seguros deben proyectar solo campos mínimos.
 - `reviews` ya no queda abierta con `using (true)` para todo `authenticated`; la lectura real se limita a admin o participantes del trabajo.
 
@@ -216,6 +218,7 @@ Arranxos mantiene dos modos de datos:
 - 4F.1B añade la sección visual de invitaciones recibidas, pero no implementa aún `Enviar solicitud desde invitación` ni aceptar/rechazar invitación.
 - 4F.1C-A ya cubre la operación transaccional para responder una invitación enviando solicitud: crea `job_request` `pending`, marca la invitación como `accepted`, no abre chat, no revela dirección exacta, no toca pagos ni acuerdos y el cliente sigue siendo quien acepta la solicitud.
 - 4F.1C-B conecta la UI del detalle profesional para responder invitaciones con `createJobRequestFromInvitation()`, sin SQL nuevo, sin chat, sin pagos/acuerdos y sin dirección exacta.
+- QA REAL 1A prepara solo la infraestructura de Playwright real contra Supabase y un smoke de login no destructivo; el flujo completo cliente invita → profesional responde → cliente ve solicitud queda pendiente para QA REAL 1B/1C con fixtures seguras.
 - `/admin/chats` es moderación por flags reales; no es todavía un listado global completo de chats.
 - Los listados admin nuevos son de solo lectura; no añaden acciones write en usuarios, trabajos ni solicitudes.
 
@@ -244,6 +247,23 @@ Comandos estándar:
 npm run typecheck
 npm run build
 npm run test:e2e
+```
+
+Smoke real separado opcional:
+
+```bash
+npm run test:e2e:supabase
+```
+
+Variables necesarias para ese smoke:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+E2E_SUPABASE_CLIENT_EMAIL=...
+E2E_SUPABASE_CLIENT_PASSWORD=...
+E2E_SUPABASE_PRO_EMAIL=...
+E2E_SUPABASE_PRO_PASSWORD=...
 ```
 
 Último estado conocido en el checkpoint documental:
