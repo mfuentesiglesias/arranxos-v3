@@ -484,6 +484,83 @@ function Inner() {
 
           {isRealProfessionalApproved && !realJobsLoading && !realJobsError && (
             <div className="flex flex-col gap-3">
+              <Card className="bg-white border-sand-200/70" testId="pro-jobs-filters">
+                <div className="font-bold text-[14px] text-ink-800 mb-1.5">Filtrar oportunidades</div>
+                <div className="text-[12px] text-ink-500 leading-snug mb-3">
+                  Filtros simples sobre trabajos publicados. El mapa y la distancia se conectarán más adelante manteniendo la privacidad.
+                </div>
+                <div className="text-[11.5px] text-ink-400 leading-snug mb-3">
+                  Estos filtros se aplican a oportunidades publicadas; las invitaciones recibidas se muestran aparte.
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <input
+                      value={realSearchQuery}
+                      onChange={(event) => setRealSearchQuery(event.target.value)}
+                      placeholder="Buscar por título, servicio o zona..."
+                      className="w-full rounded-2xl border border-sand-200/70 bg-sand-50 px-3.5 py-2.5 text-[14px] text-ink-800 outline-none placeholder:text-ink-400"
+                      data-testid="pro-jobs-search"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <label className="flex min-w-0 flex-col gap-1 text-[12px] font-semibold text-ink-500">
+                      <span>Categoría</span>
+                      <select
+                        value={realSelectedCategoryId}
+                        onChange={(event) => setRealSelectedCategoryId(event.target.value)}
+                        className="w-full min-w-0 rounded-2xl border border-sand-200/70 bg-white px-3 py-2 text-[13px] text-ink-800 outline-none"
+                        data-testid="pro-jobs-category-filter"
+                      >
+                        <option value="all">Todas las categorías</option>
+                        {realCategoryOptions.map((category) => (
+                          <option key={category.id} value={category.id}>
+                            {category.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="flex min-w-0 flex-col gap-1 text-[12px] font-semibold text-ink-500 sm:min-w-[160px]">
+                      <span>Orden</span>
+                      <select
+                        value={realSortOrder}
+                        onChange={(event) => setRealSortOrder(event.target.value as RealSortOrder)}
+                        className="w-full min-w-[140px] rounded-2xl border border-sand-200/70 bg-white px-3 py-2 pr-10 text-[13px] text-ink-800 outline-none"
+                        data-testid="pro-jobs-sort"
+                      >
+                        <option value="newest">Más recientes</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="flex min-w-0 flex-col gap-1 text-[12px] font-semibold text-ink-500">
+                      <span>Invitación</span>
+                      <div className="flex flex-wrap gap-2" data-testid="pro-jobs-invitation-filter">
+                        {([
+                          { value: "all", label: "Todos" },
+                          { value: "invited", label: "Con invitación" },
+                          { value: "not_invited", label: "Sin invitación" },
+                        ] as const).map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => setRealInvitationFilter(option.value)}
+                            className={`rounded-full border-[1.5px] px-2.5 py-1 text-[11.5px] font-bold transition ${
+                              realInvitationFilter === option.value
+                                ? "border-coral-500 bg-coral-50 text-coral-700"
+                                : "border-sand-200 text-ink-500 bg-white"
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                  </div>
+                </div>
+              </Card>
+
               <Card className="bg-white border-sand-200/70" testId="professional-invitations-section">
                 <div className="font-bold text-[14px] text-ink-800 mb-1.5">Invitaciones recibidas</div>
                 <div className="text-[12px] text-ink-500 leading-snug mb-3">
@@ -582,80 +659,6 @@ function Inner() {
                     })}
                   </div>
                 )}
-              </Card>
-
-              <Card className="bg-white border-sand-200/70" testId="pro-jobs-filters">
-                <div className="font-bold text-[14px] text-ink-800 mb-1.5">Filtrar oportunidades</div>
-                <div className="text-[12px] text-ink-500 leading-snug mb-3">
-                  Filtros simples sobre trabajos publicados. El mapa y la distancia se conectarán más adelante manteniendo la privacidad.
-                </div>
-
-                <div className="flex flex-col gap-3">
-                  <div>
-                    <input
-                      value={realSearchQuery}
-                      onChange={(event) => setRealSearchQuery(event.target.value)}
-                      placeholder="Buscar por título, servicio o zona..."
-                      className="w-full rounded-2xl border border-sand-200/70 bg-sand-50 px-3.5 py-2.5 text-[14px] text-ink-800 outline-none placeholder:text-ink-400"
-                      data-testid="pro-jobs-search"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                    <label className="flex min-w-0 flex-col gap-1.5 text-[12px] font-semibold text-ink-500">
-                      <span>Categoría</span>
-                      <select
-                        value={realSelectedCategoryId}
-                        onChange={(event) => setRealSelectedCategoryId(event.target.value)}
-                        className="w-full min-w-0 rounded-2xl border border-sand-200/70 bg-white px-3.5 py-2.5 text-[13px] text-ink-800 outline-none"
-                        data-testid="pro-jobs-category-filter"
-                      >
-                        <option value="all">Todas las categorías</option>
-                        {realCategoryOptions.map((category) => (
-                          <option key={category.id} value={category.id}>
-                            {category.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <div className="flex min-w-0 flex-col gap-1.5 text-[12px] font-semibold text-ink-500">
-                      <span>Invitación</span>
-                      <div className="flex flex-wrap gap-2" data-testid="pro-jobs-invitation-filter">
-                        {([
-                          { value: "all", label: "Todos" },
-                          { value: "invited", label: "Con invitación" },
-                          { value: "not_invited", label: "Sin invitación" },
-                        ] as const).map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => setRealInvitationFilter(option.value)}
-                            className={`rounded-full border-[1.5px] px-3 py-1.5 text-[12px] font-bold transition ${
-                              realInvitationFilter === option.value
-                                ? "border-coral-500 bg-coral-50 text-coral-700"
-                                : "border-sand-200 text-ink-500 bg-white"
-                            }`}
-                          >
-                            {option.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <label className="flex min-w-0 flex-col gap-1.5 text-[12px] font-semibold text-ink-500 md:col-span-1">
-                      <span>Orden</span>
-                      <select
-                        value={realSortOrder}
-                        onChange={(event) => setRealSortOrder(event.target.value as RealSortOrder)}
-                        className="w-full min-w-0 rounded-2xl border border-sand-200/70 bg-white px-3.5 py-2.5 pr-10 text-[13px] text-ink-800 outline-none"
-                        data-testid="pro-jobs-sort"
-                      >
-                        <option value="newest">Más recientes</option>
-                      </select>
-                    </label>
-                  </div>
-                </div>
               </Card>
 
               <div className="px-1 pt-1">
