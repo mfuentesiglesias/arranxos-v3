@@ -459,7 +459,7 @@ function Inner() {
             </h1>
           </div>
           <div className="rounded-2xl border border-sky-100 bg-sky-50 px-3.5 py-3 text-[12px] text-sky-800 leading-snug">
-            Lectura real de trabajos publicados. Solicitudes y filtros avanzados siguen sin conectar en esta vista.
+            Lectura real de trabajos publicados. Ya puedes usar filtros simples; el mapa y la distancia se conectarán más adelante manteniendo la privacidad.
           </div>
         </div>
 
@@ -601,13 +601,13 @@ function Inner() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <label className="flex flex-col gap-1.5 text-[12px] font-semibold text-ink-500">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                    <label className="flex min-w-0 flex-col gap-1.5 text-[12px] font-semibold text-ink-500">
                       <span>Categoría</span>
                       <select
                         value={realSelectedCategoryId}
                         onChange={(event) => setRealSelectedCategoryId(event.target.value)}
-                        className="rounded-2xl border border-sand-200/70 bg-white px-3.5 py-2.5 text-[13px] text-ink-800 outline-none"
+                        className="w-full min-w-0 rounded-2xl border border-sand-200/70 bg-white px-3.5 py-2.5 text-[13px] text-ink-800 outline-none"
                         data-testid="pro-jobs-category-filter"
                       >
                         <option value="all">Todas las categorías</option>
@@ -619,7 +619,7 @@ function Inner() {
                       </select>
                     </label>
 
-                    <div className="flex flex-col gap-1.5 text-[12px] font-semibold text-ink-500">
+                    <div className="flex min-w-0 flex-col gap-1.5 text-[12px] font-semibold text-ink-500">
                       <span>Invitación</span>
                       <div className="flex flex-wrap gap-2" data-testid="pro-jobs-invitation-filter">
                         {([
@@ -643,12 +643,12 @@ function Inner() {
                       </div>
                     </div>
 
-                    <label className="flex flex-col gap-1.5 text-[12px] font-semibold text-ink-500">
+                    <label className="flex min-w-0 flex-col gap-1.5 text-[12px] font-semibold text-ink-500 md:col-span-1">
                       <span>Orden</span>
                       <select
                         value={realSortOrder}
                         onChange={(event) => setRealSortOrder(event.target.value as RealSortOrder)}
-                        className="rounded-2xl border border-sand-200/70 bg-white px-3.5 py-2.5 text-[13px] text-ink-800 outline-none"
+                        className="w-full min-w-0 rounded-2xl border border-sand-200/70 bg-white px-3.5 py-2.5 pr-10 text-[13px] text-ink-800 outline-none"
                         data-testid="pro-jobs-sort"
                       >
                         <option value="newest">Más recientes</option>
@@ -657,6 +657,12 @@ function Inner() {
                   </div>
                 </div>
               </Card>
+
+              <div className="px-1 pt-1">
+                <div className="text-[12px] font-bold uppercase tracking-wide text-ink-400">
+                  Oportunidades publicadas
+                </div>
+              </div>
 
               <div className="px-1 text-[12px] font-semibold text-ink-500" data-testid="pro-jobs-results-count">
                 {filteredRealJobs.length} oportunidad{filteredRealJobs.length === 1 ? "" : "es"} encontrada{filteredRealJobs.length === 1 ? "" : "s"}
