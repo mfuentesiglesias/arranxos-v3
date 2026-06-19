@@ -286,7 +286,7 @@ export default function HomeProPage() {
 
       <ScreenBody className="px-4 pt-4 pb-6">
         {isSupabase ? (
-          <>
+          <div className="pb-20">
             {realLoading ? (
               <Card
                 className="mb-4 bg-white border-sand-200/70"
@@ -321,33 +321,24 @@ export default function HomeProPage() {
                   className="mb-4 bg-white border-sand-200/70"
                   testId="professional-home-real-summary"
                 >
-                  <div className="flex items-center justify-between gap-3 mb-3">
-                    <div>
-                      <div className="font-bold text-[13px] text-ink-800">Resumen real</div>
-                      <div className="text-[11px] text-ink-400 leading-snug">
-                        Datos reales de oportunidades publicadas e invitaciones recibidas.
-                      </div>
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full bg-coral-50 text-coral-600 flex items-center justify-center flex-shrink-0">
+                      <Icon name="trending" size={18} />
                     </div>
-                    <Link
-                      href="/profesional/trabajos"
-                      className="text-[11px] font-bold text-coral-600 whitespace-nowrap"
-                    >
-                      Ver todas
-                    </Link>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <HomeStatTile
-                      label="Oportunidades"
-                      value={String(realPublishedJobs.length)}
-                    />
-                    <HomeStatTile
-                      label="Invitaciones"
-                      value={String(realPendingInvitationsCount)}
-                    />
-                    <HomeStatTile
-                      label="Solicitudes"
-                      value={String(realInvitationsWithRequestCount)}
-                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-[13.5px] text-ink-800 mb-0.5">
+                        Trabaja como un Dersu
+                      </div>
+                      <div className="text-[12px] text-ink-500 leading-snug mb-3">
+                        Revisa cada trabajo con calma y responde solo a los que encajen contigo.
+                      </div>
+                      <Link
+                        href="/profesional/trabajos"
+                        className="inline-flex items-center justify-center rounded-2xl border border-sand-200 bg-white px-4 py-2 text-[12px] font-bold text-coral-600 transition hover:bg-coral-50"
+                      >
+                        Ver trabajos
+                      </Link>
+                    </div>
                   </div>
                 </Card>
 
@@ -358,7 +349,7 @@ export default function HomeProPage() {
                     </div>
                     <div className="flex-1">
                       <div className="font-bold text-[13px] text-teal-700">
-                        Cuenta conectada a Dersux
+                        Cuenta profesional activa
                       </div>
                       <div className="text-[11px] text-teal-700/80">
                         La dirección exacta y el chat solo se activan si el cliente acepta una solicitud.
@@ -513,20 +504,20 @@ export default function HomeProPage() {
                     </div>
                     <div>
                       <div className="font-bold text-[13.5px] text-ink-800 mb-0.5">
-                        Trabajos activos y pagos
+                        Siguiente paso
                       </div>
                       <div className="text-[12px] text-ink-500 leading-snug">
-                        La lista de trabajos activos, pagos y el historial completo se conectarán próximamente. Por ahora puedes ver y solicitar oportunidades desde{" "}
+                        Gestiona oportunidades e invitaciones desde{" "}
                         <Link href="/profesional/trabajos" className="font-bold text-coral-600 underline">
                           Trabajos
-                        </Link>.
+                        </Link>. Los trabajos activos y el historial completo se conectarán en el siguiente bloque.
                       </div>
                     </div>
                   </div>
                 </Card>
               </>
             )}
-          </>
+          </div>
         ) : (
           <>
             <Card className="mb-4" testId="professional-home-pending-actions">
