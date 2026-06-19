@@ -1,5 +1,9 @@
+import { getRealCatalogCategories, getRealCatalogServices } from "@/lib/api/catalog";
+import { getCurrentProfile } from "@/lib/api/profiles";
 import { isSupabaseMode } from "@/lib/supabase/config";
 import { getBrowserSupabaseClient } from "@/lib/supabase/client";
+
+type ProfessionalVisibleRequestStatus = "pending" | "accepted";
 
 export interface ApiJobRequest {
   id: string;
@@ -41,6 +45,24 @@ export interface ApiAcceptJobRequestResult {
   chatId: string;
 }
 
+export interface ApiProfessionalJobRequest {
+  id: string;
+  jobId: string;
+  status: ProfessionalVisibleRequestStatus;
+  createdAt: string;
+  jobTitle: string;
+  jobStatus: string;
+  categoryId: string | null;
+  categoryName: string | null;
+  serviceId: string | null;
+  serviceName: string | null;
+  approxLocation: string | null;
+  priceMin: number | null;
+  priceMax: number | null;
+  jobCreatedAt: string;
+  jobUpdatedAt: string;
+}
+
 interface JobRequestRow {
   id: string;
   job_id: string;
@@ -70,6 +92,31 @@ interface AcceptJobRequestRow {
   result_job_id: string;
   result_professional_id: string;
   result_chat_id: string;
+}
+
+interface JobSummaryRow {
+  id: string;
+  category_id: string | null;
+  service_id: string | null;
+  title: string;
+  status: string;
+  price_min: number | null;
+  price_max: number | null;
+  approx_location: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+async function getCatalogNameMaps() {
+  const [categories, services] = await Promise.all([
+    getRealCatalogCategories(),
+    getRealCatalogServices(),
+  ]);
+
+  return {
+    categoryNameById: new Map(categories.map((category) => [category.id, category.name])),
+    serviceNameById: new Map(services.map((service) => [service.id, service.name])),
+  };
 }
 
 function getErrorMessage(error: unknown): string {
@@ -237,6 +284,31 @@ function mapAcceptJobRequestRow(row: AcceptJobRequestRow): ApiAcceptJobRequestRe
   };
 }
 
+function mapProfessionalJobRequest(
+  row: JobRequestRow,
+  job: JobSummaryRow,
+  categoryNameById: Map<string, string>,
+  serviceNameById: Map<string, string>,
+): ApiProfessionalJobRequest {
+  return {
+    id: row.id,
+    jobId: row.job_id,
+    status: row.status as ProfessionalVisibleRequestStatus,
+    createdAt: row.created_at,
+    jobTitle: job.title,
+    jobStatus: job.status,
+    categoryId: job.category_id,
+    categoryName: job.category_id ? categoryNameById.get(job.category_id) ?? null : null,
+    serviceId: job.service_id,
+    serviceName: job.service_id ? serviceNameById.get(job.service_id) ?? null : null,
+    approxLocation: job.approx_location,
+    priceMin: job.price_min,
+    priceMax: job.price_max,
+    jobCreatedAt: job.created_at,
+    jobUpdatedAt: job.updated_at,
+  };
+}
+
 export async function getJobRequestsForClientJob(
   jobId: string,
 ): Promise<ApiClientJobRequest[]> {
@@ -258,6 +330,69 @@ export async function getJobRequestsForClientJob(
   }
 
   return (data ?? []).map(mapClientJobRequestRow);
+}
+
+export async function listMyProfessionalJobRequests(): Promise<ApiProfessionalJobRequest[]> {
+  if (!isSupabaseMode()) {
+    return [];
+  }
+
+  const currentProfile = await getCurrentProfile();
+
+  if (
+    !currentProfile ||
+    currentProfile.role !== "professional" ||
+    currentProfile.professionalStatus !== "approved"
+  ) {
+    return [];
+  }
+
+  const client = getBrowserSupabaseClient();
+  const { categoryNameById, serviceNameById } = await getCatalogNameMaps();
+
+  const { data, error } = await client
+    .from("job_requests")
+    .select("id, job_id, professional_id, message, status, created_at")
+    .eq("professional_id", currentProfile.id)
+    .in("status", ["pending", "accepted"])
+    .order("created_at", { ascending: false })
+    .returns<JobRequestRow[]>();
+
+  if (error) {
+    throw error;
+  }
+
+  const requestRows = data ?? [];
+
+  if (requestRows.length === 0) {
+    return [];
+  }
+
+  const jobIds = Array.from(new Set(requestRows.map((row) => row.job_id)));
+  const { data: jobRows, error: jobsError } = await client
+    .from("jobs")
+    .select(
+      "id, category_id, service_id, title, status, price_min, price_max, approx_location, created_at, updated_at",
+    )
+    .in("id", jobIds)
+    .returns<JobSummaryRow[]>();
+
+  if (jobsError) {
+    throw jobsError;
+  }
+
+  const jobsById = new Map((jobRows ?? []).map((job) => [job.id, job]));
+
+  return requestRows
+    .map((row) => {
+      const job = jobsById.get(row.job_id);
+      if (!job) {
+        return null;
+      }
+
+      return mapProfessionalJobRequest(row, job, categoryNameById, serviceNameById);
+    })
+    .filter((request): request is ApiProfessionalJobRequest => request !== null);
 }
 
 export async function getClientJobRequestsWithProfessionalInfo(

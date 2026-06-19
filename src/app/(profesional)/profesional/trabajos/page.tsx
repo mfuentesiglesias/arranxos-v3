@@ -10,6 +10,10 @@ import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { MapView } from "@/components/map/map-view";
 import {
+  listMyProfessionalJobRequests,
+  type ApiProfessionalJobRequest,
+} from "@/lib/api/jobRequests";
+import {
   listMyProfessionalInvitations,
   type ApiProfessionalJobInvitation,
 } from "@/lib/api/jobInvitations";
@@ -163,6 +167,9 @@ function Inner() {
   const [professionalInvitations, setProfessionalInvitations] = useState<ApiProfessionalJobInvitation[]>([]);
   const [invitationsLoading, setInvitationsLoading] = useState(false);
   const [invitationsError, setInvitationsError] = useState<string | null>(null);
+  const [myProfessionalRequests, setMyProfessionalRequests] = useState<ApiProfessionalJobRequest[]>([]);
+  const [myRequestsLoading, setMyRequestsLoading] = useState(false);
+  const [myRequestsError, setMyRequestsError] = useState<string | null>(null);
   const [isRealProfessionalApproved, setIsRealProfessionalApproved] = useState(false);
   const [realSearchQuery, setRealSearchQuery] = useState("");
   const [realSelectedCategoryId, setRealSelectedCategoryId] = useState("all");
@@ -311,6 +318,8 @@ function Inner() {
       setRealJobsError(null);
       setInvitationsLoading(true);
       setInvitationsError(null);
+      setMyRequestsLoading(true);
+      setMyRequestsError(null);
 
       try {
         const profile = await getCurrentProfile();
@@ -320,15 +329,18 @@ function Inner() {
             setIsRealProfessionalApproved(false);
             setRealJobs([]);
             setProfessionalInvitations([]);
+            setMyProfessionalRequests([]);
             setRealJobsLoading(false);
             setInvitationsLoading(false);
+            setMyRequestsLoading(false);
           }
           return;
         }
 
-        const [publishedJobsResult, invitationsResult] = await Promise.allSettled([
+        const [publishedJobsResult, invitationsResult, requestsResult] = await Promise.allSettled([
           getPublishedJobsForProfessional(),
           listMyProfessionalInvitations(),
+          listMyProfessionalJobRequests(),
         ]);
 
         if (!cancelled) {
@@ -353,21 +365,37 @@ function Inner() {
             );
           }
 
+          if (requestsResult.status === "fulfilled") {
+            setMyProfessionalRequests(requestsResult.value);
+            setMyRequestsError(null);
+          } else {
+            setMyProfessionalRequests([]);
+            setMyRequestsError(
+              "No pudimos cargar tus solicitudes reales ahora mismo. Vuelve a intentarlo más tarde.",
+            );
+          }
+
           setRealJobsLoading(false);
           setInvitationsLoading(false);
+          setMyRequestsLoading(false);
         }
       } catch {
         if (!cancelled) {
           setRealJobs([]);
           setProfessionalInvitations([]);
+          setMyProfessionalRequests([]);
           setRealJobsError(
             "No pudimos cargar los trabajos reales ahora mismo. Vuelve a intentarlo más tarde.",
           );
           setInvitationsError(
             "No pudimos cargar tus invitaciones reales ahora mismo. Vuelve a intentarlo más tarde.",
           );
+          setMyRequestsError(
+            "No pudimos cargar tus solicitudes reales ahora mismo. Vuelve a intentarlo más tarde.",
+          );
           setRealJobsLoading(false);
           setInvitationsLoading(false);
+          setMyRequestsLoading(false);
         }
       }
     };
@@ -378,6 +406,8 @@ function Inner() {
       cancelled = true;
     };
   }, [isSupabase]);
+
+  const myRequestsPreview = myProfessionalRequests.slice(0, 5);
 
   const openFilters = () => {
     setDraftOpportunityFilter(opportunityFilter);
@@ -779,6 +809,86 @@ function Inner() {
                         </div>
                       );
                     })}
+                  </div>
+                )}
+              </Card>
+
+              <Card className="bg-white border-sand-200/70" testId="pro-jobs-my-requests">
+                <div className="font-bold text-[14px] text-ink-800 mb-1.5">Mis solicitudes</div>
+                <div className="text-[12px] text-ink-500 leading-snug mb-3">
+                  Solicitudes recientes que has enviado a trabajos visibles para tu cuenta profesional.
+                </div>
+
+                {myRequestsLoading ? (
+                  <div className="rounded-2xl border border-sand-200/70 bg-sand-50 px-4 py-5 text-[12px] text-ink-500 text-center">
+                    Cargando solicitudes…
+                  </div>
+                ) : myRequestsError ? (
+                  <div className="rounded-2xl border border-rose-100 bg-rose-50 px-4 py-4 text-[12px] text-rose-700 leading-snug">
+                    {myRequestsError}
+                  </div>
+                ) : myRequestsPreview.length === 0 ? (
+                  <div
+                    className="rounded-2xl border border-sand-200/70 bg-sand-50 px-4 py-5 text-[12px] text-ink-500 text-center leading-snug"
+                    data-testid="pro-jobs-my-requests-empty"
+                  >
+                    Aún no tienes solicitudes visibles para esta vista.
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2.5">
+                    {myRequestsPreview.map((request) => (
+                      <div
+                        key={request.id}
+                        className="rounded-2xl border border-sand-200/70 bg-sand-50 px-[18px] py-[17px]"
+                      >
+                        <div className="mb-1.5 flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1 text-[14px] font-bold leading-tight text-ink-800">
+                            {request.jobTitle}
+                          </div>
+                          <span className="rounded-full bg-sky-50 px-2.5 py-1 text-[10.5px] font-bold text-sky-700">
+                            {getRequestStatusLabel(request.status) ?? request.status}
+                          </span>
+                        </div>
+
+                        {(request.categoryName || request.serviceName) && (
+                          <div className="mb-2 flex flex-wrap gap-1.5">
+                            {request.categoryName && (
+                              <span className="inline-flex rounded-full bg-white px-2.5 py-1 text-[10.5px] font-bold text-ink-500 border border-sand-200/70">
+                                {request.categoryName}
+                              </span>
+                            )}
+                            {request.serviceName && (
+                              <span className="inline-flex rounded-full bg-teal-50 px-2.5 py-1 text-[10.5px] font-bold text-teal-700">
+                                {request.serviceName}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="mb-2 flex items-center gap-1.5 text-[12px] text-ink-400">
+                          <Icon name="pin" size={12} stroke={2} />
+                          <span className="truncate">
+                            {request.approxLocation ?? "Ubicación aproximada no disponible"}
+                          </span>
+                          <span className="ml-auto whitespace-nowrap text-ink-400">
+                            {formatInvitationDate(request.createdAt)}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-[12px]">
+                          <span className="font-bold text-coral-600">
+                            {formatPublishedJobPrice(request.priceMin, request.priceMax)}
+                          </span>
+                          <span className="text-[11px] font-medium text-ink-400">orientativo</span>
+                        </div>
+
+                        <div className="mt-3 pt-3 border-t border-sand-200/70">
+                          <Button href={`/profesional/trabajos/${request.jobId}`} variant="outline" size="sm">
+                            Ver detalle
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </Card>
