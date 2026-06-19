@@ -408,6 +408,11 @@ function Inner() {
   }, [isSupabase]);
 
   const myRequestsPreview = myProfessionalRequests.slice(0, 5);
+  const realSummaryStats = [
+    ["Invitaciones", professionalInvitations.length],
+    ["Solicitudes", myProfessionalRequests.length],
+    ["Oportunidades", realJobs.length],
+  ] as const;
 
   const openFilters = () => {
     setDraftOpportunityFilter(opportunityFilter);
@@ -578,6 +583,212 @@ function Inner() {
 
           {isRealProfessionalApproved && !realJobsLoading && !realJobsError && (
             <div className="flex flex-col gap-3">
+              <div
+                className="grid grid-cols-3 gap-2"
+                data-testid="pro-jobs-real-summary"
+              >
+                {realSummaryStats.map(([label, value]) => (
+                  <Card key={label} className="bg-white border-sand-200/70 px-3 py-3">
+                    <div className="text-[10.5px] font-semibold uppercase tracking-wide text-ink-400">
+                      {label}
+                    </div>
+                    <div className="mt-1 text-[17px] font-extrabold text-ink-900">{value}</div>
+                  </Card>
+                ))}
+              </div>
+
+              <Card className="bg-white border-sand-200/70" testId="professional-invitations-section">
+                <div className="font-bold text-[14px] text-ink-800 mb-1.5">Invitaciones recibidas</div>
+                <div className="text-[12px] text-ink-500 leading-snug mb-3">
+                  Invitaciones directas de clientes. La dirección exacta y el chat siguen bloqueados hasta la aceptación.
+                </div>
+
+                {invitationsLoading ? (
+                  <div className="rounded-2xl border border-sand-200/70 bg-sand-50 px-4 py-5 text-[12px] text-ink-500 text-center" data-testid="professional-invitations-loading">
+                    Cargando invitaciones…
+                  </div>
+                ) : invitationsError ? (
+                  <div className="rounded-2xl border border-rose-100 bg-rose-50 px-4 py-4 text-[12px] text-rose-700 leading-snug" data-testid="professional-invitations-error">
+                    {invitationsError}
+                  </div>
+                ) : professionalInvitations.length === 0 ? (
+                  <div className="rounded-2xl border border-sand-200/70 bg-sand-50 px-4 py-5 text-[12px] text-ink-500 text-center leading-snug" data-testid="professional-invitations-empty">
+                    Aún no tienes invitaciones recibidas.
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2.5">
+                    {professionalInvitations.map((invitation) => {
+                      const requestStatusLabel = getRequestStatusLabel(invitation.requestStatus);
+
+                      return (
+                        <div
+                          key={invitation.invitationId}
+                          className="rounded-2xl border border-sand-200/70 bg-sand-50 px-[18px] py-[17px]"
+                          data-testid={`professional-invitation-${invitation.invitationId}`}
+                        >
+                          <div className="mb-1.5 flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1 text-[14px] font-bold leading-tight text-ink-800">
+                              {invitation.jobTitle}
+                            </div>
+                            <div className="flex flex-wrap justify-end gap-1.5">
+                              <span className="rounded-full bg-coral-50 px-2.5 py-1 text-[10.5px] font-bold text-coral-700">
+                                Invitado
+                              </span>
+                              <span className="rounded-full bg-sand-100 px-2.5 py-1 text-[10.5px] font-bold text-ink-500">
+                                {getInvitationStatusLabel(invitation.invitationStatus)}
+                              </span>
+                            </div>
+                          </div>
+
+                          {(invitation.categoryName || invitation.serviceName) && (
+                            <div className="mb-2 flex flex-wrap gap-1.5">
+                              {invitation.categoryName && (
+                                <span className="inline-flex rounded-full bg-white px-2.5 py-1 text-[10.5px] font-bold text-ink-500 border border-sand-200/70">
+                                  {invitation.categoryName}
+                                </span>
+                              )}
+                              {invitation.serviceName && (
+                                <span className="inline-flex rounded-full bg-teal-50 px-2.5 py-1 text-[10.5px] font-bold text-teal-700">
+                                  {invitation.serviceName}
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          <p className="mb-2 line-clamp-2 whitespace-pre-wrap text-[12.5px] text-ink-600 leading-relaxed">
+                            {invitation.jobDescription}
+                          </p>
+
+                          <div className="mb-2 flex items-center gap-1.5 text-[12px] text-ink-400">
+                            <Icon name="pin" size={12} stroke={2} />
+                            <span className="truncate">{invitation.approxLocation ?? "Ubicación aproximada no disponible"}</span>
+                            <span className="ml-auto whitespace-nowrap text-ink-400">
+                              {formatInvitationDate(invitation.invitationCreatedAt)}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-[12px]">
+                            <span className="font-bold text-coral-600">
+                              {formatPublishedJobPrice(invitation.priceMin, invitation.priceMax)}
+                            </span>
+                            <span className="text-[11px] font-medium text-ink-400">orientativo</span>
+                          </div>
+
+                          {requestStatusLabel && (
+                            <div className="mt-2 inline-flex rounded-full bg-sky-50 px-2.5 py-1 text-[10.5px] font-bold text-sky-700">
+                              {requestStatusLabel}
+                            </div>
+                          )}
+
+                          <div className="mt-3 pt-3 border-t border-sand-200/70">
+                            <Button
+                              href={`/profesional/trabajos/${invitation.jobId}?invitationId=${encodeURIComponent(invitation.invitationId)}`}
+                              variant="outline"
+                              size="sm"
+                              testId={`professional-invitation-detail-${invitation.invitationId}`}
+                            >
+                              Ver detalle
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </Card>
+
+              <Card className="bg-white border-sand-200/70" testId="pro-jobs-my-requests">
+                <div className="font-bold text-[14px] text-ink-800 mb-1.5">Mis solicitudes</div>
+                <div className="text-[12px] text-ink-500 leading-snug mb-3">
+                  Solicitudes recientes enviadas desde esta cuenta profesional.
+                </div>
+
+                {myRequestsLoading ? (
+                  <div className="rounded-2xl border border-sand-200/70 bg-sand-50 px-4 py-5 text-[12px] text-ink-500 text-center">
+                    Cargando solicitudes…
+                  </div>
+                ) : myRequestsError ? (
+                  <div className="rounded-2xl border border-rose-100 bg-rose-50 px-4 py-4 text-[12px] text-rose-700 leading-snug">
+                    {myRequestsError}
+                  </div>
+                ) : myRequestsPreview.length === 0 ? (
+                  <div
+                    className="rounded-2xl border border-sand-200/70 bg-sand-50 px-4 py-5 text-[12px] text-ink-500 text-center leading-snug"
+                    data-testid="pro-jobs-my-requests-empty"
+                  >
+                    Aún no tienes solicitudes visibles para esta vista.
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2.5">
+                    {myRequestsPreview.map((request) => (
+                      <div
+                        key={request.id}
+                        className="rounded-2xl border border-sand-200/70 bg-sand-50 px-[18px] py-[17px]"
+                      >
+                        <div className="mb-1.5 flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1 text-[14px] font-bold leading-tight text-ink-800">
+                            {request.jobTitle}
+                          </div>
+                        </div>
+
+                        <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-ink-400">
+                          <span className="inline-flex rounded-full bg-sky-50 px-2.5 py-1 font-bold text-sky-700">
+                            {getRequestStatusLabel(request.status) ?? request.status}
+                          </span>
+                          <span className="whitespace-nowrap">
+                            {formatInvitationDate(request.createdAt)}
+                          </span>
+                        </div>
+
+                        {(request.categoryName || request.serviceName) && (
+                          <div className="mb-2 flex flex-wrap gap-1.5">
+                            {request.categoryName && (
+                              <span className="inline-flex rounded-full bg-white px-2.5 py-1 text-[10.5px] font-bold text-ink-500 border border-sand-200/70">
+                                {request.categoryName}
+                              </span>
+                            )}
+                            {request.serviceName && (
+                              <span className="inline-flex rounded-full bg-teal-50 px-2.5 py-1 text-[10.5px] font-bold text-teal-700">
+                                {request.serviceName}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="mb-2 flex items-center gap-1.5 text-[12px] text-ink-400">
+                          <Icon name="pin" size={12} stroke={2} />
+                          <span className="truncate">
+                            {request.approxLocation ?? "Ubicación aproximada no disponible"}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-[12px]">
+                          <span className="font-bold text-coral-600">
+                            {formatPublishedJobPrice(request.priceMin, request.priceMax)}
+                          </span>
+                          <span className="text-[11px] font-medium text-ink-400">orientativo</span>
+                        </div>
+
+                        <div className="mt-3 pt-3 border-t border-sand-200/70">
+                          <Button href={`/profesional/trabajos/${request.jobId}`} variant="outline" size="sm">
+                            Ver detalle
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+
+              <div className="px-1 pt-1">
+                <div className="text-[12px] font-bold uppercase tracking-wide text-ink-400">
+                  Oportunidades publicadas
+                </div>
+                <div className="mt-0.5 text-[11px] text-ink-400 leading-snug">
+                  Los filtros de abajo solo afectan a este bloque.
+                </div>
+              </div>
+
               <Card className="bg-white border-sand-200/70" testId="pro-jobs-filters">
                 <div className="flex items-center gap-2">
                   <div className="min-w-0 flex-1">
@@ -712,192 +923,6 @@ function Inner() {
                   </div>
                 ) : null}
               </Card>
-
-              <Card className="bg-white border-sand-200/70" testId="professional-invitations-section">
-                <div className="font-bold text-[14px] text-ink-800 mb-1.5">Invitaciones recibidas</div>
-                <div className="text-[12px] text-ink-500 leading-snug mb-3">
-                  Trabajos a los que un cliente te ha invitado directamente. La dirección exacta y el chat solo se activan si el cliente acepta una solicitud.
-                </div>
-
-                {invitationsLoading ? (
-                  <div className="rounded-2xl border border-sand-200/70 bg-sand-50 px-4 py-5 text-[12px] text-ink-500 text-center" data-testid="professional-invitations-loading">
-                    Cargando invitaciones…
-                  </div>
-                ) : invitationsError ? (
-                  <div className="rounded-2xl border border-rose-100 bg-rose-50 px-4 py-4 text-[12px] text-rose-700 leading-snug" data-testid="professional-invitations-error">
-                    {invitationsError}
-                  </div>
-                ) : professionalInvitations.length === 0 ? (
-                  <div className="rounded-2xl border border-sand-200/70 bg-sand-50 px-4 py-5 text-[12px] text-ink-500 text-center leading-snug" data-testid="professional-invitations-empty">
-                    Aún no tienes invitaciones recibidas.
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-2.5">
-                    {professionalInvitations.map((invitation) => {
-                      const requestStatusLabel = getRequestStatusLabel(invitation.requestStatus);
-
-                      return (
-                        <div
-                          key={invitation.invitationId}
-                          className="rounded-2xl border border-sand-200/70 bg-sand-50 px-[18px] py-[17px]"
-                          data-testid={`professional-invitation-${invitation.invitationId}`}
-                        >
-                          <div className="mb-1.5 flex items-start justify-between gap-2">
-                            <div className="min-w-0 flex-1 text-[14px] font-bold leading-tight text-ink-800">
-                              {invitation.jobTitle}
-                            </div>
-                            <div className="flex flex-wrap justify-end gap-1.5">
-                              <span className="rounded-full bg-coral-50 px-2.5 py-1 text-[10.5px] font-bold text-coral-700">
-                                Invitado
-                              </span>
-                              <span className="rounded-full bg-sand-100 px-2.5 py-1 text-[10.5px] font-bold text-ink-500">
-                                {getInvitationStatusLabel(invitation.invitationStatus)}
-                              </span>
-                            </div>
-                          </div>
-
-                          {(invitation.categoryName || invitation.serviceName) && (
-                            <div className="mb-2 flex flex-wrap gap-1.5">
-                              {invitation.categoryName && (
-                                <span className="inline-flex rounded-full bg-white px-2.5 py-1 text-[10.5px] font-bold text-ink-500 border border-sand-200/70">
-                                  {invitation.categoryName}
-                                </span>
-                              )}
-                              {invitation.serviceName && (
-                                <span className="inline-flex rounded-full bg-teal-50 px-2.5 py-1 text-[10.5px] font-bold text-teal-700">
-                                  {invitation.serviceName}
-                                </span>
-                              )}
-                            </div>
-                          )}
-
-                          <p className="mb-2 line-clamp-3 whitespace-pre-wrap text-[12.5px] text-ink-600 leading-relaxed">
-                            {invitation.jobDescription}
-                          </p>
-
-                          <div className="mb-2 flex items-center gap-1.5 text-[12px] text-ink-400">
-                            <Icon name="pin" size={12} stroke={2} />
-                            <span className="truncate">{invitation.approxLocation ?? "Ubicación aproximada no disponible"}</span>
-                            <span className="ml-auto whitespace-nowrap text-ink-400">
-                              {formatInvitationDate(invitation.invitationCreatedAt)}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-2 text-[12px]">
-                            <span className="font-bold text-coral-600">
-                              {formatPublishedJobPrice(invitation.priceMin, invitation.priceMax)}
-                            </span>
-                            <span className="text-[11px] font-medium text-ink-400">orientativo</span>
-                          </div>
-
-                          {requestStatusLabel && (
-                            <div className="mt-2 inline-flex rounded-full bg-sky-50 px-2.5 py-1 text-[10.5px] font-bold text-sky-700">
-                              {requestStatusLabel}
-                            </div>
-                          )}
-
-                          <div className="mt-3 pt-3 border-t border-sand-200/70">
-                            <Button
-                              href={`/profesional/trabajos/${invitation.jobId}?invitationId=${encodeURIComponent(invitation.invitationId)}`}
-                              variant="outline"
-                              size="sm"
-                              testId={`professional-invitation-detail-${invitation.invitationId}`}
-                            >
-                              Ver detalle
-                            </Button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </Card>
-
-              <Card className="bg-white border-sand-200/70" testId="pro-jobs-my-requests">
-                <div className="font-bold text-[14px] text-ink-800 mb-1.5">Mis solicitudes</div>
-                <div className="text-[12px] text-ink-500 leading-snug mb-3">
-                  Solicitudes recientes que has enviado a trabajos visibles para tu cuenta profesional.
-                </div>
-
-                {myRequestsLoading ? (
-                  <div className="rounded-2xl border border-sand-200/70 bg-sand-50 px-4 py-5 text-[12px] text-ink-500 text-center">
-                    Cargando solicitudes…
-                  </div>
-                ) : myRequestsError ? (
-                  <div className="rounded-2xl border border-rose-100 bg-rose-50 px-4 py-4 text-[12px] text-rose-700 leading-snug">
-                    {myRequestsError}
-                  </div>
-                ) : myRequestsPreview.length === 0 ? (
-                  <div
-                    className="rounded-2xl border border-sand-200/70 bg-sand-50 px-4 py-5 text-[12px] text-ink-500 text-center leading-snug"
-                    data-testid="pro-jobs-my-requests-empty"
-                  >
-                    Aún no tienes solicitudes visibles para esta vista.
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-2.5">
-                    {myRequestsPreview.map((request) => (
-                      <div
-                        key={request.id}
-                        className="rounded-2xl border border-sand-200/70 bg-sand-50 px-[18px] py-[17px]"
-                      >
-                        <div className="mb-1.5 flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1 text-[14px] font-bold leading-tight text-ink-800">
-                            {request.jobTitle}
-                          </div>
-                          <span className="rounded-full bg-sky-50 px-2.5 py-1 text-[10.5px] font-bold text-sky-700">
-                            {getRequestStatusLabel(request.status) ?? request.status}
-                          </span>
-                        </div>
-
-                        {(request.categoryName || request.serviceName) && (
-                          <div className="mb-2 flex flex-wrap gap-1.5">
-                            {request.categoryName && (
-                              <span className="inline-flex rounded-full bg-white px-2.5 py-1 text-[10.5px] font-bold text-ink-500 border border-sand-200/70">
-                                {request.categoryName}
-                              </span>
-                            )}
-                            {request.serviceName && (
-                              <span className="inline-flex rounded-full bg-teal-50 px-2.5 py-1 text-[10.5px] font-bold text-teal-700">
-                                {request.serviceName}
-                              </span>
-                            )}
-                          </div>
-                        )}
-
-                        <div className="mb-2 flex items-center gap-1.5 text-[12px] text-ink-400">
-                          <Icon name="pin" size={12} stroke={2} />
-                          <span className="truncate">
-                            {request.approxLocation ?? "Ubicación aproximada no disponible"}
-                          </span>
-                          <span className="ml-auto whitespace-nowrap text-ink-400">
-                            {formatInvitationDate(request.createdAt)}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-2 text-[12px]">
-                          <span className="font-bold text-coral-600">
-                            {formatPublishedJobPrice(request.priceMin, request.priceMax)}
-                          </span>
-                          <span className="text-[11px] font-medium text-ink-400">orientativo</span>
-                        </div>
-
-                        <div className="mt-3 pt-3 border-t border-sand-200/70">
-                          <Button href={`/profesional/trabajos/${request.jobId}`} variant="outline" size="sm">
-                            Ver detalle
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </Card>
-
-              <div className="px-1 pt-1">
-                <div className="text-[12px] font-bold uppercase tracking-wide text-ink-400">
-                  Oportunidades publicadas
-                </div>
-              </div>
 
               {filteredRealJobs.length > 0 ? (
                 filteredRealJobs.map((job) => (
