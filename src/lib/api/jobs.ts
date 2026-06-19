@@ -47,6 +47,23 @@ export interface ApiProfessionalAssignedJob {
   updatedAt: string;
 }
 
+export interface ApiProfessionalAssignedJobDetail {
+  id: string;
+  title: string;
+  description: string;
+  status: (typeof PROFESSIONAL_ACTIVE_JOB_STATUSES)[number];
+  categoryId: string | null;
+  categoryName: string | null;
+  serviceId: string | null;
+  serviceName: string | null;
+  approxLocation: string | null;
+  priceMin: number | null;
+  priceMax: number | null;
+  createdAt: string;
+  updatedAt: string;
+  assignedProfessionalId: string | null;
+}
+
 interface PublishedJobRow {
   id: string;
   client_id: string;
@@ -71,6 +88,21 @@ interface AssignedJobRow {
   category_id: string | null;
   service_id: string | null;
   title: string;
+  status: (typeof PROFESSIONAL_ACTIVE_JOB_STATUSES)[number];
+  price_min: number | null;
+  price_max: number | null;
+  approx_location: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface AssignedJobDetailRow {
+  id: string;
+  assigned_professional_id: string | null;
+  category_id: string | null;
+  service_id: string | null;
+  title: string;
+  description: string;
   status: (typeof PROFESSIONAL_ACTIVE_JOB_STATUSES)[number];
   price_min: number | null;
   price_max: number | null;
@@ -135,6 +167,29 @@ function mapAssignedJobRowToDomain(
     priceMax: row.price_max,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function mapAssignedJobDetailRowToDomain(
+  row: AssignedJobDetailRow,
+  categoryNameById: Map<string, string>,
+  serviceNameById: Map<string, string>,
+): ApiProfessionalAssignedJobDetail {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    status: row.status,
+    categoryId: row.category_id,
+    categoryName: row.category_id ? categoryNameById.get(row.category_id) ?? null : null,
+    serviceId: row.service_id,
+    serviceName: row.service_id ? serviceNameById.get(row.service_id) ?? null : null,
+    approxLocation: row.approx_location,
+    priceMin: row.price_min,
+    priceMax: row.price_max,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    assignedProfessionalId: row.assigned_professional_id,
   };
 }
 
@@ -227,4 +282,45 @@ export async function getAssignedJobsForProfessional(): Promise<ApiProfessionalA
   return (data ?? []).map((row) =>
     mapAssignedJobRowToDomain(row, categoryNameById, serviceNameById),
   );
+}
+
+export async function getAssignedJobForProfessional(
+  jobId: string,
+): Promise<ApiProfessionalAssignedJobDetail | null> {
+  if (!isSupabaseMode()) {
+    return null;
+  }
+
+  const currentProfile = await getCurrentProfile();
+
+  if (
+    !currentProfile ||
+    currentProfile.role !== "professional" ||
+    currentProfile.professionalStatus !== "approved"
+  ) {
+    return null;
+  }
+
+  const client = getBrowserSupabaseClient();
+  const { categoryNameById, serviceNameById } = await getCatalogNameMaps();
+
+  const { data, error } = await client
+    .from("jobs")
+    .select(
+      "id, assigned_professional_id, category_id, service_id, title, description, status, price_min, price_max, approx_location, created_at, updated_at",
+    )
+    .eq("id", jobId)
+    .eq("assigned_professional_id", currentProfile.id)
+    .in("status", [...PROFESSIONAL_ACTIVE_JOB_STATUSES])
+    .maybeSingle<AssignedJobDetailRow>();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  return mapAssignedJobDetailRowToDomain(data, categoryNameById, serviceNameById);
 }

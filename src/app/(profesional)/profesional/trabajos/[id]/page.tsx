@@ -20,7 +20,12 @@ import {
   listMyProfessionalInvitations,
   type ApiProfessionalJobInvitation,
 } from "@/lib/api/jobInvitations";
-import { getPublishedJobForProfessional, type ApiProfessionalPublishedJob } from "@/lib/api/jobs";
+import {
+  getAssignedJobForProfessional,
+  getPublishedJobForProfessional,
+  type ApiProfessionalAssignedJobDetail,
+  type ApiProfessionalPublishedJob,
+} from "@/lib/api/jobs";
 import { getCurrentProfile } from "@/lib/api/profiles";
 import { getMyReviewForJob, type ApiReview } from "@/lib/api/reviews";
 import { jobs } from "@/lib/data";
@@ -126,6 +131,7 @@ function Inner({ id }: { id: string }) {
   const [proposalAmount, setProposalAmount] = useState(
     String(activeNegotiation?.lastAmount ?? Math.round((job.priceMin + job.priceMax) / 2)),
   );
+  const [realAssignedJob, setRealAssignedJob] = useState<ApiProfessionalAssignedJobDetail | null>(null);
   const [realJob, setRealJob] = useState<ApiProfessionalPublishedJob | null>(null);
   const [realAgreementContext, setRealAgreementContext] = useState<ApiJobAgreementContext | null>(null);
   const [realReview, setRealReview] = useState<ApiReview | null>(null);
@@ -222,6 +228,7 @@ function Inner({ id }: { id: string }) {
         if (!profile) {
           if (!cancelled) {
             setIsRealProfessionalApproved(false);
+            setRealAssignedJob(null);
             setRealJob(null);
             setRealAgreementContext(nextAgreementContext);
             setRealReview(nextReview);
@@ -234,6 +241,7 @@ function Inner({ id }: { id: string }) {
         if (isHistoricalCompletedJob) {
           if (!cancelled) {
             setIsRealProfessionalApproved(true);
+            setRealAssignedJob(null);
             setRealJob(null);
             setRealAgreementContext(nextAgreementContext);
             setRealReview(nextReview);
@@ -245,6 +253,7 @@ function Inner({ id }: { id: string }) {
         if (profile.role !== "professional" || profile.professionalStatus !== "approved") {
           if (!cancelled) {
             setIsRealProfessionalApproved(false);
+            setRealAssignedJob(null);
             setRealJob(null);
             setRealAgreementContext(nextAgreementContext);
             setRealReview(nextReview);
@@ -253,10 +262,14 @@ function Inner({ id }: { id: string }) {
           return;
         }
 
-        const publishedJob = await getPublishedJobForProfessional(id);
+        const [assignedJob, publishedJob] = await Promise.all([
+          getAssignedJobForProfessional(id),
+          getPublishedJobForProfessional(id),
+        ]);
 
         if (!cancelled) {
           setIsRealProfessionalApproved(true);
+          setRealAssignedJob(assignedJob);
           setRealJob(publishedJob);
           setRealAgreementContext(nextAgreementContext);
           setRealReview(nextReview);
@@ -265,6 +278,7 @@ function Inner({ id }: { id: string }) {
       } catch {
         if (!cancelled) {
           setIsRealProfessionalApproved(false);
+          setRealAssignedJob(null);
           setRealJob(null);
           setRealAgreementContext(null);
           setRealReview(null);
@@ -376,12 +390,16 @@ function Inner({ id }: { id: string }) {
     realCompletedJob?.status === "completed" &&
       realCompletedAgreement?.paymentStatus === "released",
   );
+  const activeRealJob = realAssignedJob;
+  const hasRealActiveJob = Boolean(realAssignedJob);
+  const realPageTitle = activeRealJob?.title ?? realJob?.title ?? "Detalle del trabajo";
+  const realPageSubtitle = activeRealJob ? "Trabajo activo" : "Oportunidad real";
 
   if (isSupabase) {
     return (
       <div className="flex-1 flex flex-col bg-sand-50">
         <StatusBar />
-        <TopBar title={realJob?.title ?? "Detalle del trabajo"} subtitle="Oportunidad real" />
+        <TopBar title={realPageTitle} subtitle={realPageSubtitle} />
 
         <ScreenBody className="px-4 pt-3 pb-6">
           {!isRealProfessionalApproved && !realJobLoading && !realJobError && (
@@ -390,9 +408,87 @@ function Inner({ id }: { id: string }) {
                 Acceso restringido
               </div>
               <div className="text-[11.5px] text-amber-700 leading-snug">
-                Solo profesionales aprobados pueden solicitar trabajos reales.
+                Solo profesionales aprobados pueden acceder a trabajos reales.
               </div>
             </Card>
+          )}
+
+          {activeRealJob && (
+            <>
+              <Card className="mb-3" testId="professional-job-detail-active">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="font-extrabold text-[16px] text-ink-900 leading-tight">
+                    {activeRealJob.title}
+                  </div>
+                  <div data-testid="professional-job-detail-active-status">
+                    <StatusBadge status={activeRealJob.status} />
+                  </div>
+                </div>
+                <div className="mb-2 inline-flex rounded-full bg-teal-100 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-wide text-teal-700">
+                  Trabajo activo
+                </div>
+                <div className="text-[12px] text-ink-400 mb-3">
+                  {formatPublishedJobDate(activeRealJob.updatedAt || activeRealJob.createdAt)}
+                </div>
+                <p className="text-[13px] text-ink-600 leading-relaxed mb-3 whitespace-pre-wrap">
+                  {activeRealJob.description}
+                </p>
+                {(activeRealJob.categoryName || activeRealJob.serviceName) && (
+                  <div className="mb-3 flex flex-wrap gap-1.5">
+                    {activeRealJob.categoryName && (
+                      <span className="inline-flex rounded-full bg-sand-100 px-2.5 py-1 text-[10.5px] font-bold text-ink-500">
+                        {activeRealJob.categoryName}
+                      </span>
+                    )}
+                    {activeRealJob.serviceName && (
+                      <span className="inline-flex rounded-full bg-teal-50 px-2.5 py-1 text-[10.5px] font-bold text-teal-700">
+                        {activeRealJob.serviceName}
+                      </span>
+                    )}
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2 border-t border-sand-200/70 pt-3 text-[12px] text-ink-500">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Icon name="pin" size={12} stroke={2} />
+                    {activeRealJob.approxLocation ?? "Ubicación aproximada no disponible"}
+                  </span>
+                  <span className="ml-auto inline-flex items-center gap-1.5 font-bold text-coral-600">
+                    <Icon name="euro" size={12} stroke={2} />
+                    {formatPublishedJobPrice(activeRealJob.priceMin, activeRealJob.priceMax)}
+                  </span>
+                </div>
+              </Card>
+
+              {realAgreementContext?.status === "ready" && (
+                <Card className="mb-3">
+                  <div className="font-bold text-[13.5px] text-ink-800 mb-3">Estado del trabajo</div>
+                  <JobStatusTimeline status={realAgreementContext.job?.status ?? activeRealJob.status} />
+                  <div className="mt-3 text-[11.5px] text-ink-500 leading-snug">
+                    {realAgreementContext.statusMessage}
+                  </div>
+                  {realAgreementContext.agreement && (
+                    <div className="mt-2 text-[11.5px] text-ink-500 leading-snug">
+                      Ya existe un acuerdo registrado para este trabajo.
+                    </div>
+                  )}
+                </Card>
+              )}
+
+              <Card className="mb-3 bg-sky-50/60 border-sky-100">
+                <div className="text-[11.5px] text-sky-800 leading-snug">
+                  La dirección exacta y el chat se gestionarán desde el flujo aceptado correspondiente.
+                </div>
+                <div className="mt-2 text-[11.5px] text-sky-700/80 leading-snug">
+                  El precio mostrado es orientativo y no sustituye el acuerdo del trabajo.
+                </div>
+              </Card>
+
+              <div className="mb-4" data-testid="professional-job-detail-active-back">
+                <Button full variant="outline" href="/profesional/trabajos">
+                  Volver a trabajos
+                </Button>
+              </div>
+            </>
           )}
 
           {realJobError && (
@@ -408,7 +504,7 @@ function Inner({ id }: { id: string }) {
             </Card>
           )}
 
-          {isRealProfessionalApproved && !realJobLoading && !realJobError && !realJob && !showRealReviewBlock && (
+          {isRealProfessionalApproved && !realJobLoading && !realJobError && !realAssignedJob && !realJob && !showRealReviewBlock && (
             <Card className="mb-3 bg-amber-50/70 border-amber-100">
               <div className="font-bold text-[13px] text-amber-800 mb-1">Trabajo no disponible</div>
               <div className="text-[11.5px] text-amber-700 leading-snug">
@@ -417,7 +513,7 @@ function Inner({ id }: { id: string }) {
             </Card>
           )}
 
-          {realJob && (
+          {!realAssignedJob && realJob && (
             <>
               <Card className="mb-3">
                 <div className="flex items-start justify-between gap-2 mb-2">

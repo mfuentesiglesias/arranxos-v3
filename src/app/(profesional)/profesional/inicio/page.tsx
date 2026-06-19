@@ -424,15 +424,18 @@ export default function HomeProPage() {
                               {formatJobCardDate(job.updatedAt || job.createdAt)}
                             </span>
                           </div>
+
+                          <div className="mt-3 pt-3 border-t border-sand-200/70">
+                            <Link
+                              href={`/profesional/trabajos/${job.id}`}
+                              className="inline-flex items-center justify-center rounded-2xl border border-sand-200 bg-white px-4 py-2 text-[12px] font-bold text-coral-600 transition hover:bg-coral-50"
+                            >
+                              Ver trabajo
+                            </Link>
+                          </div>
                         </Card>
                       ))}
                     </div>
-
-                    <Card className="mb-5 bg-sand-50 border-sand-200/70">
-                      <div className="text-[12px] text-ink-500 leading-snug">
-                        La gestión detallada de trabajos activos se conectará en el siguiente paso.
-                      </div>
-                    </Card>
                   </>
                 )}
 
