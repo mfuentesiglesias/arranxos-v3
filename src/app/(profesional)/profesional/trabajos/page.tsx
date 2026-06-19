@@ -102,7 +102,14 @@ function getRequestStatusLabel(status: ApiProfessionalJobInvitation["requestStat
 }
 
 type RealInvitationFilter = "all" | "invited" | "not_invited";
-type RealSortOrder = "newest";
+type RealSortOrder = "newest" | "oldest" | "price_low" | "price_high";
+
+const REAL_SORT_OPTIONS = [
+  { value: "newest", label: "Recientes" },
+  { value: "oldest", label: "Antiguos" },
+  { value: "price_low", label: "€ bajo" },
+  { value: "price_high", label: "€ alto" },
+] as const satisfies ReadonlyArray<{ value: RealSortOrder; label: string }>;
 
 function Inner() {
   const params = useSearchParams();
@@ -219,11 +226,52 @@ function Inner() {
         return true;
       })
       .sort((a, b) => {
-        if (realSortOrder === "newest") {
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        const aCreatedAt = new Date(a.createdAt).getTime();
+        const bCreatedAt = new Date(b.createdAt).getTime();
+
+        if (realSortOrder === "oldest") {
+          return aCreatedAt - bCreatedAt;
         }
 
-        return 0;
+        if (realSortOrder === "price_low") {
+          const aPrice = a.priceMin ?? a.priceMax;
+          const bPrice = b.priceMin ?? b.priceMax;
+
+          if (aPrice == null && bPrice == null) {
+            return 0;
+          }
+
+          if (aPrice == null) {
+            return 1;
+          }
+
+          if (bPrice == null) {
+            return -1;
+          }
+
+          return aPrice - bPrice;
+        }
+
+        if (realSortOrder === "price_high") {
+          const aPrice = a.priceMax ?? a.priceMin;
+          const bPrice = b.priceMax ?? b.priceMin;
+
+          if (aPrice == null && bPrice == null) {
+            return 0;
+          }
+
+          if (aPrice == null) {
+            return 1;
+          }
+
+          if (bPrice == null) {
+            return -1;
+          }
+
+          return bPrice - aPrice;
+        }
+
+        return bCreatedAt - aCreatedAt;
       });
   }, [invitedRealJobIds, realInvitationFilter, realJobs, realSearchQuery, realSelectedCategoryId, realSortOrder]);
 
@@ -591,10 +639,22 @@ function Inner() {
 
                     <div className="flex min-w-0 flex-col gap-1.5 text-[12px] font-semibold text-ink-500">
                       <span>Orden</span>
-                      <div className="flex" data-testid="pro-jobs-sort">
-                        <span className="inline-flex shrink-0 whitespace-nowrap rounded-full border border-sand-200 bg-sand-50 px-3 py-1.5 text-[11.5px] font-semibold text-ink-600">
-                          {realSortOrder === "newest" ? "Más recientes" : realSortOrder}
-                        </span>
+                      <span className="text-[11px] font-medium text-ink-400">Precio orientativo</span>
+                      <div className="flex flex-wrap gap-2" data-testid="pro-jobs-sort">
+                        {REAL_SORT_OPTIONS.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => setRealSortOrder(option.value)}
+                            className={`rounded-full border px-3 py-1.5 text-[11.5px] font-semibold transition ${
+                              realSortOrder === option.value
+                                ? "border-coral-500 bg-coral-50 text-coral-700"
+                                : "border-sand-200 bg-white text-ink-500"
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
                       </div>
                     </div>
                   </div>

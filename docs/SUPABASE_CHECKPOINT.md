@@ -48,6 +48,7 @@ Arranxos mantiene dos modos de datos:
 - dashboard admin con KPIs reales más completo
 - 4F.1C-A responder invitación enviando solicitud: preparado en repo; SQL versionado nuevo pendiente de revisar y ejecutar; sin UI todavía
 - 4G.1C filtros mobile-first con chips/píldoras: preparado en repo sin SQL nuevo
+- 4G.1D orden funcional client-side con chips: preparado en repo sin SQL nuevo
 
 ### Probado live recientemente
 
@@ -112,6 +113,7 @@ Arranxos mantiene dos modos de datos:
 | Build 4G.1A ajuste visual filtros profesional | Preparado | Code-only; sin SQL nuevo y sin SQL remoto; ajusta el copy del aviso superior en `/profesional/trabajos`, mantiene el bloque `Filtrar oportunidades` antes de la lista real con separación visual más clara y ensancha el layout móvil de selects para que `Más recientes` no se corte; sigue sin mapa, sin distancia/radio, sin uso de lat/lng y sin revelar dirección exacta. |
 | Build 4G.1B recolocar filtros y compactar móvil | Preparado | Code-only; sin SQL nuevo y sin SQL remoto; recoloca `Filtrar oportunidades` justo después del aviso azul en `/profesional/trabajos`, deja `Invitaciones recibidas` debajo y aclara que los filtros solo afectan a `Oportunidades publicadas`; compacta el layout móvil de búsqueda, categoría, invitación y orden para que `Más recientes` no se corte; sin mapa, sin distancia/radio, sin uso de lat/lng y sin revelar dirección exacta. |
 | Build 4G.1C filtros mobile-first con chips | Preparado | Code-only; sin SQL nuevo y sin SQL remoto; `/profesional/trabajos` sustituye el select nativo de categoría por chips/píldoras, muestra `Más recientes` como chip fijo en vez de select nativo, compacta los chips de invitación, añade botón `Limpiar` solo con filtros activos y un contador compacto de resultados; los filtros siguen siendo client-side, solo afectan a `Oportunidades publicadas`, mantienen `Invitaciones recibidas` separadas y siguen sin mapa, distancia/radio, lat/lng ni dirección exacta. |
+| Build 4G.1D orden funcional con chips | Preparado | Code-only; sin SQL nuevo y sin SQL remoto; `/profesional/trabajos` convierte `Orden` en un grupo funcional de chips client-side con `Recientes`, `Antiguos`, `€ bajo` y `€ alto`, ordenando por fecha o rango de precio orientativo sin select nativo; los filtros siguen siendo client-side, solo afectan a `Oportunidades publicadas`, mantienen `Invitaciones recibidas` separadas y siguen sin mapa, distancia/radio, lat/lng ni dirección exacta. |
 | QA REAL 1A infraestructura Playwright Supabase smoke | Preparado | Code-only; sin SQL nuevo y sin SQL remoto; existe `playwright.supabase.config.ts` separada para tests reales contra Supabase, `npm run test:e2e:supabase` y un smoke no destructivo `tests/e2e/supabase-smoke.spec.ts` que valida login real de cliente y profesional con variables de entorno (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `E2E_SUPABASE_CLIENT_EMAIL`, `E2E_SUPABASE_CLIENT_PASSWORD`, `E2E_SUPABASE_PRO_EMAIL`, `E2E_SUPABASE_PRO_PASSWORD`); no crea jobs, no crea invitaciones, no responde invitaciones, no abre chat y deja el flujo completo invitación → solicitud para QA REAL 1B/1C con fixtures. |
 | Branding 1B guía Dersux/Dersu | Completado | Documentación creada en `docs/BRANDING_DERSUX.md`; sin cambios de UI, sin cambios de lógica, sin SQL y sin cambios técnicos en roles, rutas, tablas o RPCs. |
 | Branding 1C copy visible bajo riesgo | Completado | Solo cambios de copy visibles en pantallas cliente/profesional y navegación demo; usa "Profesional Dersux" y "Dersux Pro" donde aporta claridad; sin SQL, sin cambios de lógica y sin cambios técnicos en roles, rutas, tablas o RPCs. |
@@ -203,6 +205,7 @@ Arranxos mantiene dos modos de datos:
 - 4G.1A no añade SQL nuevo; solo ajusta copy y layout visual de esos filtros simples en móvil y escritorio.
 - 4G.1B no añade SQL nuevo; recoloca visualmente los filtros antes de invitaciones y deja explícito que solo afectan a oportunidades publicadas.
 - 4G.1C no añade SQL nuevo; mantiene los filtros enteramente client-side, elimina los selects nativos de categoría y orden en favor de chips mobile-first y conserva las invitaciones recibidas en un bloque separado.
+- 4G.1D no añade SQL nuevo; mantiene los filtros enteramente client-side y hace funcional el orden con chips por fecha y precio orientativo, sin select nativo y sin tocar invitaciones recibidas.
 - QA REAL 1A no añade SQL nuevo; separa Playwright real de mock con `playwright.supabase.config.ts` y requiere variables de entorno explícitas para login real no destructivo contra Supabase.
 - `profiles` puede leerse como admin, pero los listados seguros deben proyectar solo campos mínimos.
 - `reviews` ya no queda abierta con `using (true)` para todo `authenticated`; la lectura real se limita a admin o participantes del trabajo.
@@ -231,6 +234,7 @@ Arranxos mantiene dos modos de datos:
 - 4G.1A corrige el copy del aviso superior y el layout visual de filtros para móvil sin cambiar la lógica de filtrado ni añadir mapa/distancia/radio.
 - 4G.1B recoloca esos filtros justo después del aviso azul, mantiene las invitaciones separadas y compacta el bloque para móvil sin cambiar la lógica ni añadir mapa/distancia/radio.
 - 4G.1C rediseña ese bloque con chips/píldoras mobile-first, añade limpiar filtros y contador compacto, mantiene categoría/orden sin select nativo y conserva que los filtros solo afectan a oportunidades publicadas; no usa lat/lng, no muestra dirección exacta y no toca SQL.
+- 4G.1D hace funcional el orden client-side con chips `Recientes`, `Antiguos`, `€ bajo` y `€ alto`, aclarando que el rango es orientativo y manteniendo que los filtros solo afectan a oportunidades publicadas; no usa lat/lng, no muestra dirección exacta y no toca SQL.
 - QA REAL 1A prepara solo la infraestructura de Playwright real contra Supabase y un smoke de login no destructivo; el flujo completo cliente invita → profesional responde → cliente ve solicitud queda pendiente para QA REAL 1B/1C con fixtures seguras.
 - `/admin/chats` es moderación por flags reales; no es todavía un listado global completo de chats.
 - Los listados admin nuevos son de solo lectura; no añaden acciones write en usuarios, trabajos ni solicitudes.
