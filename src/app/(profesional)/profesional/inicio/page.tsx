@@ -15,7 +15,9 @@ import { currentPro, defaultAdminConfig, professionals } from "@/lib/data";
 import { getCurrentProfile, type ApiProfile } from "@/lib/api/profiles";
 import { isSupabaseMode } from "@/lib/supabase/config";
 import {
+  getAssignedJobsForProfessional,
   getPublishedJobsForProfessional,
+  type ApiProfessionalAssignedJob,
   type ApiProfessionalPublishedJob,
 } from "@/lib/api/jobs";
 import {
@@ -59,6 +61,7 @@ const PROFESSIONAL_PENDING_ACTION_STATUSES = [
 export default function HomeProPage() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [realProfile, setRealProfile] = useState<ApiProfile | null>(null);
+  const [realAssignedJobs, setRealAssignedJobs] = useState<ApiProfessionalAssignedJob[]>([]);
   const [realPublishedJobs, setRealPublishedJobs] = useState<ApiProfessionalPublishedJob[]>([]);
   const [realInvitations, setRealInvitations] = useState<ApiProfessionalJobInvitation[]>([]);
   const [realLoading, setRealLoading] = useState(false);
@@ -136,8 +139,9 @@ export default function HomeProPage() {
       setRealError(null);
 
       try {
-        const [profile, publishedJobsResult, invitationsResult] = await Promise.allSettled([
+        const [profile, assignedJobsResult, publishedJobsResult, invitationsResult] = await Promise.allSettled([
           getCurrentProfile(),
+          getAssignedJobsForProfessional(),
           getPublishedJobsForProfessional(),
           listMyProfessionalInvitations(),
         ]);
@@ -152,6 +156,7 @@ export default function HomeProPage() {
             profile.value.professionalStatus !== "approved"
           ) {
             setRealProfessionalApproved(false);
+            setRealAssignedJobs([]);
             setRealPublishedJobs([]);
             setRealInvitations([]);
             setRealLoading(false);
@@ -161,6 +166,7 @@ export default function HomeProPage() {
           setRealProfessionalApproved(true);
         } else {
           setRealProfessionalApproved(false);
+          setRealAssignedJobs([]);
           setRealPublishedJobs([]);
           setRealInvitations([]);
           if (!cancelled) setRealLoading(false);
@@ -168,6 +174,12 @@ export default function HomeProPage() {
             setRealError("Tu sesión no tiene un perfil profesional válido.");
           }
           return;
+        }
+
+        if (assignedJobsResult.status === "fulfilled") {
+          setRealAssignedJobs(assignedJobsResult.value);
+        } else {
+          setRealAssignedJobs([]);
         }
 
         if (publishedJobsResult.status === "fulfilled") {
@@ -183,6 +195,7 @@ export default function HomeProPage() {
         }
       } catch {
         if (!cancelled) {
+          setRealAssignedJobs([]);
           setRealPublishedJobs([]);
           setRealInvitations([]);
           setRealProfessionalApproved(false);
@@ -205,9 +218,7 @@ export default function HomeProPage() {
   const realPendingInvitationsCount = realInvitations.filter(
     (inv) => inv.invitationStatus === "pending",
   ).length;
-  const realInvitationsWithRequestCount = realInvitations.filter(
-    (inv) => inv.requestStatus != null,
-  ).length;
+  const realAssignedJobsPreview = realAssignedJobs.slice(0, 3);
   const realPublishedJobsPreview = realPublishedJobs.slice(0, 4);
   const realInvitationsPreview = realInvitations
     .filter((inv) => inv.invitationStatus === "pending")
@@ -215,9 +226,9 @@ export default function HomeProPage() {
 
   const headerKpis = isSupabase
     ? [
-        ["Oportunidades", `${realPublishedJobs.length}`],
+        ["Activos", `${realAssignedJobs.length}`],
         ["Invitaciones", `${realPendingInvitationsCount}`],
-        ["Solicitudes", `${realInvitationsWithRequestCount}`],
+        ["Oportunidades", `${realPublishedJobs.length}`],
       ]
     : [
         ["Activos", `${myActiveJobs.length}`],
@@ -358,6 +369,73 @@ export default function HomeProPage() {
                   </div>
                 </Card>
 
+                {realAssignedJobsPreview.length > 0 && (
+                  <>
+                    <SectionHeading title="Tus trabajos activos" />
+                    <div
+                      className="flex flex-col gap-2.5 mb-5"
+                      data-testid="professional-home-real-active-jobs"
+                    >
+                      {realAssignedJobsPreview.map((job) => (
+                        <Card key={job.id} className="bg-white border-sand-200/70">
+                          <div className="mb-1.5 flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1 text-[14px] font-bold leading-tight text-ink-800">
+                              {job.title}
+                            </div>
+                            <span className="rounded-full bg-teal-50 px-2.5 py-1 text-[10.5px] font-bold text-teal-700 whitespace-nowrap">
+                              {getProfessionalJobStatusLabel(job.status)}
+                            </span>
+                          </div>
+
+                          <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-teal-700/80">
+                            Trabajo activo asignado
+                          </div>
+
+                          {(job.categoryName || job.serviceName) && (
+                            <div className="mb-2 flex flex-wrap gap-1.5">
+                              {job.categoryName && (
+                                <span className="inline-flex rounded-full bg-sand-100 px-2.5 py-1 text-[10.5px] font-bold text-ink-500">
+                                  {job.categoryName}
+                                </span>
+                              )}
+                              {job.serviceName && (
+                                <span className="inline-flex rounded-full bg-teal-50 px-2.5 py-1 text-[10.5px] font-bold text-teal-700">
+                                  {job.serviceName}
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="mb-2 flex items-center gap-1.5 text-[12px] text-ink-400">
+                            <Icon name="pin" size={12} stroke={2} />
+                            <span className="truncate">
+                              {job.approxLocation ?? "Ubicación aproximada no disponible"}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="text-[13px] font-bold text-coral-600">
+                              {job.priceMin != null && job.priceMax != null
+                                ? `${job.priceMin.toLocaleString("es-ES")} € – ${job.priceMax.toLocaleString("es-ES")} €`
+                                : "Precio no disponible"}
+                            </span>
+                            <span className="text-[11px] font-medium text-ink-400">orientativo</span>
+                            <span className="text-[11px] text-ink-400">
+                              {formatJobCardDate(job.updatedAt || job.createdAt)}
+                            </span>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+
+                    <Card className="mb-5 bg-sand-50 border-sand-200/70">
+                      <div className="text-[12px] text-ink-500 leading-snug">
+                        La gestión detallada de trabajos activos se conectará en el siguiente paso.
+                      </div>
+                    </Card>
+                  </>
+                )}
+
                 {realPublishedJobsPreview.length > 0 && (
                   <>
                     <SectionHeading
@@ -488,11 +566,12 @@ export default function HomeProPage() {
                 {!realLoading &&
                   !realError &&
                   realProfessionalApproved &&
+                  realAssignedJobsPreview.length === 0 &&
                   realPublishedJobsPreview.length === 0 &&
                   realInvitationsPreview.length === 0 && (
                     <Card className="mb-4 bg-white border-sand-200/70">
                       <div className="text-[12px] text-ink-500 text-center py-6 leading-snug">
-                        No hay oportunidades ni invitaciones todavía.
+                        No hay trabajos activos, oportunidades ni invitaciones todavía.
                       </div>
                     </Card>
                   )}
@@ -507,10 +586,10 @@ export default function HomeProPage() {
                         Siguiente paso
                       </div>
                       <div className="text-[12px] text-ink-500 leading-snug">
-                        Gestiona oportunidades e invitaciones desde{" "}
+                        Revisa tus trabajos activos y responde nuevas oportunidades desde{" "}
                         <Link href="/profesional/trabajos" className="font-bold text-coral-600 underline">
                           Trabajos
-                        </Link>. Los trabajos activos y el historial completo se conectarán en el siguiente bloque.
+                        </Link>.
                       </div>
                     </div>
                   </div>
@@ -618,6 +697,37 @@ export default function HomeProPage() {
       </ScreenBody>
     </div>
   );
+}
+
+function getProfessionalJobStatusLabel(status: ApiProfessionalAssignedJob["status"]) {
+  switch (status) {
+    case "in_progress":
+      return "En curso";
+    case "agreement_pending":
+      return "Presupuesto pendiente";
+    case "agreed":
+      return "Acordado";
+    case "escrow_funded":
+      return "Pago protegido";
+    case "completed_pending_confirmation":
+      return "Pendiente confirmación";
+    case "dispute":
+      return "Disputa";
+  }
+}
+
+function formatJobCardDate(dateValue: string) {
+  const date = new Date(dateValue);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Fecha no disponible";
+  }
+
+  return `Actualizado ${date.toLocaleDateString("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  })}`;
 }
 
 function HomeStatTile({ label, value }: { label: string; value: string }) {

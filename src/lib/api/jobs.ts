@@ -1,6 +1,16 @@
 import { getRealCatalogCategories, getRealCatalogServices } from "@/lib/api/catalog";
+import { getCurrentProfile } from "@/lib/api/profiles";
 import { isSupabaseMode } from "@/lib/supabase/config";
 import { getBrowserSupabaseClient } from "@/lib/supabase/client";
+
+const PROFESSIONAL_ACTIVE_JOB_STATUSES = [
+  "in_progress",
+  "agreement_pending",
+  "agreed",
+  "escrow_funded",
+  "completed_pending_confirmation",
+  "dispute",
+] as const;
 
 export interface ApiProfessionalPublishedJob {
   id: string;
@@ -22,7 +32,22 @@ export interface ApiProfessionalPublishedJob {
   invitedCount: number;
 }
 
-interface JobRow {
+export interface ApiProfessionalAssignedJob {
+  id: string;
+  title: string;
+  status: (typeof PROFESSIONAL_ACTIVE_JOB_STATUSES)[number];
+  categoryId: string | null;
+  categoryName: string | null;
+  serviceId: string | null;
+  serviceName: string | null;
+  approxLocation: string | null;
+  priceMin: number | null;
+  priceMax: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface PublishedJobRow {
   id: string;
   client_id: string;
   category_id: string | null;
@@ -40,6 +65,20 @@ interface JobRow {
   created_at: string;
 }
 
+interface AssignedJobRow {
+  id: string;
+  assigned_professional_id: string | null;
+  category_id: string | null;
+  service_id: string | null;
+  title: string;
+  status: (typeof PROFESSIONAL_ACTIVE_JOB_STATUSES)[number];
+  price_min: number | null;
+  price_max: number | null;
+  approx_location: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 async function getCatalogNameMaps() {
   const [categories, services] = await Promise.all([
     getRealCatalogCategories(),
@@ -53,7 +92,7 @@ async function getCatalogNameMaps() {
 }
 
 function mapJobRowToDomain(
-  row: JobRow,
+  row: PublishedJobRow,
   categoryNameById: Map<string, string>,
   serviceNameById: Map<string, string>,
 ): ApiProfessionalPublishedJob {
@@ -78,6 +117,27 @@ function mapJobRowToDomain(
   };
 }
 
+function mapAssignedJobRowToDomain(
+  row: AssignedJobRow,
+  categoryNameById: Map<string, string>,
+  serviceNameById: Map<string, string>,
+): ApiProfessionalAssignedJob {
+  return {
+    id: row.id,
+    title: row.title,
+    status: row.status,
+    categoryId: row.category_id,
+    categoryName: row.category_id ? categoryNameById.get(row.category_id) ?? null : null,
+    serviceId: row.service_id,
+    serviceName: row.service_id ? serviceNameById.get(row.service_id) ?? null : null,
+    approxLocation: row.approx_location,
+    priceMin: row.price_min,
+    priceMax: row.price_max,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 export async function getPublishedJobsForProfessional(): Promise<ApiProfessionalPublishedJob[]> {
   if (!isSupabaseMode()) {
     return [];
@@ -93,7 +153,7 @@ export async function getPublishedJobsForProfessional(): Promise<ApiProfessional
     )
     .eq("status", "published")
     .order("created_at", { ascending: false })
-    .returns<JobRow[]>();
+    .returns<PublishedJobRow[]>();
 
   if (error) {
     throw error;
@@ -119,7 +179,7 @@ export async function getPublishedJobForProfessional(
     )
     .eq("id", jobId)
     .eq("status", "published")
-    .maybeSingle<JobRow>();
+    .maybeSingle<PublishedJobRow>();
 
   if (error) {
     throw error;
@@ -130,4 +190,41 @@ export async function getPublishedJobForProfessional(
   }
 
   return mapJobRowToDomain(data, categoryNameById, serviceNameById);
+}
+
+export async function getAssignedJobsForProfessional(): Promise<ApiProfessionalAssignedJob[]> {
+  if (!isSupabaseMode()) {
+    return [];
+  }
+
+  const currentProfile = await getCurrentProfile();
+
+  if (
+    !currentProfile ||
+    currentProfile.role !== "professional" ||
+    currentProfile.professionalStatus !== "approved"
+  ) {
+    return [];
+  }
+
+  const client = getBrowserSupabaseClient();
+  const { categoryNameById, serviceNameById } = await getCatalogNameMaps();
+
+  const { data, error } = await client
+    .from("jobs")
+    .select(
+      "id, assigned_professional_id, category_id, service_id, title, status, price_min, price_max, approx_location, created_at, updated_at",
+    )
+    .eq("assigned_professional_id", currentProfile.id)
+    .in("status", [...PROFESSIONAL_ACTIVE_JOB_STATUSES])
+    .order("updated_at", { ascending: false })
+    .returns<AssignedJobRow[]>();
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map((row) =>
+    mapAssignedJobRowToDomain(row, categoryNameById, serviceNameById),
+  );
 }
