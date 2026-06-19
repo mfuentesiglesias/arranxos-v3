@@ -15,6 +15,14 @@ import { currentPro, defaultAdminConfig, professionals } from "@/lib/data";
 import { getCurrentProfile, type ApiProfile } from "@/lib/api/profiles";
 import { isSupabaseMode } from "@/lib/supabase/config";
 import {
+  getPublishedJobsForProfessional,
+  type ApiProfessionalPublishedJob,
+} from "@/lib/api/jobs";
+import {
+  listMyProfessionalInvitations,
+  type ApiProfessionalJobInvitation,
+} from "@/lib/api/jobInvitations";
+import {
   getCurrentProfessionalId,
   getEffectiveJobs,
   getEffectiveNotifications,
@@ -51,6 +59,11 @@ const PROFESSIONAL_PENDING_ACTION_STATUSES = [
 export default function HomeProPage() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [realProfile, setRealProfile] = useState<ApiProfile | null>(null);
+  const [realPublishedJobs, setRealPublishedJobs] = useState<ApiProfessionalPublishedJob[]>([]);
+  const [realInvitations, setRealInvitations] = useState<ApiProfessionalJobInvitation[]>([]);
+  const [realLoading, setRealLoading] = useState(false);
+  const [realError, setRealError] = useState<string | null>(null);
+  const [realProfessionalApproved, setRealProfessionalApproved] = useState(false);
   const session = useSession();
   const isSupabase = isSupabaseMode();
   const currentProfessionalId = getCurrentProfessionalId(session);
@@ -118,23 +131,99 @@ export default function HomeProPage() {
 
     let cancelled = false;
 
-    const loadProfile = async () => {
+    const loadRealData = async () => {
+      setRealLoading(true);
+      setRealError(null);
+
       try {
-        const profile = await getCurrentProfile();
-        if (!cancelled && profile) {
-          setRealProfile(profile);
+        const [profile, publishedJobsResult, invitationsResult] = await Promise.allSettled([
+          getCurrentProfile(),
+          getPublishedJobsForProfessional(),
+          listMyProfessionalInvitations(),
+        ]);
+
+        if (cancelled) return;
+
+        if (profile.status === "fulfilled" && profile.value) {
+          setRealProfile(profile.value);
+
+          if (
+            profile.value.role !== "professional" ||
+            profile.value.professionalStatus !== "approved"
+          ) {
+            setRealProfessionalApproved(false);
+            setRealPublishedJobs([]);
+            setRealInvitations([]);
+            setRealLoading(false);
+            return;
+          }
+
+          setRealProfessionalApproved(true);
+        } else {
+          setRealProfessionalApproved(false);
+          setRealPublishedJobs([]);
+          setRealInvitations([]);
+          if (!cancelled) setRealLoading(false);
+          if (profile.status === "rejected") {
+            setRealError("Tu sesión no tiene un perfil profesional válido.");
+          }
+          return;
+        }
+
+        if (publishedJobsResult.status === "fulfilled") {
+          setRealPublishedJobs(publishedJobsResult.value);
+        } else {
+          setRealPublishedJobs([]);
+        }
+
+        if (invitationsResult.status === "fulfilled") {
+          setRealInvitations(invitationsResult.value);
+        } else {
+          setRealInvitations([]);
         }
       } catch {
-        // Keep the current mock fallback if the real profile cannot be loaded.
+        if (!cancelled) {
+          setRealPublishedJobs([]);
+          setRealInvitations([]);
+          setRealProfessionalApproved(false);
+          setRealError("No pudimos cargar los datos reales. Vuelve a intentarlo más tarde.");
+        }
+      } finally {
+        if (!cancelled) {
+          setRealLoading(false);
+        }
       }
     };
 
-    void loadProfile();
+    void loadRealData();
 
     return () => {
       cancelled = true;
     };
   }, [isSupabase]);
+
+  const realPendingInvitationsCount = realInvitations.filter(
+    (inv) => inv.invitationStatus === "pending",
+  ).length;
+  const realInvitationsWithRequestCount = realInvitations.filter(
+    (inv) => inv.requestStatus != null,
+  ).length;
+  const realPublishedJobsPreview = realPublishedJobs.slice(0, 4);
+  const realInvitationsPreview = realInvitations
+    .filter((inv) => inv.invitationStatus === "pending")
+    .slice(0, 3);
+
+  const headerKpis = isSupabase
+    ? [
+        ["Oportunidades", `${realPublishedJobs.length}`],
+        ["Invitaciones", `${realPendingInvitationsCount}`],
+        ["Solicitudes", `${realInvitationsWithRequestCount}`],
+      ]
+    : [
+        ["Activos", `${myActiveJobs.length}`],
+        ["Pendientes", `${myPendingActionJobs.length}`],
+        ["Completados", `${myCompletedJobsCount}`],
+      ];
 
   return (
     <div className="flex-1 flex flex-col" data-testid="professional-home-page">
@@ -161,19 +250,15 @@ export default function HomeProPage() {
           </HeaderIconButton>
         </div>
         <div className="grid grid-cols-3 gap-2">
-          {[
-            ["Activos", `${myActiveJobs.length}`],
-            ["Pendientes", `${myPendingActionJobs.length}`],
-            ["Completados", `${myCompletedJobsCount}`],
-          ].map(([l, v]) => (
+          {headerKpis.map(([label, value]) => (
             <div
-              key={l}
+              key={label}
               className="bg-white/15 backdrop-blur rounded-2xl px-3 py-2.5"
             >
               <div className="text-[10.5px] text-white/70 font-semibold uppercase tracking-wide">
-                {l}
+                {label}
               </div>
-              <div className="font-extrabold text-[15px]">{v}</div>
+              <div className="font-extrabold text-[15px]">{value}</div>
             </div>
           ))}
         </div>
@@ -200,99 +285,345 @@ export default function HomeProPage() {
       />
 
       <ScreenBody className="px-4 pt-4 pb-6">
-        <Card className="mb-4" testId="professional-home-pending-actions">
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <div>
-              <div className="font-bold text-[13px] text-ink-800">Resumen profesional</div>
-              <div className="text-[11px] text-ink-400 leading-snug">
-                Basado en trabajos efectivos asignados en esta demo.
-              </div>
-            </div>
-            <Link href="/profesional/trabajos?mine=1" className="text-[11px] font-bold text-coral-600">
-              Ver todos
-            </Link>
-          </div>
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <HomeStatTile label="Activos" value={String(myActiveJobs.length)} />
-            <HomeStatTile label="Pendientes" value={String(myPendingActionJobs.length)} />
-            <HomeStatTile label="Cerrados" value={String(myCompletedJobsCount)} />
-          </div>
-        </Card>
-
-        {/* Verification card */}
-        <Card className="mb-4 bg-teal-50 border-teal-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-teal-500 text-white flex items-center justify-center">
-              <Icon name="shield" size={18} />
-            </div>
-            <div className="flex-1">
-              <div className="font-bold text-[13px] text-teal-700">
-                Cuenta validada demo · {professional.reliability ?? currentPro.reliability}% fiabilidad demo
-              </div>
-              <div className="text-[11px] text-teal-700/80">
-                Datos simulados para la demo. En producción, la validación sería
-                operativa.
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        {/* Oportunidades */}
-        <SectionHeading
-          title="Trabajos cerca de ti"
-          action="Ver todos"
-          href="/profesional/trabajos"
-        />
-        <div className="flex flex-col gap-2.5 mb-5">
-          {openJobs.map((j) => (
-            <JobCard
-              key={j.id}
-              job={j}
-              href={`/profesional/trabajos/${j.id}`}
-              approxLocation
-              showDistance={`${1 + (parseInt(j.id.replace("j", "")) % 7)} km`}
-            />
-          ))}
-        </div>
-
-        {/* En curso */}
-        {myJobsPreview.length > 0 && (
+        {isSupabase ? (
           <>
+            {realLoading ? (
+              <Card
+                className="mb-4 bg-white border-sand-200/70"
+                testId="professional-home-real-loading"
+              >
+                <div className="text-[12px] text-ink-500 text-center py-6">
+                  Cargando datos reales…
+                </div>
+              </Card>
+            ) : realError ? (
+              <Card
+                className="mb-4 bg-rose-50 border-rose-100"
+                testId="professional-home-real-error"
+              >
+                <div className="text-[12px] text-rose-700 leading-snug">{realError}</div>
+              </Card>
+            ) : !realProfessionalApproved ? (
+              <Card
+                className="mb-4 bg-amber-50 border-amber-100"
+                testId="professional-home-pending-actions"
+              >
+                <div className="font-bold text-[13px] text-amber-800 mb-1">
+                  Profesional no aprobado
+                </div>
+                <div className="text-[12px] text-amber-700 leading-snug">
+                  Solo un profesional aprobado puede ver oportunidades reales. Tu cuenta debe ser validada por un administrador antes de operar.
+                </div>
+              </Card>
+            ) : (
+              <>
+                <Card
+                  className="mb-4 bg-white border-sand-200/70"
+                  testId="professional-home-real-summary"
+                >
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <div>
+                      <div className="font-bold text-[13px] text-ink-800">Resumen real</div>
+                      <div className="text-[11px] text-ink-400 leading-snug">
+                        Datos reales de oportunidades publicadas e invitaciones recibidas.
+                      </div>
+                    </div>
+                    <Link
+                      href="/profesional/trabajos"
+                      className="text-[11px] font-bold text-coral-600 whitespace-nowrap"
+                    >
+                      Ver todas
+                    </Link>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <HomeStatTile
+                      label="Oportunidades"
+                      value={String(realPublishedJobs.length)}
+                    />
+                    <HomeStatTile
+                      label="Invitaciones"
+                      value={String(realPendingInvitationsCount)}
+                    />
+                    <HomeStatTile
+                      label="Solicitudes"
+                      value={String(realInvitationsWithRequestCount)}
+                    />
+                  </div>
+                </Card>
+
+                <Card className="mb-4 bg-teal-50 border-teal-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-teal-500 text-white flex items-center justify-center">
+                      <Icon name="shield" size={18} />
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-bold text-[13px] text-teal-700">
+                        Cuenta conectada a Dersux
+                      </div>
+                      <div className="text-[11px] text-teal-700/80">
+                        La dirección exacta y el chat solo se activan si el cliente acepta una solicitud.
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+
+                {realPublishedJobsPreview.length > 0 && (
+                  <>
+                    <SectionHeading
+                      title="Oportunidades publicadas"
+                      action="Ver todas"
+                      href="/profesional/trabajos"
+                    />
+                    <div
+                      className="flex flex-col gap-2.5 mb-5"
+                      data-testid="professional-home-real-opportunities"
+                    >
+                      {realPublishedJobsPreview.map((job) => (
+                        <Card key={job.id} className="bg-white border-sand-200/70">
+                          <div className="mb-1.5 flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1 text-[14px] font-bold leading-tight text-ink-800">
+                              {job.title}
+                            </div>
+                            <span className="rounded-full bg-sand-100 px-2.5 py-1 text-[10.5px] font-bold text-ink-500 whitespace-nowrap">
+                              Publicado
+                            </span>
+                          </div>
+
+                          {(job.categoryName || job.serviceName) && (
+                            <div className="mb-2 flex flex-wrap gap-1.5">
+                              {job.categoryName && (
+                                <span className="inline-flex rounded-full bg-sand-100 px-2.5 py-1 text-[10.5px] font-bold text-ink-500">
+                                  {job.categoryName}
+                                </span>
+                              )}
+                              {job.serviceName && (
+                                <span className="inline-flex rounded-full bg-teal-50 px-2.5 py-1 text-[10.5px] font-bold text-teal-700">
+                                  {job.serviceName}
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="mb-2 flex items-center gap-1.5 text-[12px] text-ink-400">
+                            <Icon name="pin" size={12} stroke={2} />
+                            <span className="truncate">
+                              {job.approxLocation ?? "Ubicación aproximada no disponible"}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span className="text-[13px] font-bold text-coral-600">
+                              {job.priceMin != null && job.priceMax != null
+                                ? `${job.priceMin.toLocaleString("es-ES")} € – ${job.priceMax.toLocaleString("es-ES")} €`
+                                : "Precio no disponible"}
+                            </span>
+                            <span className="text-[11px] font-medium text-ink-400">
+                              orientativo
+                            </span>
+                          </div>
+
+                          <div className="mt-3 pt-3 border-t border-sand-200/70">
+                            <Link
+                              href={`/profesional/trabajos/${job.id}`}
+                              className="inline-flex items-center justify-center rounded-2xl border border-sand-200 bg-white px-4 py-2 text-[12px] font-bold text-coral-600 transition hover:bg-coral-50"
+                            >
+                              Ver detalle
+                            </Link>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {realInvitationsPreview.length > 0 && (
+                  <>
+                    <SectionHeading
+                      title="Invitaciones recibidas"
+                      action="Ver todas"
+                      href="/profesional/trabajos"
+                    />
+                    <div
+                      className="flex flex-col gap-2.5 mb-5"
+                      data-testid="professional-home-real-invitations"
+                    >
+                      {realInvitationsPreview.map((invitation) => (
+                        <Card
+                          key={invitation.invitationId}
+                          className="bg-white border-sand-200/70"
+                        >
+                          <div className="mb-1.5 flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1 text-[14px] font-bold leading-tight text-ink-800">
+                              {invitation.jobTitle}
+                            </div>
+                            <span className="rounded-full bg-coral-50 px-2.5 py-1 text-[10.5px] font-bold text-coral-700 whitespace-nowrap">
+                              {invitation.invitationStatus === "pending"
+                                ? "Pendiente"
+                                : invitation.invitationStatus === "accepted"
+                                  ? "Aceptada"
+                                  : invitation.invitationStatus}
+                            </span>
+                          </div>
+
+                          {invitation.requestStatus && (
+                            <div className="mb-2">
+                              <span className="inline-flex rounded-full bg-sky-50 px-2.5 py-1 text-[10.5px] font-bold text-sky-700">
+                                Solicitud {invitation.requestStatus === "pending" ? "pendiente" : invitation.requestStatus}
+                              </span>
+                            </div>
+                          )}
+
+                          <div className="mb-2 flex items-center gap-1.5 text-[12px] text-ink-400">
+                            <Icon name="pin" size={12} stroke={2} />
+                            <span className="truncate">
+                              {invitation.approxLocation ?? "Ubicación aproximada no disponible"}
+                            </span>
+                          </div>
+
+                          <div className="mt-3 pt-3 border-t border-sand-200/70">
+                            <Link
+                              href={`/profesional/trabajos/${invitation.jobId}?invitationId=${encodeURIComponent(invitation.invitationId)}`}
+                              className="inline-flex items-center justify-center rounded-2xl border border-sand-200 bg-white px-4 py-2 text-[12px] font-bold text-coral-600 transition hover:bg-coral-50"
+                            >
+                              Ver detalle
+                            </Link>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {!realLoading &&
+                  !realError &&
+                  realProfessionalApproved &&
+                  realPublishedJobsPreview.length === 0 &&
+                  realInvitationsPreview.length === 0 && (
+                    <Card className="mb-4 bg-white border-sand-200/70">
+                      <div className="text-[12px] text-ink-500 text-center py-6 leading-snug">
+                        No hay oportunidades ni invitaciones todavía.
+                      </div>
+                    </Card>
+                  )}
+
+                <Card>
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full bg-coral-50 text-coral-600 flex items-center justify-center flex-shrink-0">
+                      <Icon name="trending" size={18} />
+                    </div>
+                    <div>
+                      <div className="font-bold text-[13.5px] text-ink-800 mb-0.5">
+                        Trabajos activos y pagos
+                      </div>
+                      <div className="text-[12px] text-ink-500 leading-snug">
+                        La lista de trabajos activos, pagos y el historial completo se conectarán próximamente. Por ahora puedes ver y solicitar oportunidades desde{" "}
+                        <Link href="/profesional/trabajos" className="font-bold text-coral-600 underline">
+                          Trabajos
+                        </Link>.
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            <Card className="mb-4" testId="professional-home-pending-actions">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div>
+                  <div className="font-bold text-[13px] text-ink-800">Resumen profesional</div>
+                  <div className="text-[11px] text-ink-400 leading-snug">
+                    Basado en trabajos efectivos asignados en esta demo.
+                  </div>
+                </div>
+                <Link href="/profesional/trabajos?mine=1" className="text-[11px] font-bold text-coral-600">
+                  Ver todos
+                </Link>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <HomeStatTile label="Activos" value={String(myActiveJobs.length)} />
+                <HomeStatTile label="Pendientes" value={String(myPendingActionJobs.length)} />
+                <HomeStatTile label="Cerrados" value={String(myCompletedJobsCount)} />
+              </div>
+            </Card>
+
+            {/* Verification card */}
+            <Card className="mb-4 bg-teal-50 border-teal-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-teal-500 text-white flex items-center justify-center">
+                  <Icon name="shield" size={18} />
+                </div>
+                <div className="flex-1">
+                  <div className="font-bold text-[13px] text-teal-700">
+                    Cuenta validada demo · {professional.reliability ?? currentPro.reliability}% fiabilidad demo
+                  </div>
+                  <div className="text-[11px] text-teal-700/80">
+                    Datos simulados para la demo. En producción, la validación sería
+                    operativa.
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            {/* Oportunidades */}
             <SectionHeading
-              title="Tus trabajos activos"
+              title="Trabajos cerca de ti"
               action="Ver todos"
-              href="/profesional/trabajos?mine=1"
+              href="/profesional/trabajos"
             />
-            <div className="flex flex-col gap-2.5 mb-5" data-testid="professional-home-active-jobs">
-              {myJobsPreview.map((j) => (
+            <div className="flex flex-col gap-2.5 mb-5">
+              {openJobs.map((j) => (
                 <JobCard
                   key={j.id}
                   job={j}
                   href={`/profesional/trabajos/${j.id}`}
+                  approxLocation
+                  showDistance={`${1 + (parseInt(j.id.replace("j", "")) % 7)} km`}
                 />
               ))}
             </div>
+
+            {/* En curso */}
+            {myJobsPreview.length > 0 && (
+              <>
+                <SectionHeading
+                  title="Tus trabajos activos"
+                  action="Ver todos"
+                  href="/profesional/trabajos?mine=1"
+                />
+                <div className="flex flex-col gap-2.5 mb-5" data-testid="professional-home-active-jobs">
+                  {myJobsPreview.map((j) => (
+                    <JobCard
+                      key={j.id}
+                      job={j}
+                      href={`/profesional/trabajos/${j.id}`}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Tips */}
+            <Card>
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-coral-50 text-coral-600 flex items-center justify-center flex-shrink-0">
+                  <Icon name="trending" size={18} />
+                </div>
+                <div>
+                  <div className="font-bold text-[13.5px] text-ink-800 mb-0.5">
+                    Consejo Dersux
+                  </div>
+                  <div className="text-[12px] text-ink-500 leading-snug">
+                    Responde en menos de 1 h para aparecer primero en los resultados.
+                    Tu tiempo medio actual: <strong>{professional.responseTime}</strong>.
+                    Comisión plataforma: {defaultAdminConfig.commissionPct}%.
+                  </div>
+                </div>
+              </div>
+            </Card>
           </>
         )}
-
-        {/* Tips */}
-        <Card>
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-full bg-coral-50 text-coral-600 flex items-center justify-center flex-shrink-0">
-              <Icon name="trending" size={18} />
-            </div>
-            <div>
-              <div className="font-bold text-[13.5px] text-ink-800 mb-0.5">
-                Consejo Dersux
-              </div>
-              <div className="text-[12px] text-ink-500 leading-snug">
-                Responde en menos de 1 h para aparecer primero en los resultados.
-                Tu tiempo medio actual: <strong>{professional.responseTime}</strong>.
-                Comisión plataforma: {defaultAdminConfig.commissionPct}%.
-              </div>
-            </div>
-          </div>
-        </Card>
       </ScreenBody>
     </div>
   );
