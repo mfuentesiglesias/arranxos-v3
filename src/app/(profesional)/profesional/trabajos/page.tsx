@@ -168,6 +168,7 @@ function Inner() {
   const [realSelectedCategoryId, setRealSelectedCategoryId] = useState("all");
   const [realInvitationFilter, setRealInvitationFilter] = useState<RealInvitationFilter>("all");
   const [realSortOrder, setRealSortOrder] = useState<RealSortOrder>("newest");
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
   const jobRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -548,71 +549,92 @@ function Inner() {
           {isRealProfessionalApproved && !realJobsLoading && !realJobsError && (
             <div className="flex flex-col gap-3">
               <Card className="bg-white border-sand-200/70" testId="pro-jobs-filters">
-                <div className="mb-3 flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="font-bold text-[14px] text-ink-800">Filtrar oportunidades</div>
-                    <div className="mt-1 text-[12px] leading-snug text-ink-500">
-                      Filtra oportunidades publicadas. Las invitaciones se muestran aparte.
+                <div className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[14px] font-bold text-ink-800">Filtros y orden</div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      <span
+                        className="text-[12px] font-semibold text-ink-500"
+                        data-testid="pro-jobs-results-count"
+                      >
+                        {realResultsCountLabel}
+                      </span>
+                      <span className="text-[11px] text-ink-400 whitespace-nowrap">
+                        · {REAL_SORT_OPTIONS.find((option) => option.value === realSortOrder)?.label ?? realSortOrder}
+                      </span>
+                      {hasActiveRealFilters ? (
+                        <span className="text-[11px] font-medium text-coral-600 whitespace-nowrap">· Filtros activos</span>
+                      ) : null}
                     </div>
                   </div>
-                  {hasActiveRealFilters ? (
-                    <button
-                      type="button"
-                      onClick={clearRealFilters}
-                      className="shrink-0 rounded-full border border-sand-200 bg-white px-3 py-1.5 text-[11.5px] font-semibold text-ink-500 transition hover:border-coral-200 hover:text-coral-700"
-                      data-testid="pro-jobs-clear-filters"
-                    >
-                      Limpiar
-                    </button>
-                  ) : null}
-                </div>
-
-                <div className="flex flex-col gap-3">
-                  <div>
-                    <input
-                      value={realSearchQuery}
-                      onChange={(event) => setRealSearchQuery(event.target.value)}
-                      placeholder="Buscar por título, servicio o zona..."
-                      className="w-full rounded-2xl border border-sand-200/70 bg-sand-50 px-3.5 py-2.5 text-[14px] text-ink-800 outline-none placeholder:text-ink-400"
-                      data-testid="pro-jobs-search"
-                    />
-                  </div>
-
-                  <div className="flex min-w-0 flex-col gap-1.5 text-[12px] font-semibold text-ink-500">
-                    <span>Categoría</span>
-                    <div
-                      className="flex gap-2 overflow-x-auto pb-1 sm:flex-wrap"
-                      data-testid="pro-jobs-category-filter"
-                    >
+                  <div className="flex shrink-0 items-center gap-2">
+                    {hasActiveRealFilters ? (
                       <button
                         type="button"
-                        onClick={() => setRealSelectedCategoryId("all")}
-                        className={`shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-[11.5px] font-semibold transition ${
-                          realSelectedCategoryId === "all"
-                            ? "border-coral-500 bg-coral-50 text-coral-700"
-                            : "border-sand-200 bg-white text-ink-500"
-                        }`}
+                        onClick={clearRealFilters}
+                        className="shrink-0 whitespace-nowrap rounded-full border border-sand-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-ink-500 transition hover:border-coral-200 hover:text-coral-700"
+                        data-testid="pro-jobs-clear-filters"
                       >
-                        Todas
+                        Limpiar
                       </button>
-                      {realCategoryOptions.map((category) => (
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => setFiltersExpanded((prev) => !prev)}
+                      className="shrink-0 whitespace-nowrap rounded-full border border-sand-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-ink-500 transition hover:border-coral-200 hover:text-coral-700"
+                      data-testid="pro-jobs-filters-toggle"
+                    >
+                      {filtersExpanded ? "Ocultar" : "Mostrar"}
+                    </button>
+                  </div>
+                </div>
+
+                {filtersExpanded ? (
+                  <div className="mt-3 flex flex-col gap-3 border-t border-sand-100 pt-3">
+                    <div>
+                      <input
+                        value={realSearchQuery}
+                        onChange={(event) => setRealSearchQuery(event.target.value)}
+                        placeholder="Buscar por título, servicio o zona…"
+                        className="w-full rounded-2xl border border-sand-200/70 bg-sand-50 px-3.5 py-2.5 text-[14px] text-ink-800 outline-none placeholder:text-ink-400"
+                        data-testid="pro-jobs-search"
+                      />
+                    </div>
+
+                    <div className="flex min-w-0 flex-col gap-1.5 text-[12px] font-semibold text-ink-500">
+                      <span>Categoría</span>
+                      <div
+                        className="flex gap-2 overflow-x-auto pb-1 sm:flex-wrap"
+                        data-testid="pro-jobs-category-filter"
+                      >
                         <button
-                          key={category.id}
                           type="button"
-                          onClick={() => setRealSelectedCategoryId(category.id)}
+                          onClick={() => setRealSelectedCategoryId("all")}
                           className={`shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-[11.5px] font-semibold transition ${
-                            realSelectedCategoryId === category.id
+                            realSelectedCategoryId === "all"
                               ? "border-coral-500 bg-coral-50 text-coral-700"
                               : "border-sand-200 bg-white text-ink-500"
                           }`}
                         >
-                          {category.name}
+                          Todas
                         </button>
-                      ))}
+                        {realCategoryOptions.map((category) => (
+                          <button
+                            key={category.id}
+                            type="button"
+                            onClick={() => setRealSelectedCategoryId(category.id)}
+                            className={`shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-[11.5px] font-semibold transition ${
+                              realSelectedCategoryId === category.id
+                                ? "border-coral-500 bg-coral-50 text-coral-700"
+                                : "border-sand-200 bg-white text-ink-500"
+                            }`}
+                          >
+                            {category.name}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
                     <div className="flex min-w-0 flex-col gap-1.5 text-[12px] font-semibold text-ink-500">
                       <span>Invitación</span>
                       <div className="flex flex-wrap gap-2" data-testid="pro-jobs-invitation-filter">
@@ -625,7 +647,7 @@ function Inner() {
                             key={option.value}
                             type="button"
                             onClick={() => setRealInvitationFilter(option.value)}
-                            className={`rounded-full border px-3 py-1.5 text-[11.5px] font-semibold transition ${
+                            className={`shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-[11.5px] font-semibold transition ${
                               realInvitationFilter === option.value
                                 ? "border-coral-500 bg-coral-50 text-coral-700"
                                 : "border-sand-200 bg-white text-ink-500"
@@ -646,7 +668,7 @@ function Inner() {
                             key={option.value}
                             type="button"
                             onClick={() => setRealSortOrder(option.value)}
-                            className={`rounded-full border px-3 py-1.5 text-[11.5px] font-semibold transition ${
+                            className={`shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-[11.5px] font-semibold transition ${
                               realSortOrder === option.value
                                 ? "border-coral-500 bg-coral-50 text-coral-700"
                                 : "border-sand-200 bg-white text-ink-500"
@@ -658,19 +680,7 @@ function Inner() {
                       </div>
                     </div>
                   </div>
-
-                  <div className="flex items-center justify-between gap-3 border-t border-sand-100 pt-3">
-                    <div
-                      className="text-[12px] font-semibold text-ink-500"
-                      data-testid="pro-jobs-results-count"
-                    >
-                      {realResultsCountLabel}
-                    </div>
-                    {hasActiveRealFilters ? (
-                      <div className="text-[11px] font-medium text-coral-600">Filtros activos</div>
-                    ) : null}
-                  </div>
-                </div>
+                ) : null}
               </Card>
 
               <Card className="bg-white border-sand-200/70" testId="professional-invitations-section">
