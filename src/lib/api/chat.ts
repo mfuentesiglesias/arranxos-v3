@@ -1,6 +1,7 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 
 import { getCurrentProfile, type ApiProfileRole } from "@/lib/api/profiles";
+import { getRealCatalogCategories, getRealCatalogServices } from "@/lib/api/catalog";
 import { isSupabaseMode } from "@/lib/supabase/config";
 import { getBrowserSupabaseClient } from "@/lib/supabase/client";
 import type { ChatMessage, JobStatus } from "@/lib/types";
@@ -45,6 +46,23 @@ export interface ApiChatThread {
   messages: ApiChatThreadMessage[];
 }
 
+export interface ApiProfessionalChatThread {
+  chatId: string;
+  jobId: string;
+  createdAt: string;
+  lastMessageAt: string | null;
+  jobTitle: string;
+  jobStatus: JobStatus;
+  categoryId: string | null;
+  categoryName: string | null;
+  serviceId: string | null;
+  serviceName: string | null;
+  approxLocation: string | null;
+  priceMin: number | null;
+  priceMax: number | null;
+  jobUpdatedAt: string;
+}
+
 interface ChatRow {
   id: string;
   job_id: string;
@@ -52,6 +70,30 @@ interface ChatRow {
   professional_id: string;
   created_at: string;
   last_message_at: string | null;
+}
+
+interface ChatListJobRow {
+  id: string;
+  title: string;
+  status: JobStatus;
+  category_id: string | null;
+  service_id: string | null;
+  approx_location: string | null;
+  price_min: number | null;
+  price_max: number | null;
+  updated_at: string;
+}
+
+async function getCatalogNameMaps() {
+  const [categories, services] = await Promise.all([
+    getRealCatalogCategories(),
+    getRealCatalogServices(),
+  ]);
+
+  return {
+    categoryNameById: new Map(categories.map((category) => [category.id, category.name])),
+    serviceNameById: new Map(services.map((service) => [service.id, service.name])),
+  };
 }
 
 interface ChatMessageRow {
@@ -172,6 +214,30 @@ function mapJobChatRow(row: JobChatRow): ApiChatThreadJob {
   };
 }
 
+function mapProfessionalChatThread(
+  chat: ChatRow,
+  job: ChatListJobRow,
+  categoryNameById: Map<string, string>,
+  serviceNameById: Map<string, string>,
+): ApiProfessionalChatThread {
+  return {
+    chatId: chat.id,
+    jobId: chat.job_id,
+    createdAt: chat.created_at,
+    lastMessageAt: chat.last_message_at,
+    jobTitle: job.title,
+    jobStatus: job.status,
+    categoryId: job.category_id,
+    categoryName: job.category_id ? categoryNameById.get(job.category_id) ?? null : null,
+    serviceId: job.service_id,
+    serviceName: job.service_id ? serviceNameById.get(job.service_id) ?? null : null,
+    approxLocation: job.approx_location,
+    priceMin: job.price_min,
+    priceMax: job.price_max,
+    jobUpdatedAt: job.updated_at,
+  };
+}
+
 function buildUnavailableThread(
   currentRole: ApiProfileRole | null,
   job: JobChatRow | null,
@@ -244,6 +310,69 @@ function normalizeSendChatMessageError(error: unknown): Error {
   }
 
   return new Error("No pudimos enviar el mensaje. Inténtalo de nuevo.");
+}
+
+export async function listMyProfessionalChats(): Promise<ApiProfessionalChatThread[]> {
+  if (!isSupabaseMode()) {
+    return [];
+  }
+
+  const currentProfile = await getCurrentProfile();
+
+  if (
+    !currentProfile ||
+    currentProfile.role !== "professional" ||
+    currentProfile.professionalStatus !== "approved"
+  ) {
+    return [];
+  }
+
+  const client = getBrowserSupabaseClient();
+  const { categoryNameById, serviceNameById } = await getCatalogNameMaps();
+
+  const { data: chatRows, error: chatError } = await client
+    .from("chats")
+    .select("id, job_id, client_id, professional_id, created_at, last_message_at")
+    .eq("professional_id", currentProfile.id)
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .returns<ChatRow[]>();
+
+  if (chatError) {
+    throw chatError;
+  }
+
+  const chats = chatRows ?? [];
+
+  if (chats.length === 0) {
+    return [];
+  }
+
+  const jobIds = Array.from(new Set(chats.map((chat) => chat.job_id)));
+  const { data: jobRows, error: jobError } = await client
+    .from("jobs")
+    .select(
+      "id, title, status, category_id, service_id, approx_location, price_min, price_max, updated_at",
+    )
+    .in("id", jobIds)
+    .returns<ChatListJobRow[]>();
+
+  if (jobError) {
+    throw jobError;
+  }
+
+  const jobsById = new Map((jobRows ?? []).map((job) => [job.id, job]));
+
+  return chats
+    .map((chat) => {
+      const job = jobsById.get(chat.job_id);
+      if (!job) {
+        return null;
+      }
+
+      return mapProfessionalChatThread(chat, job, categoryNameById, serviceNameById);
+    })
+    .filter((thread): thread is ApiProfessionalChatThread => thread !== null);
 }
 
 export async function getChatThread(jobId: string): Promise<ApiChatThread> {
