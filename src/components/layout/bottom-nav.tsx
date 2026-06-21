@@ -33,7 +33,7 @@ export const NAV_CLIENT: NavItem[] = [
 export const NAV_PRO: NavItem[] = [
   { href: "/profesional/inicio", label: "Inicio", icon: "home" },
   { href: "/profesional/trabajos", label: "Trabajos", icon: "search" },
-  { href: "/chat/j22", label: "Chat", icon: "chat", match: ["/chat"] },
+  { href: "/profesional/chat", label: "Chat", icon: "chat", match: ["/profesional/chat", "/chat"] },
   { href: "/profesional/pagos", label: "Pagos", icon: "briefcase" },
   { href: "/profesional/mi-perfil", label: "Perfil", icon: "user" },
 ];

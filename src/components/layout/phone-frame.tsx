@@ -43,6 +43,7 @@ const NAV_GROUPS: Array<{ group: string; screens: { href: string; label: string 
     screens: [
       { href: "/profesional/inicio", label: "Inicio Dersux Pro" },
       { href: "/profesional/trabajos", label: "Explorar trabajos" },
+      { href: "/profesional/chat", label: "Chats reales" },
       { href: "/profesional/trabajos/j1", label: "Detalle trabajo (aprox)" },
       { href: "/profesional/trabajos/j1/solicitar", label: "Solicitar trabajo" },
       { href: "/profesional/trabajos/j2/seguimiento", label: "Seguimiento" },
