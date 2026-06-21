@@ -593,70 +593,77 @@ function SupabaseInner({ jobId }: { jobId: string }) {
         </div>
 
         {currentAgreement ? (
-          <div className="mb-3 rounded-2xl border border-teal-100 bg-teal-50 px-3.5 py-3">
-            <div className="font-bold text-[13px] text-teal-700">Acuerdo alcanzado</div>
-            <div className="mt-1 text-[12px] text-teal-700/80">
-              Importe final acordado {formatEuro(currentAgreement.finalPrice)}.
+          <>
+            <div className="mb-3 rounded-2xl border border-teal-100 bg-teal-50 px-3.5 py-3">
+              <div className="font-bold text-[13px] text-teal-700">Acuerdo alcanzado</div>
+              <div className="mt-1 text-[12px] text-teal-700/80">
+                El precio final acordado es <strong>{formatEuro(currentAgreement.finalPrice)}</strong> y sustituye al rango orientativo del trabajo.
+              </div>
             </div>
-            <div className="mt-1 text-[12px] text-teal-700/80">
-              Este importe sustituye al rango orientativo del trabajo.
-            </div>
-            <div className="mt-1 text-[12px] text-teal-700/80">
-              Estado logico interno: {PAYMENT_STATUS_LABELS[currentAgreement.paymentStatus] ?? currentAgreement.paymentStatus}
-            </div>
+
             {canFundProtectedPayment && (
-              <div className="mt-3">
-                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-teal-700/70">
-                  Siguiente paso interno
+              <div className="mb-3 rounded-2xl border border-sky-100 bg-sky-50/60 px-3.5 py-3">
+                <div className="font-bold text-[13px] text-sky-800">Pago protegido interno</div>
+                <div className="mt-1 text-[11.5px] text-sky-700/80 leading-snug">
+                  Tras acordar el precio final, el siguiente paso logico es registrar el pago protegido dentro del flujo interno de Dersux.
+                </div>
+                <div className="mt-2 text-[11px] text-sky-600/80 leading-snug">
+                  Este paso no realiza un cobro real con Stripe. Es una fase logica interna de la plataforma.
                 </div>
                 <button
                   type="button"
                   onClick={() => void protectPayment()}
                   disabled={fundingPayment}
-                  className="rounded-full bg-coral-500 px-4 py-3 text-[13px] font-bold text-white disabled:opacity-40"
+                  className="mt-3 rounded-full bg-coral-500 px-4 py-3 text-[13px] font-bold text-white disabled:opacity-40"
                 >
-                  {fundingPayment ? "Protegiendo pago..." : "Registrar pago protegido (demo)"}
+                  {fundingPayment ? "Protegiendo pago..." : "Registrar pago protegido interno"}
                 </button>
               </div>
             )}
+
             {canMarkCompleted && (
-              <div className="mt-3">
-                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-teal-700/70">
-                  Seguimiento del trabajo
+              <div className="mb-3 rounded-2xl border border-teal-100 bg-teal-50/60 px-3.5 py-3">
+                <div className="font-bold text-[13px] text-teal-700">Finalizacion del trabajo</div>
+                <div className="mt-1 text-[11.5px] text-teal-700/80 leading-snug">
+                  Cuando el pago protegido interno este registrado, puedes marcar el trabajo como terminado al finalizar el servicio.
                 </div>
                 <button
                   type="button"
                   onClick={() => void completeJob()}
                   disabled={markingCompleted}
-                  className="rounded-full bg-coral-500 px-4 py-3 text-[13px] font-bold text-white disabled:opacity-40"
+                  className="mt-3 rounded-full bg-coral-500 px-4 py-3 text-[13px] font-bold text-white disabled:opacity-40"
                 >
                   {markingCompleted ? "Marcando terminado..." : "Marcar trabajo terminado"}
                 </button>
               </div>
             )}
+
             {canConfirmCompletion && (
-              <div className="mt-3">
-                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-teal-700/70">
-                  Cierre del trabajo
+              <div className="mb-3 rounded-2xl border border-teal-100 bg-teal-50/60 px-3.5 py-3">
+                <div className="font-bold text-[13px] text-teal-700">Finalizacion del trabajo</div>
+                <div className="mt-1 text-[11.5px] text-teal-700/80 leading-snug">
+                  El profesional ha marcado el trabajo como terminado. Confirma la finalizacion si todo esta correcto.
                 </div>
                 <button
                   type="button"
                   onClick={() => void releasePayment()}
                   disabled={confirmingCompletion}
-                  className="rounded-full bg-coral-500 px-4 py-3 text-[13px] font-bold text-white disabled:opacity-40"
+                  className="mt-3 rounded-full bg-coral-500 px-4 py-3 text-[13px] font-bold text-white disabled:opacity-40"
                 >
-                  {confirmingCompletion
-                    ? "Liberando pago..."
-                    : "Confirmar finalización y liberar pago"}
+                  {confirmingCompletion ? "Liberando pago..." : "Confirmar finalizacion"}
                 </button>
               </div>
             )}
+
             {isCompletedAndReleased && (
-              <div className="mt-3 text-[12px] font-semibold text-teal-700">
-                Trabajo completado. El flujo interno de pago ya quedo cerrado.
+              <div className="mb-3 rounded-2xl border border-teal-100 bg-teal-50 px-3.5 py-3">
+                <div className="font-bold text-[13px] text-teal-700">Trabajo completado</div>
+                <div className="mt-1 text-[11.5px] text-teal-700/80 leading-snug">
+                  El ciclo del acuerdo quedo cerrado. Todas las fases internas se completaron correctamente.
+                </div>
               </div>
             )}
-          </div>
+          </>
         ) : currentNegotiation ? (
           <div className="mb-3 rounded-2xl border border-amber-100 bg-amber-50 px-3.5 py-3">
             <div className="font-bold text-[13px] text-amber-800">Oferta y negociacion</div>
@@ -688,13 +695,19 @@ function SupabaseInner({ jobId }: { jobId: string }) {
 
         {profileRole === "professional" && isAwaitingProtectedPayment && (
           <div className="mb-3 rounded-2xl border border-amber-100 bg-amber-50 px-3.5 py-3 text-[12px] text-amber-800">
-            Esperando pago protegido del cliente.
+            <div className="font-bold text-[13px] text-amber-800">Pago protegido interno</div>
+            <div className="mt-1 leading-snug">
+              El acuerdo ya esta cerrado. Esperando que el cliente registre el pago protegido interno desde su panel de chat.
+            </div>
           </div>
         )}
 
         {isAwaitingClientConfirmation && (
           <div className="mb-3 rounded-2xl border border-violet-100 bg-violet-50 px-3.5 py-3 text-[12px] text-violet-800">
-            Esperando confirmación del cliente.
+            <div className="font-bold text-[13px] text-violet-800">Finalizacion pendiente</div>
+            <div className="mt-1 leading-snug">
+              El trabajo ya esta marcado como terminado. Esperando que el cliente confirme la finalizacion.
+            </div>
           </div>
         )}
 
