@@ -273,6 +273,15 @@ function SupabaseInner({ jobId }: { jobId: string }) {
       currentAgreement.paymentStatus === "released",
   );
   const isProfessionalView = profileRole === "professional";
+  const canOpenDisputeFromChat = Boolean(
+    currentJob?.status === "completed_pending_confirmation" &&
+      currentAgreement?.paymentStatus === "protected" &&
+      (profileRole === "client" || profileRole === "professional"),
+  );
+  const disputeRoute =
+    profileRole === "professional"
+      ? `/profesional/trabajos/${jobId}/disputa`
+      : `/cliente/trabajos/${jobId}/disputa`;
   const parsedProposalAmount = Number(proposalAmount);
   const isProposalAmountValid =
     Number.isFinite(parsedProposalAmount) &&
@@ -652,6 +661,23 @@ function SupabaseInner({ jobId }: { jobId: string }) {
                 >
                   {confirmingCompletion ? "Liberando pago..." : "Confirmar finalizacion"}
                 </button>
+              </div>
+            )}
+
+            {canOpenDisputeFromChat && (
+              <div className="mb-3 rounded-2xl border border-rose-100 bg-rose-50/60 px-3.5 py-3" data-testid="chat-open-dispute-link">
+                <div className="font-bold text-[13px] text-rose-700">Hay algun problema</div>
+                <div className="mt-1 text-[11.5px] text-rose-600/80 leading-snug">
+                  {isProfessionalView
+                    ? "Si hay un problema con la finalizacion o la confirmacion, puedes abrir una disputa desde aqui."
+                    : "Si el trabajo no esta correcto, puedes abrir una disputa antes de confirmar la finalizacion."}
+                </div>
+                <Link
+                  href={disputeRoute}
+                  className="mt-3 inline-flex items-center justify-center rounded-full bg-white px-4 py-2 text-[12px] font-bold text-rose-700 border border-rose-100"
+                >
+                  Abrir disputa
+                </Link>
               </div>
             )}
 
