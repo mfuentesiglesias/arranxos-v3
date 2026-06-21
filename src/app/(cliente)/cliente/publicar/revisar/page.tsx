@@ -19,6 +19,22 @@ import {
   getEffectiveApprovedCatalogServices,
   useSession,
 } from "@/lib/store";
+import { createMyJob } from "@/lib/api/clientJobs";
+import { isSupabaseMode } from "@/lib/supabase/config";
+
+function parsePriceRange(priceRange: string): { priceMin: number | null; priceMax: number | null } {
+  const normalizedPriceRange = priceRange.trim();
+
+  if (normalizedPriceRange === "Menos de 100€") return { priceMin: 0, priceMax: 100 };
+  if (normalizedPriceRange === "100–300€") return { priceMin: 100, priceMax: 300 };
+  if (normalizedPriceRange === "300–700€") return { priceMin: 300, priceMax: 700 };
+  if (normalizedPriceRange === "700–1.500€") return { priceMin: 700, priceMax: 1500 };
+  if (normalizedPriceRange === "1.500–3.000€") return { priceMin: 1500, priceMax: 3000 };
+  if (normalizedPriceRange === "Más de 3.000€") return { priceMin: 3000, priceMax: 6000 };
+  if (normalizedPriceRange === "No tengo idea, quiero que me propongan") return { priceMin: null, priceMax: null };
+
+  return { priceMin: null, priceMax: null };
+}
 
 function RevisarInner() {
   const router = useRouter();
@@ -74,8 +90,47 @@ function RevisarInner() {
   const reviewLeaks = reviewLeakText ? scanLeaks(reviewLeakText) : [];
 
   const [publishing, setPublishing] = useState(false);
-  const publish = () => {
+  const [publishError, setPublishError] = useState<string | null>(null);
+
+  const publish = async () => {
     if (hasLeak(reviewLeakText)) {
+      return;
+    }
+
+    if (isSupabaseMode()) {
+      setPublishError(null);
+      setPublishing(true);
+
+      try {
+        const { priceMin, priceMax } = parsePriceRange(priceRange);
+        const questionnaire: Record<string, unknown> = {
+          ...(Object.keys(answers).length > 0 ? answers : {}),
+          budgetLabel: priceRange || "No especificado",
+          urgent: urgent ? "Sí" : "No",
+          ...(serviceId ? { serviceId } : {}),
+        };
+
+        const result = await createMyJob({
+          title,
+          description,
+          categoryId: category?.id ?? categoryId,
+          serviceId: selectedService?.id ?? serviceId,
+          questionnaire,
+          approxLocation: location,
+          priceMin,
+          priceMax,
+        });
+
+        router.push(`/cliente/trabajos/${result.jobId}?justPublished=1`);
+      } catch (error) {
+        setPublishError(
+          error instanceof Error && error.message
+            ? error.message
+            : "No pudimos publicar el trabajo. Inténtalo de nuevo.",
+        );
+        setPublishing(false);
+      }
+
       return;
     }
 
@@ -151,6 +206,12 @@ function RevisarInner() {
 
         {reviewLeaks.length > 0 && <AntiLeakAlert leaks={reviewLeaks} />}
 
+        {publishError && (
+          <Card className="mb-3 bg-rose-50 border-rose-100 text-[12px] text-rose-700 leading-snug" data-testid="client-publish-error">
+            {publishError}
+          </Card>
+        )}
+
         <Card className="bg-teal-50/50 border-teal-100 mb-3">
           <div className="flex items-start gap-3">
             <div className="w-9 h-9 rounded-full bg-teal-500 text-white flex items-center justify-center flex-shrink-0">
@@ -188,7 +249,7 @@ function RevisarInner() {
       </ScreenBody>
 
       <div className="app-bottom-bar px-5 pb-5 pt-3 bg-white border-t border-sand-200/70">
-        <Button full onClick={publish} disabled={publishing || reviewLeaks.length > 0}>
+        <Button full onClick={publish} disabled={publishing || reviewLeaks.length > 0} testId="client-publish-submit">
           {publishing ? "Publicando…" : "Publicar trabajo"}
         </Button>
       </div>

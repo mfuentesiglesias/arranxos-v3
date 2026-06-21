@@ -175,6 +175,117 @@ export async function getMyJobById(jobId: string): Promise<ApiClientJob | null> 
   return mapJobRowToApiClientJob(data, categoryNameById, serviceNameById, requestCount);
 }
 
+export interface CreateClientJobInput {
+  title: string;
+  description: string;
+  categoryId: string;
+  serviceId: string;
+  questionnaire: Record<string, unknown>;
+  approxLocation: string;
+  priceMin: number | null;
+  priceMax: number | null;
+}
+
+export interface CreateClientJobResult {
+  jobId: string;
+  status: string;
+  createdAt: string;
+}
+
+interface CreateJobRow {
+  result_job_id: string;
+  result_status: string;
+  result_created_at: string;
+}
+
+function normalizeCreateClientJobError(error: unknown): Error {
+  const message =
+    error instanceof Error
+      ? error.message.toLowerCase()
+      : typeof error === "object" && error !== null && "message" in error && typeof (error as Record<string, unknown>).message === "string"
+        ? (String((error as Record<string, unknown>).message).toLowerCase())
+        : "";
+
+  if (message.includes("authentication required") || message.includes("current user does not have a profile")) {
+    return new Error("Necesitas iniciar sesión para publicar un trabajo.");
+  }
+
+  if (message.includes("only clients can publish")) {
+    return new Error("Solo los clientes pueden publicar trabajos.");
+  }
+
+  if (message.includes("title cannot be empty") || message.includes("title must contain at most")) {
+    return new Error("El título del trabajo no es válido.");
+  }
+
+  if (message.includes("description cannot be empty") || message.includes("description must contain at most")) {
+    return new Error("La descripción del trabajo no es válida.");
+  }
+
+  if (message.includes("approximate location cannot be empty")) {
+    return new Error("Indica una ubicación aproximada para el trabajo.");
+  }
+
+  if (message.includes("phone number") || message.includes("email address") || message.includes("url") || message.includes("contact app")) {
+    return new Error("El título o la descripción contienen datos de contacto. Usa el chat de Dersux tras la aceptación.");
+  }
+
+  if (message.includes("category") && (message.includes("does not exist") || message.includes("is not active"))) {
+    return new Error("La categoría seleccionada ya no está disponible.");
+  }
+
+  if (message.includes("service") && (message.includes("does not exist") || message.includes("is not active") || message.includes("does not belong to category"))) {
+    return new Error("El servicio seleccionado ya no está disponible.");
+  }
+
+  if (message.includes("price")) {
+    return new Error("El rango de precio orientativo no es válido.");
+  }
+
+  if (message.includes("questionnaire must be a json object")) {
+    return new Error("El cuestionario no tiene un formato válido.");
+  }
+
+  return new Error("No pudimos publicar el trabajo. Inténtalo de nuevo.");
+}
+
+export async function createMyJob(input: CreateClientJobInput): Promise<CreateClientJobResult> {
+  if (!isSupabaseMode()) {
+    throw new Error("createMyJob() is unavailable while NEXT_PUBLIC_DATA_MODE=mock.");
+  }
+
+  const client = getBrowserSupabaseClient();
+
+  const { data, error } = await client.rpc("create_client_job", {
+    p_title: input.title,
+    p_description: input.description,
+    p_category_id: input.categoryId,
+    p_service_id: input.serviceId,
+    p_questionnaire: input.questionnaire,
+    p_approx_location: input.approxLocation,
+    p_price_min: input.priceMin,
+    p_price_max: input.priceMax,
+  });
+
+  if (error) {
+    throw normalizeCreateClientJobError(error);
+  }
+
+  const result = Array.isArray(data)
+    ? (data[0] as CreateJobRow | undefined)
+    : ((data as CreateJobRow | null) ?? undefined);
+
+  if (!result) {
+    throw new Error("No pudimos publicar el trabajo. Inténtalo de nuevo.");
+  }
+
+  return {
+    jobId: result.result_job_id,
+    status: result.result_status,
+    createdAt: result.result_created_at,
+  };
+}
+
 export function toMockJob(apiJob: ApiClientJob, clientName?: string): Job {
   const location = apiJob.approxLocation ?? "Sin ubicación";
   const now = new Date();
