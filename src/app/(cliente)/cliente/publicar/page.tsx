@@ -17,6 +17,14 @@ import { getEffectiveApprovedCatalogCategories, useSession } from "@/lib/store";
 import { isSupabaseMode } from "@/lib/supabase/config";
 import type { CatalogCategory } from "@/lib/types";
 
+function safeCatalogIcon(icon: string | undefined): string {
+  if (!icon) return "•";
+  const trimmed = icon.trim();
+  if (trimmed === "") return "•";
+  if (/[^\x00-\x7F]/.test(trimmed)) return trimmed;
+  return "•";
+}
+
 export default function PublicarCategoriaPage() {
   const [open, setOpen] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -86,7 +94,7 @@ export default function PublicarCategoriaPage() {
                       className="w-10 h-10 rounded-xl flex items-center justify-center text-[20px]"
                       style={{ background: g.color }}
                     >
-                      {g.icon}
+                      {safeCatalogIcon(g.icon)}
                     </div>
                     <div className="text-left">
                       <div className="font-bold text-[14px] text-ink-800">
@@ -112,7 +120,7 @@ export default function PublicarCategoriaPage() {
                         data-testid={`client-category-${slugifyCatalogText(c.name)}`}
                         className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-sand-50 active:bg-sand-100"
                       >
-                        <span className="text-[18px]">{c.icon ?? "•"}</span>
+                        <span className="text-[18px]">{safeCatalogIcon(c.icon)}</span>
                         <span className="min-w-0 flex-1 text-[12.5px] font-semibold text-ink-700 leading-tight">
                           {c.name}
                           {c.source === "admin_approved" && (

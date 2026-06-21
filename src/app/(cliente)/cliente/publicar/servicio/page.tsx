@@ -21,6 +21,14 @@ import {
 import { isSupabaseMode } from "@/lib/supabase/config";
 import type { CatalogCategory, CatalogService } from "@/lib/types";
 
+function safeCatalogIcon(icon: string | undefined): string {
+  if (!icon) return "•";
+  const trimmed = icon.trim();
+  if (trimmed === "") return "•";
+  if (/[^\x00-\x7F]/.test(trimmed)) return trimmed;
+  return "•";
+}
+
 function ServicioInner() {
   const router = useRouter();
   const params = useSearchParams();
@@ -103,7 +111,7 @@ function ServicioInner() {
       <ScreenBody className="px-5 pt-3 pb-6" white>
         <div className="flex items-center gap-3 p-3 rounded-2xl bg-sand-50 border border-sand-200 mb-4">
           <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-[22px] shadow-card">
-            {category?.icon ?? "•"}
+            {safeCatalogIcon(category?.icon)}
           </div>
           <div>
             <div className="text-[11px] text-ink-400 font-semibold">Categoría</div>
