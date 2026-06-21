@@ -136,6 +136,23 @@ export default function TrabajosPage() {
         </div>
       </div>
       <ScreenBody className="px-4 pt-4 pb-6">
+        <Card className="mb-3 bg-sky-50/60 border-sky-100" testId="client-jobs-chat-link">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="font-bold text-[13px] text-sky-800">Ver chats</div>
+              <div className="text-[11.5px] text-sky-700/80 leading-snug">
+                Accede a tus conversaciones abiertas con profesionales aceptados.
+              </div>
+            </div>
+            <Link
+              href="/cliente/chat"
+              className="inline-flex shrink-0 items-center justify-center rounded-full bg-white px-3 py-2 text-[12px] font-bold text-sky-700 border border-sky-100"
+            >
+              Abrir
+            </Link>
+          </div>
+        </Card>
+
         {isSupabase && loadingReal && (
           <Card className="mb-3 text-[12px] text-ink-600 leading-snug">
             Cargando tus trabajos reales…
