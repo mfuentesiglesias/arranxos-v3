@@ -272,6 +272,7 @@ function SupabaseInner({ jobId }: { jobId: string }) {
       currentAgreement &&
       currentAgreement.paymentStatus === "released",
   );
+  const isProfessionalView = profileRole === "professional";
   const parsedProposalAmount = Number(proposalAmount);
   const isProposalAmountValid =
     Number.isFinite(parsedProposalAmount) &&
@@ -584,29 +585,45 @@ function SupabaseInner({ jobId }: { jobId: string }) {
           </div>
         )}
 
+        <div className="mb-3 rounded-2xl border border-sand-200/70 bg-white px-3.5 py-3">
+          <div className="font-bold text-[13px] text-ink-800">Presupuesto y acuerdo</div>
+          <div className="mt-1 text-[12px] text-ink-500 leading-snug">
+            El rango orientativo del trabajo solo sirve como referencia. El precio final se acuerda aqui, dentro de Dersux.
+          </div>
+        </div>
+
         {currentAgreement ? (
           <div className="mb-3 rounded-2xl border border-teal-100 bg-teal-50 px-3.5 py-3">
             <div className="font-bold text-[13px] text-teal-700">Acuerdo alcanzado</div>
             <div className="mt-1 text-[12px] text-teal-700/80">
-              Importe final {formatEuro(currentAgreement.finalPrice)}.
+              Importe final acordado {formatEuro(currentAgreement.finalPrice)}.
             </div>
             <div className="mt-1 text-[12px] text-teal-700/80">
-              {PAYMENT_STATUS_LABELS[currentAgreement.paymentStatus] ?? currentAgreement.paymentStatus}
+              Este importe sustituye al rango orientativo del trabajo.
+            </div>
+            <div className="mt-1 text-[12px] text-teal-700/80">
+              Estado logico interno: {PAYMENT_STATUS_LABELS[currentAgreement.paymentStatus] ?? currentAgreement.paymentStatus}
             </div>
             {canFundProtectedPayment && (
               <div className="mt-3">
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-teal-700/70">
+                  Siguiente paso interno
+                </div>
                 <button
                   type="button"
                   onClick={() => void protectPayment()}
                   disabled={fundingPayment}
                   className="rounded-full bg-coral-500 px-4 py-3 text-[13px] font-bold text-white disabled:opacity-40"
                 >
-                  {fundingPayment ? "Protegiendo pago..." : "Pagar y proteger"}
+                  {fundingPayment ? "Protegiendo pago..." : "Registrar pago protegido (demo)"}
                 </button>
               </div>
             )}
             {canMarkCompleted && (
               <div className="mt-3">
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-teal-700/70">
+                  Seguimiento del trabajo
+                </div>
                 <button
                   type="button"
                   onClick={() => void completeJob()}
@@ -619,6 +636,9 @@ function SupabaseInner({ jobId }: { jobId: string }) {
             )}
             {canConfirmCompletion && (
               <div className="mt-3">
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-teal-700/70">
+                  Cierre del trabajo
+                </div>
                 <button
                   type="button"
                   onClick={() => void releasePayment()}
@@ -633,22 +653,25 @@ function SupabaseInner({ jobId }: { jobId: string }) {
             )}
             {isCompletedAndReleased && (
               <div className="mt-3 text-[12px] font-semibold text-teal-700">
-                Trabajo completado · pago liberado.
+                Trabajo completado. El flujo interno de pago ya quedo cerrado.
               </div>
             )}
           </div>
         ) : currentNegotiation ? (
           <div className="mb-3 rounded-2xl border border-amber-100 bg-amber-50 px-3.5 py-3">
-            <div className="font-bold text-[13px] text-amber-800">Oferta actual</div>
+            <div className="font-bold text-[13px] text-amber-800">Oferta y negociacion</div>
             <div className="mt-1 text-[12px] text-amber-700">
               {currentNegotiation.proposedByRole === "professional"
-                ? "El profesional envio la ultima propuesta."
-                : "El cliente envio la ultima propuesta."}
+                ? "El profesional envio la ultima propuesta final."
+                : "El cliente envio la ultima contraoferta."}
             </div>
             <div className="mt-2 text-[15px] font-extrabold text-amber-800">
               {currentNegotiation.lastAmount !== null
                 ? formatEuro(currentNegotiation.lastAmount)
                 : "Sin importe"}
+            </div>
+            <div className="mt-2 text-[11.5px] text-amber-700/80 leading-snug">
+              El rango orientativo del trabajo solo sirve como referencia. El precio final se acuerda aqui, dentro de Dersux.
             </div>
             <div className="mt-2 text-[11.5px] text-amber-700/80">
               Cliente: {currentNegotiation.clientAccepted ? "aceptado" : "pendiente"} · Profesional: {currentNegotiation.professionalAccepted ? "aceptado" : "pendiente"}
@@ -656,7 +679,10 @@ function SupabaseInner({ jobId }: { jobId: string }) {
           </div>
         ) : agreementContext?.status === "ready" ? (
           <div className="mb-3 rounded-2xl border border-sky-100 bg-sky-50 px-3.5 py-3 text-[12px] text-sky-800">
-            Todavía no hay presupuesto propuesto para este trabajo.
+            <div className="font-bold text-[13px] text-sky-800">Sin presupuesto propuesto todavia</div>
+            <div className="mt-1 leading-snug">
+              El rango orientativo del trabajo solo sirve como referencia. El precio final se acuerda aqui, dentro de Dersux.
+            </div>
           </div>
         ) : null}
 
@@ -674,7 +700,7 @@ function SupabaseInner({ jobId }: { jobId: string }) {
 
         {agreementContext?.status === "ready" && agreementContext.events.length > 0 && (
           <div className="mb-3 rounded-2xl border border-sand-200/70 bg-white px-3.5 py-3">
-            <div className="font-bold text-[13px] text-ink-800">Historial del presupuesto</div>
+            <div className="font-bold text-[13px] text-ink-800">Historial de negociacion</div>
             <div className="mt-3 flex flex-col gap-2">
               {agreementContext.events.map((event) => (
                 <div key={event.id} className="rounded-xl border border-sand-200/70 bg-sand-50 px-3 py-2">
@@ -695,6 +721,11 @@ function SupabaseInner({ jobId }: { jobId: string }) {
           <div className="mb-3 rounded-2xl border border-sand-200/70 bg-white p-3.5">
             <div className="font-bold text-[13px] text-ink-800">
               {currentNegotiation ? "Enviar contraoferta" : "Enviar presupuesto"}
+            </div>
+            <div className="mt-1 text-[12px] text-ink-500 leading-snug">
+              {isProfessionalView
+                ? "Envia un presupuesto final para que el cliente pueda aceptarlo o responder con una contraoferta."
+                : "Puedes aceptar la oferta o enviar una contraoferta. El acuerdo final quedara registrado en la app."}
             </div>
             <div className="mt-3 flex flex-col gap-2">
               <label className="text-[12px] font-semibold text-ink-500">Importe propuesto (EUR)</label>
