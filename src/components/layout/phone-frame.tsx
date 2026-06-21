@@ -21,6 +21,7 @@ const NAV_GROUPS: Array<{ group: string; screens: { href: string; label: string 
     group: "Cliente",
     screens: [
       { href: "/cliente/inicio", label: "Inicio" },
+      { href: "/cliente/chat", label: "Chats cliente" },
       { href: "/cliente/explorar", label: "Explorar pros" },
       { href: "/cliente/publicar", label: "Publicar · categoría" },
       { href: "/cliente/publicar/servicio", label: "Publicar · servicio" },
