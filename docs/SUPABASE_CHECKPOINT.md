@@ -31,6 +31,7 @@ Arranxos mantiene dos modos de datos:
 - acceso visible 4E.2C a invitaciones preparado en repo sin SQL nuevo
 - base 4F.1A para invitaciones recibidas de profesional ejecutada y verificada en Supabase
 - UI 4F.1B de invitaciones recibidas preparada en repo sin SQL nuevo
+- publicación real de jobs desde cliente con RPC `create_client_job` ejecutada y verificada en Supabase
 
 ### Sigue mock o parcial
 
@@ -39,7 +40,6 @@ Arranxos mantiene dos modos de datos:
 - emails reales
 - realtime completo de chat
 - tickets de búsqueda reales (completado; SQL ejecutado y verificado en Supabase)
-- publicación real de jobs desde cliente
 - persistencia real de especialidades profesionales
 - listado global completo de chats admin más allá de moderación por flags
 - automatismos de bloqueo por score o strikes
@@ -118,9 +118,57 @@ Arranxos mantiene dos modos de datos:
 | Branding 1B guía Dersux/Dersu | Completado | Documentación creada en `docs/BRANDING_DERSUX.md`; sin cambios de UI, sin cambios de lógica, sin SQL y sin cambios técnicos en roles, rutas, tablas o RPCs. |
 | Branding 1C copy visible bajo riesgo | Completado | Solo cambios de copy visibles en pantallas cliente/profesional y navegación demo; usa "Profesional Dersux" y "Dersux Pro" donde aporta claridad; sin SQL, sin cambios de lógica y sin cambios técnicos en roles, rutas, tablas o RPCs. |
 | QA 5A Playwright Extended Mock | Completado | Suite nueva `tests/e2e/qa-extended.spec.ts`; cubre privacidad mock en `/admin/usuarios`, copy visible Dersux/Dersux Pro y carga de rutas cliente/profesional relacionadas; sin SQL, sin cambios de app y sin cambios Supabase. |
+| 5A publicación real cliente + smoke completo | Completado | `sql/30_create_client_job_rpc.sql` ejecutado y verificado en Supabase; frontend conectado en `e8d8f7e`; fix visual de iconos reales en `b603350`; fix timeline móvil en `b89061e`; smoke real cerrado para publicar, solicitar, aceptar, crear chat, pactar acuerdo, registrar pago protegido, marcar terminado y confirmar finalización sin dirección exacta, emails, teléfonos ni coordenadas. |
 | `/admin/valoraciones` real | Completado | Listado real de reviews. |
 | `/admin/configuracion` real | Completado | `admin_config` real vía RPC. |
 | `/admin/profesionales` real | Completado | Scores reales y recálculo manual. |
+
+## 5A — Publicación real cliente y ciclo completo smoke
+
+- SQL versionado: `sql/30_create_client_job_rpc.sql`
+- Commit SQL: `58a83a6 feat(sql): add create client job rpc`
+- Commit frontend: `e8d8f7e feat(client): publish jobs with create client job rpc`
+- Fix iconos catálogo: `b603350 fix(client): sanitize catalog icons in publish flow`
+- Fix timeline móvil: `b89061e fix(client): prevent job status timeline clipping on mobile`
+
+### Smoke real validado
+
+- `job_id`: `63735dd9-5f79-412e-bb3c-27a947764a5b`
+- `title`: `Prueba smoke publicación`
+- `final_price`: `200`
+- `professional_id`: `32173f65-13e4-4cf7-96aa-b4bc5bbab395`
+- estado final: `completed`
+
+- cliente publicó job real con `create_client_job`
+- profesional `approved` vio la oportunidad sin dirección exacta
+- profesional envió solicitud y cliente la vio
+- cliente aceptó la solicitud
+- el chat se creó solo tras aceptación
+- se pactó acuerdo final de `200 €`
+- cliente registró pago protegido interno
+- profesional marcó el trabajo como terminado
+- cliente confirmó la finalización
+- el pago interno quedó liberado y el job terminó en `completed`
+
+### Verificaciones de privacidad y pago interno
+
+- no se mostró dirección exacta antes de la aceptación
+- no se mostraron emails, teléfonos ni coordenadas
+- `job_private_locations`: `0` filas en este smoke
+- el chat no existía antes de aceptar la solicitud
+- `payment_status`: `pending -> protected -> released`
+- `paid_at` y `released_at` quedaron con fecha
+- `price_guaranteed` se confirmó como residual/no usado; la fuente real del estado de pago es `payment_status`
+- durante los smokes no hubo SQL manual de cambio: solo `SELECT` de verificación
+- no hizo falta ajustar RLS, RPC ni grants después del smoke
+
+### Siguiente bloque recomendado
+
+- decidir 5B con ChatGPT entre:
+- documentar/ordenar smoke tests
+- mejorar reviews/valoración post-`completed`
+- revisar revelado de dirección exacta post-aceptación
+- cubrir el siguiente hueco funcional real más cercano
 
 ## Estado actual de pantallas admin
 
@@ -157,6 +205,7 @@ Arranxos mantiene dos modos de datos:
 | `reject_catalog_request` | `sql/23_catalog_requests_rpc.sql` | Rechazar solicitud real con motivo opcional. |
 | `merge_catalog_request` | `sql/23_catalog_requests_rpc.sql` | Fusionar solicitud real con servicio existente. |
 | `create_search_ticket_from_job` | `sql/24_search_tickets_rpc.sql` | Crear ticket real de búsqueda desde un job del cliente, derivando zona aproximada server-side. |
+| `create_client_job` | `sql/30_create_client_job_rpc.sql` | Crear job real del cliente con validación server-side de rol, catálogo, anti-fuga básica y rango orientativo; no toca `job_private_locations` ni dirección exacta. |
 | `update_search_ticket_status` | `sql/24_search_tickets_rpc.sql` | Cambiar estado real del ticket de búsqueda desde admin. |
 | `create_job_invitation` | `sql/26_create_job_invitation_rpc.sql` | RPC ya ejecutada y verificada en Supabase para invitar un profesional aprobado a un job publicado del cliente; `SECURITY DEFINER`, `search_path = public, pg_temp`, sin execute para `anon` y con execute para `authenticated`. |
 | `get_client_job_invitable_professionals_with_public_info` | `sql/27_job_invitation_candidates_rpc.sql` | RPC ya ejecutada y verificada en Supabase para listar candidatos reales con proyección pública mínima, matching por servicio/categoría y estado de invitación sin exponer teléfono, `location_label`, lat/lng ni score interno; `SECURITY DEFINER`, `search_path = public, pg_temp`, sin execute para `anon` y con execute para `authenticated`. |
