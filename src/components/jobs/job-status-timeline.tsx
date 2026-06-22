@@ -27,38 +27,40 @@ export function JobStatusTimeline({ status }: { status: JobStatus }) {
   }
   const currentIdx = ORDER.indexOf(status);
   return (
-    <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
-      {STEPS.map((step, i) => {
-        const done = i < currentIdx;
-        const active = i === currentIdx;
-        return (
-          <div key={step.key} className="flex items-center gap-1 flex-shrink-0">
-            <div className="flex flex-col items-center gap-1">
-              <div
-                className={cn(
-                  "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold",
-                  done && "bg-teal-500 text-white",
-                  active && "bg-coral-500 text-white ring-4 ring-coral-100",
-                  !done && !active && "bg-sand-200 text-ink-400",
-                )}
-              >
-                {done ? "✓" : i + 1}
+    <div className="-mx-1 overflow-x-auto pb-1 no-scrollbar">
+      <div className="flex min-w-max items-center gap-1 px-1 pr-3">
+        {STEPS.map((step, i) => {
+          const done = i < currentIdx;
+          const active = i === currentIdx;
+          return (
+            <div key={step.key} className="flex items-center gap-1 flex-shrink-0">
+              <div className="flex flex-col items-center gap-1">
+                <div
+                  className={cn(
+                    "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold",
+                    done && "bg-teal-500 text-white",
+                    active && "bg-coral-500 text-white ring-4 ring-coral-100",
+                    !done && !active && "bg-sand-200 text-ink-400",
+                  )}
+                >
+                  {done ? "✓" : i + 1}
+                </div>
+                <span
+                  className={cn(
+                    "text-[10px] whitespace-nowrap",
+                    active ? "text-ink-800 font-bold" : "text-ink-400 font-medium",
+                  )}
+                >
+                  {step.label}
+                </span>
               </div>
-              <span
-                className={cn(
-                  "text-[10px] whitespace-nowrap",
-                  active ? "text-ink-800 font-bold" : "text-ink-400 font-medium",
-                )}
-              >
-                {step.label}
-              </span>
+              {i < STEPS.length - 1 && (
+                <div className={cn("w-4 h-0.5 mb-4", done ? "bg-teal-500" : "bg-sand-200")} />
+              )}
             </div>
-            {i < STEPS.length - 1 && (
-              <div className={cn("w-4 h-0.5 mb-4", done ? "bg-teal-500" : "bg-sand-200")} />
-            )}
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
