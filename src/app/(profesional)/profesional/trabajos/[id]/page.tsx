@@ -85,7 +85,7 @@ function ReviewStatusCard({
 }) {
   return review ? (
     <Card className="mb-3" testId="pro-review-summary">
-      <div className="font-bold text-[13.5px] text-ink-800 mb-1">Valoración del cliente</div>
+      <div className="font-bold text-[13.5px] text-ink-800 mb-1">Tu valoración del cliente</div>
       <div className="text-[12px] text-ink-600 leading-snug mb-1">Ya has valorado este trabajo.</div>
       <div className="text-[12px] text-ink-600 leading-snug mb-1">{review.rating} de 5 estrellas</div>
       {review.comment && <div className="text-[11.5px] text-ink-500 leading-snug mb-1">{review.comment}</div>}
@@ -95,7 +95,7 @@ function ReviewStatusCard({
     </Card>
   ) : (
     <Card className="mb-3" testId="pro-review-cta-card">
-      <div className="font-bold text-[13.5px] text-ink-800 mb-2">Valoración del cliente</div>
+      <div className="font-bold text-[13.5px] text-ink-800 mb-2">Valoración del trabajo</div>
       <div className="text-[11.5px] text-ink-500 leading-snug mb-3">
         Tu opinión ayuda a mejorar la confianza dentro de Dersux.
       </div>
@@ -762,7 +762,9 @@ function Inner({ id }: { id: string }) {
             ~ {formatEuro(commission)}. Recibirás{" "}
             <strong>{formatEuro(agreedAmount - commission)}</strong>{" "}
             {resolvedAgreement
-              ? "según el acuerdo actual de esta demo."
+              ? isSupabase
+                ? "según el acuerdo final registrado para este trabajo."
+                : "según el acuerdo actual de esta demo."
               : "(si se acuerda en el rango medio de la simulación)."}
           </div>
         </Card>
@@ -819,10 +821,12 @@ function Inner({ id }: { id: string }) {
         {resolvedAgreement && job.status === "agreed" && (
           <Card className="mb-3 bg-amber-50/60 border-amber-100" testId="pro-payment-pending-state">
             <div className="font-bold text-[13px] text-amber-800 mb-1">
-              Pendiente de pago protegido (mock)
+              Pendiente de pago protegido{isSupabase ? "" : " (mock)"}
             </div>
             <div className="text-[11.5px] text-amber-700 leading-snug">
-              El cliente ya aceptó el acuerdo. Falta financiarlo en la demo para que el dinero quede retenido.
+              {isSupabase
+                ? "El cliente ya aceptó el acuerdo. Falta registrar el pago protegido interno para retener el importe pactado."
+                : "El cliente ya aceptó el acuerdo. Falta financiarlo en la demo para que el dinero quede retenido."}
             </div>
           </Card>
         )}
@@ -834,7 +838,9 @@ function Inner({ id }: { id: string }) {
               Pago protegido confirmado
             </div>
             <div className="text-[11.5px] text-teal-700/80 leading-snug">
-              Los fondos ya están retenidos en la demo. Ya puedes marcar el trabajo como terminado cuando acabes.
+              {isSupabase
+                ? "Los fondos ya están retenidos dentro del flujo interno. Ya puedes marcar el trabajo como terminado cuando acabes."
+                : "Los fondos ya están retenidos en la demo. Ya puedes marcar el trabajo como terminado cuando acabes."}
             </div>
           </Card>
         )}
@@ -845,11 +851,13 @@ function Inner({ id }: { id: string }) {
               Trabajo marcado como terminado
             </div>
             <div className="text-[11.5px] text-violet-700 leading-snug">
-              El cliente debe revisar el resultado y confirmar el cierre del trabajo. El pago protegido mock sigue asociado al acuerdo.
+              {isSupabase
+                ? "El cliente debe revisar el resultado y confirmar el cierre del trabajo. El pago protegido interno sigue asociado al acuerdo hasta esa confirmación."
+                : "El cliente debe revisar el resultado y confirmar el cierre del trabajo. El pago protegido mock sigue asociado al acuerdo."}
             </div>
             {job.completionDeadline && (
               <div className="mt-2 text-[11px] font-semibold text-violet-700/80">
-                Auto-release demo en {Math.max(0, daysBetween(new Date().toISOString(), job.completionDeadline))} día{Math.max(0, daysBetween(new Date().toISOString(), job.completionDeadline)) === 1 ? "" : "s"}.
+                Auto-release{isSupabase ? "" : " demo"} en {Math.max(0, daysBetween(new Date().toISOString(), job.completionDeadline))} día{Math.max(0, daysBetween(new Date().toISOString(), job.completionDeadline)) === 1 ? "" : "s"}.
               </div>
             )}
             {isMine && (
@@ -871,12 +879,16 @@ function Inner({ id }: { id: string }) {
             <div className="font-bold text-[13px] text-teal-700 mb-1">
               Trabajo completado
             </div>
-            <div className="text-[11.5px] text-teal-700/80 leading-snug">
-              {autoReleaseApplied
-                ? "El trabajo se completó por auto-release demo tras vencer el plazo de confirmación."
-                : "El cliente ya confirmó este trabajo en la demo y el acuerdo queda cerrado."} El pago protegido mock queda visible como referencia del flujo.
-            </div>
-          </Card>
+          <div className="text-[11.5px] text-teal-700/80 leading-snug">
+            {autoReleaseApplied
+              ? `El trabajo se completó por auto-release${isSupabase ? "" : " demo"} tras vencer el plazo de confirmación.`
+              : isSupabase
+                ? "El cliente ya confirmó este trabajo y el acuerdo ha quedado cerrado correctamente."
+                : "El cliente ya confirmó este trabajo en la demo y el acuerdo queda cerrado."} {isSupabase
+              ? "La liberación del pago interno queda registrada en el acuerdo."
+              : "El pago protegido mock queda visible como referencia del flujo."} Precio final: {formatEuro(agreedAmount)}.
+          </div>
+        </Card>
         )}
 
         {job.status === "dispute" && jobDispute && (

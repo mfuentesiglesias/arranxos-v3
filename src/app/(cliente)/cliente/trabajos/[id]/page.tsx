@@ -1044,7 +1044,9 @@ function ActionsForStatus({
           Acuerdo alcanzado · Falta pago
         </div>
         <div className="text-[12px] text-amber-700 mb-3">
-          Completa el pago protegido mock para retener los fondos dentro de la demo.
+          {isSupabase
+            ? "Completa el pago protegido interno para retener el importe acordado dentro de Dersux."
+            : "Completa el pago protegido mock para retener los fondos dentro de la demo."}
         </div>
         <Button full href={`/cliente/trabajos/${jobId}/pagar`} testId="client-pay-protected">
           Pagar y proteger {formatEuro(finalPrice ?? Math.round((priceMin + priceMax) / 2))}
@@ -1062,11 +1064,13 @@ function ActionsForStatus({
           El profesional marcó el trabajo como terminado
         </div>
         <div className="text-[12px] text-violet-700 mb-3">
-          Revisa el resultado y confirma el cierre del trabajo en la demo. El pago protegido mock sigue asociado al acuerdo.
+          {isSupabase
+            ? "Revisa el resultado y confirma el cierre del trabajo. El pago protegido interno sigue asociado al acuerdo hasta tu confirmación."
+            : "Revisa el resultado y confirma el cierre del trabajo en la demo. El pago protegido mock sigue asociado al acuerdo."}
         </div>
         {completionDeadline && (
           <div className="mb-3 rounded-xl border border-violet-100 bg-white px-3 py-2 text-[11.5px] text-violet-700 leading-snug" data-testid="client-auto-release-deadline">
-            Auto-release demo en {Math.max(0, daysBetween(new Date().toISOString(), completionDeadline))} día{Math.max(0, daysBetween(new Date().toISOString(), completionDeadline)) === 1 ? "" : "s"} si no confirmas ni abres disputa.
+            Auto-release{isSupabase ? "" : " demo"} en {Math.max(0, daysBetween(new Date().toISOString(), completionDeadline))} día{Math.max(0, daysBetween(new Date().toISOString(), completionDeadline)) === 1 ? "" : "s"} si no confirmas ni abres disputa.
           </div>
         )}
         <div className="grid grid-cols-2 gap-2">
@@ -1079,9 +1083,11 @@ function ActionsForStatus({
             </Button>
           )}
         </div>
-        <Button full variant="outline" className="mt-2" onClick={onApplyAutoReleaseDemo} testId="client-apply-auto-release-demo">
-          Aplicar auto-release demo
-        </Button>
+        {!isSupabase && (
+          <Button full variant="outline" className="mt-2" onClick={onApplyAutoReleaseDemo} testId="client-apply-auto-release-demo">
+            Aplicar auto-release demo
+          </Button>
+        )}
       </Card>
     );
   }
@@ -1094,8 +1100,12 @@ function ActionsForStatus({
           </div>
           <div className="text-[11.5px] text-teal-700/80 leading-snug">
             {autoReleaseApplied
-              ? "El trabajo se completó por auto-release demo tras vencer el plazo de confirmación."
-              : "El cliente ya confirmó este trabajo en la demo y el acuerdo queda cerrado."} El pago protegido mock sigue visible como referencia del flujo.
+              ? `El trabajo se completó por auto-release${isSupabase ? "" : " demo"} tras vencer el plazo de confirmación.`
+              : isSupabase
+                ? "Has confirmado este trabajo y el acuerdo ha quedado cerrado correctamente."
+                : "El cliente ya confirmó este trabajo en la demo y el acuerdo queda cerrado."} {isSupabase
+              ? "El precio final y la liberación del pago interno quedan registrados en el historial del acuerdo."
+              : "El pago protegido mock sigue visible como referencia del flujo."} {typeof finalPrice === "number" ? `Precio final: ${formatEuro(finalPrice)}.` : ""}
           </div>
         </Card>
         {(!isSupabase || canShowRealReviewBlock) && (existingReview ? (
@@ -1152,7 +1162,7 @@ function ActionsForStatus({
           Pago protegido en custodia
         </div>
         <div className="text-[11.5px] text-teal-700/80 leading-snug">
-          {formatEuro(finalPrice ?? Math.round((priceMin + priceMax) / 2))} siguen asociados al acuerdo como pago protegido mock.
+          {formatEuro(finalPrice ?? Math.round((priceMin + priceMax) / 2))} siguen asociados al acuerdo como pago protegido{isSupabase ? " interno" : " mock"}.
         </div>
       </Card>
     );

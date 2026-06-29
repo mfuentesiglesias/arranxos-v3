@@ -405,7 +405,7 @@ function SupabaseInner({ jobId }: { jobId: string }) {
 
     try {
       await fundProtectedPayment(jobId);
-      setAgreementActionNotice("Pago protegido. Los fondos han quedado retenidos en esta fase fake.");
+      setAgreementActionNotice("Pago protegido. Los fondos han quedado retenidos dentro del flujo interno de Dersux.");
       setSupabaseReloadKey((currentValue) => currentValue + 1);
     } catch (error) {
       setAgreementActionError(
@@ -453,7 +453,7 @@ function SupabaseInner({ jobId }: { jobId: string }) {
 
     try {
       await confirmJobCompletion(jobId);
-      setAgreementActionNotice("Trabajo completado. El pago ha quedado liberado en esta fase fake.");
+      setAgreementActionNotice("Trabajo completado. El pago ha quedado liberado dentro del flujo interno de Dersux.");
       setSupabaseReloadKey((currentValue) => currentValue + 1);
     } catch (error) {
       setAgreementActionError(
